@@ -2,25 +2,7 @@
 #include "deps/readInput.hpp"
 #include <chrono>
 
-template <int dim, int n_pts>
-struct dsimplicies
-{
-    std::array<int, dim> curr_state;
-    dsimplicies()
-    {
-        for (int i = 0; i < dim; i++)
-            curr_state[i] = 0;
-    }
-    void generate_next()
-    {
-        auto dimension = dim - 1;
-        while (curr_state[dimension] == n_pts - 1)
-            curr_state[dimension--] = 0;
-        curr_state[dimension]++;
-    }
-};
-
-std::map<double, std::vector<std::vector<int>>> binEdges(std::vector<std::vector<double>> &distMat)
+std::map<double, std::vector<std::vector<int>>> binEdgeSimplexes(std::vector<std::vector<double>> &distMat) // Direct creation of edgebins to a map
 {
     std::map<double, std::vector<std::vector<int>>> binned_edges;
     for (int i = 0; i < distMat.size(); i++)
@@ -29,12 +11,52 @@ std::map<double, std::vector<std::vector<int>>> binEdges(std::vector<std::vector
     return binned_edges;
 }
 
-template <int dim>
-std::map<double, std::vector<std::vector<int>>> binByWeights(std::vector<std::pair<double, std::vector<std::vector<int>>>> &weighted_simplicies, std::map<double, std::vector<std::array<int, dim>>> &bins)
+std::map<double, std::vector<std::vector<int>>> binByWeights(std::vector<std::pair<double, std::vector<std::vector<int>>>> &weighted_simplicies, std::map<double, std::vector<std::vector<int>>> &bins) // Merged higher dim feature to bins
 {
     for (auto &[weight, simplex] : weighted_simplicies)
         bins[weight].push_back(simplex);
     return bins;
+}
+
+struct dsimplexes // Creates a constructor for combinatorial simplexes n_pts = n, dim = r
+{
+    size_t n_pts;
+    size_t dim;
+    std::vector<int> simplex;
+
+    dsimplexes(size_t n_pts, size_t dim) : n_pts(n_pts), dim(dim)
+    {
+        for (size_t i = 0; i < dim; i++)
+            simplex.push_back(i);
+    };
+
+    void print_simplex()
+    {
+        for (size_t i = 0; i < dim; i++)
+            std::cout << simplex[i] << " ";
+        std::cout << std::endl;
+    }
+
+    void next_simplex()
+    {
+        for (size_t i = dim - 1; i >= 0; i--)
+        {
+            if (++simplex.at(i) == n_pts)
+            {
+                size_t j = 0, reset_to = 0; 
+                for (; j < dim && simplex.at(j) != n_pts; ++j)
+                    reset_to = simplex.at(j);
+                std::cout << reset_to<<std::endl;
+                simplex.at(i) = reset_to+1+(dim-j); // Reset this position
+            }
+            else
+                break;
+        }
+    };
+};
+
+void dsimplices_batches(std::vector<std::vector<double>> &distMat, u_int dim, size_t batch_size, u_int worker) // Worker is invokation counter
+{
 }
 
 int main(int argc, char *argv[])
@@ -47,7 +69,7 @@ int main(int argc, char *argv[])
     auto start_time = std::chrono::high_resolution_clock::now();
     auto inputData = readInput::readCSV(argv[1]);
     auto distMatrix = distMat(inputData);
-    auto bins = binEdges(distMatrix);
+    auto bins = binEdgeSimplexes(distMatrix);
     for (auto &[dist, vect] : bins)
         for (auto i : vect)
             std::cout << dist << " " << i[0] << " " << i[1] << std::endl;
