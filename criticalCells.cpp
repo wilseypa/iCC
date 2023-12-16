@@ -11,10 +11,11 @@ std::map<double, std::vector<std::vector<int>>> binEdgeSimplexes(std::vector<std
     return binned_edges;
 }
 
-std::map<double, std::vector<std::vector<int>>> binByWeights(std::vector<std::pair<double, std::vector<std::vector<int>>>> &weighted_simplicies, std::map<double, std::vector<std::vector<int>>> &bins) // Merged higher dim feature to bins
+std::map<double, std::vector<std::vector<int>>> binByWeights(std::map<double, std::vector<std::vector<int>>> &weighted_simplicies, std::map<double, std::vector<std::vector<int>>> &bins) // Merged higher dim feature to bins
 {
-    for (auto &[weight, simplex] : weighted_simplicies)
-        bins[weight].push_back(simplex);
+    for (auto &[weight, simplexes] : weighted_simplicies)
+        for (auto simplex : simplexes)
+            bins[weight].push_back(simplex);
     return bins;
 }
 
@@ -37,15 +38,10 @@ struct dsimplexes // Creates a constructor for combinatorial simplexes n_pts = n
             simplex.push_back(i - 1);
     };
 
-    void print_simplex()
-    {
-        for (size_t i = 0; i < dim; i++)
-            std::cout << simplex[i] << " ";
-        std::cout << std::endl;
-    }
-
     bool next_simplex()
     {
+        if (simplex.back() == n_pts - dim)
+            return false;
         for (size_t i = 0; i < dim; i++)
         {
             bool flag = true;
@@ -58,14 +54,30 @@ struct dsimplexes // Creates a constructor for combinatorial simplexes n_pts = n
                 simplex[i] = reset_to - i;
             }
             else if (flag)
-                return simplex.back() != n_pts - dim;
+                return true;
         }
         return false; // Not really needed just avoiding compiler warnings
     };
 };
 
-void dsimplices_batches(std::vector<std::vector<double>> &distMat, u_int dim, size_t batch_size, u_int worker) // Worker is invokation counter
+std::map<double, std::vector<std::vector<int>>> dsimplices_batches(std::vector<std::vector<double>> &distMat, u_int dim, size_t batch_size, u_int worker) // Worker is invokation counter
 {
+    // worker param not currently in use.. Will get added based on pre initialization of dsimplexes struct
+    std::map<double, std::vector<std::vector<int>>> weighted_simplexes;
+    dsimplexes ds(distMat.size(), dim);
+    do
+    {
+        double max_dist = 0;
+        for (int i = 0; i < dim - 1; i++)
+            for (int j = i + 1; j < dim; j++)
+            {
+                auto dist = distMat[ds.simplex[i]][ds.simplex[j]];
+                if (max_dist < dist)
+                    max_dist = dist;
+            }
+        weighted_simplexes[max_dist].push_back(ds.simplex);
+    } while (ds.next_simplex());
+    return weighted_simplexes;
 }
 
 int main(int argc, char *argv[])
@@ -77,14 +89,24 @@ int main(int argc, char *argv[])
     }
     auto start_time = std::chrono::high_resolution_clock::now();
     auto inputData = readInput::readCSV(argv[1]);
+    auto maxDim = inputData[0].size() + 2;
     auto distMatrix = distMat(inputData);
     auto bins = binEdgeSimplexes(distMatrix);
-    for (auto &[dist, vect] : bins)
-        for (auto i : vect)
-            std::cout << dist << " " << i[0] << " " << i[1] << std::endl;
-    /*     for (int dim = 2; dim < inputData[0].size(); dim++)
-        {
-        } */
+
+    for (size_t dim = 2; dim < maxDim; dim++)
+    {
+        auto batch_time = std::chrono::high_resolution_clock::now();
+        auto weighted_simplicies = dsimplices_batches(distMatrix, 3, 1000, 0); // Worker is invokation counter
+
+        // for (auto &[dist, vect] : weighted_simplicies)
+        //    for (auto i : vect)
+        //        std::cout << dist << " " << i[0] << " " << i[1]  << " " << i[2]<< std::endl;
+        /*     for (int dim = 2; dim < inputData[0].size(); dim++)
+            {
+            } */
+    }
     auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+    std::cout << "Elapsed time: " << duration << " milliseconds" << std::endl;
     return 0;
 }
