@@ -20,14 +20,21 @@ std::map<double, std::vector<std::vector<int>>> binByWeights(std::vector<std::pa
 
 struct dsimplexes // Creates a constructor for combinatorial simplexes n_pts = n, dim = r
 {
+    // Usage
+    //  dsimplexes ds(N, R);
+    //  do
+    //  {
+    //      ds.print_simplex();
+    //  } while (ds.next_simplex());
+
     size_t n_pts;
     size_t dim;
     std::vector<int> simplex;
 
     dsimplexes(size_t n_pts, size_t dim) : n_pts(n_pts), dim(dim)
     {
-        for (size_t i = 0; i < dim; i++)
-            simplex.push_back(i);
+        for (size_t i = dim; i > 0; i--)
+            simplex.push_back(i - 1);
     };
 
     void print_simplex()
@@ -37,21 +44,23 @@ struct dsimplexes // Creates a constructor for combinatorial simplexes n_pts = n
         std::cout << std::endl;
     }
 
-    void next_simplex()
+    bool next_simplex()
     {
-        for (size_t i = dim - 1; i >= 0; i--)
+        for (size_t i = 0; i < dim; i++)
         {
-            if (++simplex.at(i) == n_pts)
+            bool flag = true;
+            if (++simplex[i] == n_pts - i)
             {
-                size_t j = 0, reset_to = 0; 
-                for (; j < dim && simplex.at(j) != n_pts; ++j)
-                    reset_to = simplex.at(j);
-                std::cout << reset_to<<std::endl;
-                simplex.at(i) = reset_to+1+(dim-j); // Reset this position
+                flag = false;
+                auto reset_to = n_pts;
+                for (size_t j = i + 1; j < dim && reset_to >= n_pts; j++)
+                    reset_to = simplex[j] + j + 1;
+                simplex[i] = reset_to - i;
             }
-            else
-                break;
+            else if (flag)
+                return simplex.back() != n_pts - dim;
         }
+        return false; // Not really needed just avoiding compiler warnings
     };
 };
 
