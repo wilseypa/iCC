@@ -1,5 +1,6 @@
 #include "deps/distMat.cpp"
 #include "deps/readInput.hpp"
+#include "deps/hopcroft_karp.cpp"
 #include <chrono>
 
 std::map<double, std::vector<std::vector<int>>> binEdgeSimplexes(std::vector<std::vector<double>> &distMat) // Direct creation of edgebins to a map
@@ -92,14 +93,50 @@ std::map<double, std::vector<std::vector<int>>> dsimplices_batches(std::vector<s
         for (int i = 0; i < dim - 1; i++)
             for (int j = i + 1; j < dim; j++)
                 max_dist = std::max(max_dist, distMat[ds.simplex[i]][ds.simplex[j]]);
-        weighted_simplexes[max_dist].push_back(ds.simplex);
+        weighted_simplexes[max_dist].push_back({ds.simplex.rbegin(), ds.simplex.rend()});
     } while (ds.next_simplex());
     return weighted_simplexes;
 }
 
-std::vector<std::vector<int>> dimMatching(std::vector<std::vector<int>> simplexes, size_t dim, bool final = false)
+std::vector<std::vector<int>> dimMatching(std::vector<std::vector<int>> &simplexes, size_t dim, bool final)
 {
-    return simplexes;
+    std::vector<std::vector<int>> critCells, simps, cofaces;
+    for (auto &simplex : simplexes)
+    {
+        if (simplex.size() == dim + 1)
+            cofaces.emplace_back(std::move(simplex));
+        else if (simplex.size() == dim)
+            simps.emplace_back(std::move(simplex));
+        else if (simplex.size() < dim)
+            critCells.emplace_back(std::move(simplex));
+    }
+    if (simps.empty() || cofaces.empty())
+    {
+        std::move(simps.begin(), simps.end(), std::back_inserter(critCells));
+        if (!final)
+            std::move(cofaces.begin(), cofaces.end(), std::back_inserter(critCells));
+        return critCells;
+    }
+    HKGraph csr_matrix(simps.size(), cofaces.size());
+    for (std::size_t i = 0; i < simps.size(); ++i)
+    {
+        for (std::size_t j = 0; j < cofaces.size(); ++j)
+        {
+            if (std::includes(cofaces[j].begin(), cofaces[j].end(), simps[i].begin(), simps[i].end()))
+                csr_matrix.addEdge(i, j);
+        }
+    }
+    auto res = csr_matrix.custom_hopcroftKarpAlgorithm();
+
+    std::for_each(res.first.rbegin(), res.first.rend(), [&simps](auto index)
+                  { simps.erase(simps.begin() + index); });
+    std::for_each(res.second.rbegin(), res.second.rend(), [&cofaces](auto index)
+                  { cofaces.erase(cofaces.begin() + index); });
+
+    std::move(simps.begin(), simps.end(), std::back_inserter(critCells));
+    if (!final)
+        std::move(cofaces.begin(), cofaces.end(), std::back_inserter(critCells));
+    return critCells;
 }
 
 int main(int argc, char *argv[])
@@ -115,7 +152,7 @@ int main(int argc, char *argv[])
     auto distMatrix = distMat(inputData);
     auto bins = binEdgeSimplexes(distMatrix);
 
-    for (size_t dim = 2; dim < maxDim; dim++)
+    for (size_t dim = 2; dim <= maxDim; dim++)
     {
         auto batch_start_time = std::chrono::high_resolution_clock::now();
         auto weighted_simplicies = dsimplices_batches(distMatrix, dim + 1, 1000, 0); // Worker is invokation counter
@@ -129,12 +166,28 @@ int main(int argc, char *argv[])
 
         // Dim Matching functionality
         for (auto &[weight, simplexes] : bins)
-            simplexes = dimMatching(simplexes, dim, dim == maxDim - 1);
+            simplexes = dimMatching(simplexes, dim, dim == maxDim);
         auto match_end_time = std::chrono::high_resolution_clock::now();
         std::cout << "Match time" << (match_end_time - match_start_time).count() << std::endl;
     }
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = (end_time - start_time).count();
     std::cout << "Elapsed time: " << duration << " ns" << std::endl;
+
+    for (auto &[weight, simplexes] : bins)
+    {
+        if (simplexes.size() > 1)
+        {
+            std::cout << weight << " ";
+            for (auto &simplex : simplexes)
+            {
+                std::cout << "(";
+                for (auto i : simplex)
+                    std::cout << i << " ";
+                std::cout << ")";
+            }
+            std::cout << std::endl;
+        }
+    }
     return 0;
 }
