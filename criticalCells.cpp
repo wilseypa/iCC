@@ -147,7 +147,6 @@ int main(int argc, char *argv[])
         std::cerr << "Usage: " << argv[0] << " <input_filename>" << std::endl;
         return 1;
     }
-    int num_threads = omp_get_num_threads();
     auto start_time = std::chrono::high_resolution_clock::now();
     auto inputData = readInput::readCSV(argv[1]);
     size_t maxDim = inputData[0].size();
@@ -167,15 +166,22 @@ int main(int argc, char *argv[])
         binByWeights(weighted_simplicies, bins);
 
         // Dim Matching functionality
+
+#ifdef PARALLEL
 #pragma omp parallel for
-        for (int i = 0; i < num_threads; i++)
+        for (int i = 0; i < omp_get_num_threads(); i++)
         {
-            size_t block_size = floor((double)bins.size() / num_threads);
+            size_t block_size = floor((double)bins.size() / omp_get_num_threads());
             auto it = std::next(bins.begin(), block_size * i);
-            auto end = (num_threads == i + 1) ? bins.end() : std::next(bins.begin(), block_size * i + 1);
+            auto end = (omp_get_num_threads() == i + 1) ? bins.end() : std::next(bins.begin(), block_size * i + 1);
             for (; it != end; it++)
                 it->second = dimMatching(it->second, dim, dim == maxDim);
         }
+
+#else
+        for (auto &it : bins)
+            it.second = dimMatching(it.second, dim, dim == maxDim);
+#endif
         auto match_end_time = std::chrono::high_resolution_clock::now();
         std::cout << "Match time" << (match_end_time - match_start_time).count() << std::endl;
     }
