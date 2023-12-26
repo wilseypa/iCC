@@ -123,15 +123,15 @@ std::vector<std::vector<int>> dimMatching(std::vector<std::vector<int>> &simplex
         for (std::size_t j = 0; j < cofaces.size(); ++j)
         {
             if (std::includes(cofaces[j].begin(), cofaces[j].end(), simps[i].begin(), simps[i].end()))
-                csr_matrix.addEdge(i, j);
+                csr_matrix.addEdge(i + 1, j + 1); // Intial index 1
         }
     }
     auto res = csr_matrix.custom_hopcroftKarpAlgorithm();
 
     std::for_each(res.first.rbegin(), res.first.rend(), [&simps](auto index)
-                  { simps.erase(simps.begin() + index); });
+                  { simps.erase(std::next(simps.begin(), index-1)); });
     std::for_each(res.second.rbegin(), res.second.rend(), [&cofaces](auto index)
-                  { cofaces.erase(cofaces.begin() + index); });
+                  { cofaces.erase(std::next(cofaces.begin(), index-1)); });
 
     std::move(simps.begin(), simps.end(), std::back_inserter(critCells));
     if (!final)
@@ -176,7 +176,7 @@ int main(int argc, char *argv[])
 
     for (auto &[weight, simplexes] : bins)
     {
-        if (simplexes.size() > 1)
+        if (!simplexes.empty())
         {
             std::cout << weight << " ";
             for (auto &simplex : simplexes)
