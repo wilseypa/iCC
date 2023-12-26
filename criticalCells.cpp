@@ -2,6 +2,7 @@
 #include "deps/readInput.hpp"
 #include "deps/hopcroft_karp.cpp"
 #include <chrono>
+#include "omp.h"
 
 std::map<double, std::vector<std::vector<int>>> binEdgeSimplexes(std::vector<std::vector<double>> &distMat) // Direct creation of edgebins to a map
 {
@@ -129,9 +130,9 @@ std::vector<std::vector<int>> dimMatching(std::vector<std::vector<int>> &simplex
     auto res = csr_matrix.custom_hopcroftKarpAlgorithm();
 
     std::for_each(res.first.rbegin(), res.first.rend(), [&simps](auto index)
-                  { simps.erase(std::next(simps.begin(), index-1)); });
+                  { simps.erase(std::next(simps.begin(), index - 1)); });
     std::for_each(res.second.rbegin(), res.second.rend(), [&cofaces](auto index)
-                  { cofaces.erase(std::next(cofaces.begin(), index-1)); });
+                  { cofaces.erase(std::next(cofaces.begin(), index - 1)); });
 
     std::move(simps.begin(), simps.end(), std::back_inserter(critCells));
     if (!final)
@@ -146,6 +147,7 @@ int main(int argc, char *argv[])
         std::cerr << "Usage: " << argv[0] << " <input_filename>" << std::endl;
         return 1;
     }
+    int num_threads = omp_get_num_threads();
     auto start_time = std::chrono::high_resolution_clock::now();
     auto inputData = readInput::readCSV(argv[1]);
     size_t maxDim = inputData[0].size();
@@ -165,8 +167,15 @@ int main(int argc, char *argv[])
         binByWeights(weighted_simplicies, bins);
 
         // Dim Matching functionality
-        for (auto &[weight, simplexes] : bins)
-            simplexes = dimMatching(simplexes, dim, dim == maxDim);
+#pragma omp parallel for
+        for (int i = 0; i < num_threads; i++)
+        {
+            size_t block_size = floor((double)bins.size() / num_threads);
+            auto it = std::next(bins.begin(), block_size * i);
+            auto end = (num_threads == i + 1) ? bins.end() : std::next(bins.begin(), block_size * i + 1);
+            for (; it != end; it++)
+                it->second = dimMatching(it->second, dim, dim == maxDim);
+        }
         auto match_end_time = std::chrono::high_resolution_clock::now();
         std::cout << "Match time" << (match_end_time - match_start_time).count() << std::endl;
     }
