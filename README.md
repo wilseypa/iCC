@@ -6,8 +6,6 @@
 - C++23
   
 - CMake
-
-- Eigen
   
 - OpenMP
 
@@ -15,7 +13,7 @@
 			  
 ### COMPILING 
   
-  ##    mkdir build && cd build
+  	##    mkdir build && cd build
 	##    cmake .. -DCMAKE_BUILD_TYPE=Release
 	##    make
 

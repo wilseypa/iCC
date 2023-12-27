@@ -2,7 +2,9 @@
 #include "deps/readInput.hpp"
 #include "deps/hopcroft_karp.cpp"
 #include <chrono>
-#include "omp.h"
+#include <omp.h>
+
+#define PARALLEL
 
 std::map<double, std::vector<std::vector<int>>> binEdgeSimplexes(std::vector<std::vector<double>> &distMat) // Direct creation of edgebins to a map
 {
@@ -16,8 +18,7 @@ std::map<double, std::vector<std::vector<int>>> binEdgeSimplexes(std::vector<std
 void binByWeights(std::map<double, std::vector<std::vector<int>>> &weighted_simplicies, std::map<double, std::vector<std::vector<int>>> &bins) // Merged higher dim feature to bins
 {
     for (auto &[weight, simplexes] : weighted_simplicies)
-        for (auto simplex : simplexes)
-            bins[weight].push_back(simplex);
+        std::move(simplexes.begin(), simplexes.end(), std::back_inserter(bins[weight]));
     return;
 }
 
@@ -166,14 +167,15 @@ int main(int argc, char *argv[])
         binByWeights(weighted_simplicies, bins);
 
         // Dim Matching functionality
-
+        int num_threads = 20;
 #ifdef PARALLEL
 #pragma omp parallel for
-        for (int i = 0; i < omp_get_num_threads(); i++)
+        for (int i = 0; i < num_threads; i++)
         {
-            size_t block_size = floor((double)bins.size() / omp_get_num_threads());
+            size_t block_size = floor((double)bins.size() / num_threads);
             auto it = std::next(bins.begin(), block_size * i);
-            auto end = (omp_get_num_threads() == i + 1) ? bins.end() : std::next(bins.begin(), block_size * i + 1);
+            bool isLastThread = (i + 1 == num_threads);
+            auto end = isLastThread ? bins.end() : std::next(bins.begin(), block_size * (i + 1));
             for (; it != end; it++)
                 it->second = dimMatching(it->second, dim, dim == maxDim);
         }
