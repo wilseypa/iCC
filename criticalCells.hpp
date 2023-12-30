@@ -4,6 +4,7 @@
 #include <string>
 #include <map>
 #include <iostream>
+#include <chrono>
 
 std::ostream &operator<<(std::ostream &os, const std::map<double, std::vector<std::vector<int>>> &bins)
 {
@@ -31,39 +32,24 @@ struct SparesDistMat
     double distance(size_t i, size_t j) { return this->distMatrix[i][j]; };
 };
 
-struct NominalDistMat
+struct NormallDistMat
 {
     std::vector<std::vector<double>> distMatrix;
     inline double distance(size_t i, size_t j) { return this->distMatrix[i][j]; };
 };
 
-template <typename DistMatType>
-class CritCells : public DistMatType
-{
-public:
-    CritCells(const std::string &fileName);               // FileName to read InputData from
-    CritCells(std::vector<std::vector<double>> &distMat); // Input normal Distance matrix
-    void run_Compute(int maxDim, int batchsize = 50000);
-
-private:
-    std::map<double, std::vector<std::vector<int>>> binEdgeSimplexes();                                                                             // Direct creation of edgebins to a map
-    void binByWeights(std::map<double, std::vector<std::vector<int>>> &weighted_simplicies, std::map<double, std::vector<std::vector<int>>> &bins); // Merged higher dim feature to bins
-    std::map<double, std::vector<std::vector<int>>> dsimplices_batches(size_t dim, size_t batch_size);                                              // Worker is invokation counter
-    std::vector<std::vector<int>> dimMatching(std::vector<std::vector<int>> &simplexes, size_t dim, bool final);
-};
-
-struct dsimplexes // Creates a constructor for combinatorial simplexes n_pts = n, dim = r
+struct VR // Creates a constructor for combinatorial simplexes n_pts = n, dim = r
 {
 public:
     std::vector<int> simplex;
 
-    dsimplexes(size_t n_pts, size_t dim) : n_pts(n_pts), dim(dim)
+    VR(size_t n_pts, size_t dim) : n_pts(n_pts), dim(dim)
     {
         for (size_t i = dim; i > 0; i--)
             simplex.push_back(i - 1);
     };
 
-    dsimplexes(size_t n_pts, size_t dim, size_t start_at) : n_pts(n_pts), dim(dim)
+    VR(size_t n_pts, size_t dim, size_t start_at) : n_pts(n_pts), dim(dim)
     {
         auto temp = start_at;
     };
@@ -92,6 +78,21 @@ public:
 private:
     size_t n_pts;
     size_t dim;
+};
+
+template <typename ComplexType, typename DistMatType>
+class CritCells : public DistMatType
+{
+public:
+    CritCells(const std::string &fileName);               // FileName to read InputData from
+    CritCells(std::vector<std::vector<double>> &distMat); // Input normal Distance matrix
+    void run_Compute(int maxDim, int batchsize = 50000);
+
+private:
+    std::map<double, std::vector<std::vector<int>>> binEdgeSimplexes();                                                                             // Direct creation of edgebins to a map
+    void binByWeights(std::map<double, std::vector<std::vector<int>>> &weighted_simplicies, std::map<double, std::vector<std::vector<int>>> &bins); // Merged higher dim feature to bins
+    std::map<double, std::vector<std::vector<int>>> dsimplices_batches(ComplexType simplex_const, size_t dim, size_t batch_size);                   // Worker is invokation counter
+    std::vector<std::vector<int>> dimMatching(std::vector<std::vector<int>> &simplexes, size_t dim, bool final);
 };
 
 unsigned long long combinations(int n, int r)
