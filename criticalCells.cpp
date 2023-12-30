@@ -7,6 +7,19 @@
 
 #define PARALLEL
 
+template <>
+CritCells<NominalDistMat>::CritCells(const std::string &fileName)
+{
+    auto inputData = readInput::readCSV(fileName);
+    this->distMatrix = distMat(inputData);
+}
+
+template <>
+CritCells<NominalDistMat>::CritCells(std::vector<std::vector<double>> &distMat)
+{
+    this->distMatrix = distMat;
+}
+
 int main(int argc, char *argv[])
 {
     if (argc != 3)
@@ -14,30 +27,24 @@ int main(int argc, char *argv[])
         std::cerr << "Usage: " << argv[0] << " <input_filename> <maxDim>" << std::endl;
         return 1;
     }
-    CritCells cc(argv[1]);
+    CritCells<NominalDistMat> cc(argv[1]);
     cc.run_Compute(std::stoi(argv[2]));
     return 0;
 }
 
-CritCells::CritCells(const std::string &fileName)
-{
-    auto inputData = readInput::readCSV(fileName);
-    distMatrix = distMat(inputData);
-}
-
-void CritCells::run_Compute(int maxDim, int batch_size)
+template <typename DistMatType>
+void CritCells<DistMatType>::run_Compute(int maxDim, int batch_size)
 {
     auto start_time = std::chrono::high_resolution_clock::now();
-    auto bins = binEdgeSimplexes(distMatrix);
+    auto bins = binEdgeSimplexes();
     for (size_t dim = 2; dim <= maxDim; dim++)
     {
         auto batch_start_time = std::chrono::high_resolution_clock::now();
-        auto weighted_simplicies = dsimplices_batches(distMatrix, dim + 1, batch_size); // Worker is invokation counter
+        auto weighted_simplicies = dsimplices_batches(dim + 1, batch_size); // Worker is invokation counter
         auto batch_end_time = std::chrono::high_resolution_clock::now();
-        std::cout << "Batch time " << std::chrono::duration<double>(batch_end_time - batch_start_time).count() << " seconds." << std::endl;
+        std::cout << "Batch time: " << std::chrono::duration<double>(batch_end_time - batch_start_time).count() << " seconds." << std::endl;
 
         auto match_start_time = std::chrono::high_resolution_clock::now();
-
         // Bin the batches
         binByWeights(weighted_simplicies, bins);
 
@@ -60,46 +67,50 @@ void CritCells::run_Compute(int maxDim, int batch_size)
             it.second = dimMatching(it.second, dim, dim == maxDim);
 #endif
         auto match_end_time = std::chrono::high_resolution_clock::now();
-        std::cout << "Match time " << std::chrono::duration<double>(match_end_time - match_start_time).count() << " seconds." << std::endl;
+        std::cout << "Match time: " << std::chrono::duration<double>(match_end_time - match_start_time).count() << " seconds." << std::endl;
     }
     auto end_time = std::chrono::high_resolution_clock::now();
     std::cout << "Elapsed time: " << std::chrono::duration<double>(end_time - start_time).count() << " seconds." << std::endl;
     std::cout << bins << std::endl;
 }
 
-std::map<double, std::vector<std::vector<int>>> CritCells::binEdgeSimplexes(std::vector<std::vector<double>> &distMat) // Direct creation of edgebins to a map
+template <typename DistMatType>
+std::map<double, std::vector<std::vector<int>>> CritCells<DistMatType>::binEdgeSimplexes() // Direct creation of edgebins to a map
 {
     std::map<double, std::vector<std::vector<int>>> binned_edges;
-    for (int i = 0; i < distMat.size() - 1; i++)
-        for (int j = i + 1; j < distMat.size(); j++)
-            binned_edges[distMat[i][j]].push_back({i, j});
+    for (int i = 0; i < this->distMatrix.size() - 1; i++)
+        for (int j = i + 1; j < this->distMatrix.size(); j++)
+            binned_edges[this->distance(i, j)].push_back({i, j});
     return binned_edges;
 }
 
-void CritCells::binByWeights(std::map<double, std::vector<std::vector<int>>> &weighted_simplicies, std::map<double, std::vector<std::vector<int>>> &bins) // Merged higher dim feature to bins
+template <typename DistMatType>
+void CritCells<DistMatType>::binByWeights(std::map<double, std::vector<std::vector<int>>> &weighted_simplicies, std::map<double, std::vector<std::vector<int>>> &bins) // Merged higher dim feature to bins
 {
     for (auto &[weight, simplexes] : weighted_simplicies)
         std::move(simplexes.begin(), simplexes.end(), std::back_inserter(bins[weight]));
     return;
 }
 
-std::map<double, std::vector<std::vector<int>>> CritCells::dsimplices_batches(std::vector<std::vector<double>> &distMat, u_int dim, size_t batch_size) // Worker is invokation counter
+template <typename DistMatType>
+std::map<double, std::vector<std::vector<int>>> CritCells<DistMatType>::dsimplices_batches(size_t dim, size_t batch_size) // Worker is invokation counter
 {
     std::map<double, std::vector<std::vector<int>>> weighted_simplexes;
-    dsimplexes ds(distMat.size(), dim);
+    dsimplexes ds(this->distMatrix.size(), dim);
     do
     {
         double max_dist = 0;
         for (int i = 0; i < dim - 1; i++)
             for (int j = i + 1; j < dim; j++)
-                max_dist = std::max(max_dist, distMat[ds.simplex[j]][ds.simplex[i]]);
+                max_dist = std::max(max_dist, this->distance(ds.simplex[j], ds.simplex[i]));
         weighted_simplexes[max_dist].push_back({ds.simplex.rbegin(), ds.simplex.rend()});
         // batch_size--;
-    } while (ds.next_simplex() && batch_size);
+    } while (ds.next_simplex());
     return weighted_simplexes;
 }
 
-std::vector<std::vector<int>> CritCells::dimMatching(std::vector<std::vector<int>> &simplexes, size_t dim, bool final)
+template <typename DistMatType>
+std::vector<std::vector<int>> CritCells<DistMatType>::dimMatching(std::vector<std::vector<int>> &simplexes, size_t dim, bool final)
 {
     std::vector<std::vector<int>> critCells, simps, cofaces;
     for (auto &simplex : simplexes)

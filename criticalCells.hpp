@@ -1,3 +1,5 @@
+#pragma once
+
 #include <vector>
 #include <string>
 #include <map>
@@ -23,18 +25,30 @@ std::ostream &operator<<(std::ostream &os, const std::map<double, std::vector<st
     return os;
 }
 
-class CritCells
+struct SparesDistMat
+{
+    std::vector<std::vector<double>> distMatrix;
+    double distance(size_t i, size_t j) { return this->distMatrix[i][j]; };
+};
+
+struct NominalDistMat
+{
+    std::vector<std::vector<double>> distMatrix;
+    inline double distance(size_t i, size_t j) { return this->distMatrix[i][j]; };
+};
+
+template <typename DistMatType>
+class CritCells : public DistMatType
 {
 public:
-    CritCells(const std::string &fileName);                                       // FileName to read InputData from
-    CritCells(std::vector<std::vector<double>> &distMat) : distMatrix(distMat){}; // Implementation not required
+    CritCells(const std::string &fileName);               // FileName to read InputData from
+    CritCells(std::vector<std::vector<double>> &distMat); // Input normal Distance matrix
     void run_Compute(int maxDim, int batchsize = 50000);
 
 private:
-    std::vector<std::vector<double>> distMatrix;
-    std::map<double, std::vector<std::vector<int>>> binEdgeSimplexes(std::vector<std::vector<double>> &distMat);                                    // Direct creation of edgebins to a map
+    std::map<double, std::vector<std::vector<int>>> binEdgeSimplexes();                                                                             // Direct creation of edgebins to a map
     void binByWeights(std::map<double, std::vector<std::vector<int>>> &weighted_simplicies, std::map<double, std::vector<std::vector<int>>> &bins); // Merged higher dim feature to bins
-    std::map<double, std::vector<std::vector<int>>> dsimplices_batches(std::vector<std::vector<double>> &distMat, u_int dim, size_t batch_size);    // Worker is invokation counter
+    std::map<double, std::vector<std::vector<int>>> dsimplices_batches(size_t dim, size_t batch_size);                                              // Worker is invokation counter
     std::vector<std::vector<int>> dimMatching(std::vector<std::vector<int>> &simplexes, size_t dim, bool final);
 };
 
