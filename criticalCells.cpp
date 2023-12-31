@@ -26,35 +26,40 @@ void CritCells<ComplexType, DistMatType>::run_Compute(int maxDim, int batch_size
     auto bins = binEdgeSimplexes();
     for (size_t dim = 2; dim <= maxDim; dim++)
     {
-        auto batch_start_time = std::chrono::high_resolution_clock::now();
-        VR complex(this->distMatrix.size(), dim + 1);
-        auto weighted_simplicies = dsimplices_batches(complex, dim, batch_size); // Worker is invokation counter
-        auto batch_end_time = std::chrono::high_resolution_clock::now();
-        std::cout << "Batch time: " << std::chrono::duration<double>(batch_end_time - batch_start_time).count() << " seconds." << std::endl;
-        auto match_start_time = std::chrono::high_resolution_clock::now();
-        // Bin the batches
-        binByWeights(weighted_simplicies, bins);
+        auto batch_no = 1;
+        ComplexType complex(this->distMatrix.size(), dim + 1);
+        while (complex.active)
+        {
+            auto batch_start_time = std::chrono::high_resolution_clock::now();
+            auto weighted_simplicies = dsimplices_batches(complex, dim, batch_size); // Worker is invokation counter
+            std::cout << weighted_simplicies.size() << std::endl;
+            auto batch_end_time = std::chrono::high_resolution_clock::now();
+            std::cout << "Batch time: " << std::chrono::duration<double>(batch_end_time - batch_start_time).count() << " seconds." << std::endl;
+            auto match_start_time = std::chrono::high_resolution_clock::now();
+            // Bin the batches
+            binByWeights(weighted_simplicies, bins);
 
-        // Dim Matching functionality
-        int num_threads = 20;
+            // Dim Matching functionality
+            int num_threads = 20;
 #ifdef PARALLEL
 #pragma omp parallel for
-        for (int i = 0; i < num_threads; i++)
-        {
-            size_t block_size = floor((double)bins.size() / num_threads);
-            auto it = std::next(bins.begin(), block_size * i);
-            bool isLastThread = (i + 1 == num_threads);
-            auto end = isLastThread ? bins.end() : std::next(bins.begin(), block_size * (i + 1));
-            for (; it != end; it++)
-                it->second = dimMatching(it->second, dim, dim == maxDim);
-        }
+            for (int i = 0; i < num_threads; i++)
+            {
+                size_t block_size = floor((double)bins.size() / num_threads);
+                auto it = std::next(bins.begin(), block_size * i);
+                bool isLastThread = (i + 1 == num_threads);
+                auto end = isLastThread ? bins.end() : std::next(bins.begin(), block_size * (i + 1));
+                for (; it != end; it++)
+                    it->second = dimMatching(it->second, dim, dim == maxDim);
+            }
 
 #else
-        for (auto &it : bins)
-            it.second = dimMatching(it.second, dim, dim == maxDim);
+            for (auto &it : bins)
+                it.second = dimMatching(it.second, dim, dim == maxDim);
 #endif
-        auto match_end_time = std::chrono::high_resolution_clock::now();
-        std::cout << "Match time: " << std::chrono::duration<double>(match_end_time - match_start_time).count() << " seconds." << std::endl;
+            auto match_end_time = std::chrono::high_resolution_clock::now();
+            std::cout << "Match time: " << std::chrono::duration<double>(match_end_time - match_start_time).count() << " seconds." << std::endl;
+        }
     }
     auto end_time = std::chrono::high_resolution_clock::now();
     std::cout << "Elapsed time: " << std::chrono::duration<double>(end_time - start_time).count() << " seconds." << std::endl;
@@ -80,9 +85,10 @@ void CritCells<ComplexType, DistMatType>::binByWeights(std::map<double, std::vec
 }
 
 template <typename ComplexType, typename DistMatType>
-std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatType>::dsimplices_batches(ComplexType complex, size_t dim, size_t batch_size) // Worker is invokation counter
+std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatType>::dsimplices_batches(ComplexType &complex, size_t dim, size_t batch_size) // Worker is invokation counter
 {
     std::map<double, std::vector<std::vector<int>>> weighted_simplexes;
+    long long counter = 0;
     do
     {
         double max_dist = 0;
@@ -90,7 +96,7 @@ std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatTy
             for (int j = i + 1; j <= dim; j++)
                 max_dist = std::max(max_dist, this->distance(complex.simplex[j], complex.simplex[i]));
         weighted_simplexes[max_dist].push_back({complex.simplex.rbegin(), complex.simplex.rend()});
-    } while (complex.next_simplex());
+    } while (complex.next_simplex() && (!batch_size || batch_size > ++counter));
     return weighted_simplexes;
 }
 
