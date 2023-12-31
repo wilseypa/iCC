@@ -1,7 +1,7 @@
 # CriticalCells
 ---
 
-### REQUIREMENTS 
+## REQUIREMENTS 
 
 - C++23
   
@@ -9,9 +9,11 @@
   
 - OpenMP
 
+- Eigen3
+
 ---
 			  
-### COMPILING 
+## COMPILING 
   
   	##    mkdir build && cd build
 	##    cmake .. -DCMAKE_BUILD_TYPE=Release
@@ -19,9 +21,9 @@
 
 ---
 
-###  RUNNING 
+##  RUNNING 
 
-	##    ./CriticalCells <inputFileName>
+	##    ./CritCells <input_filename> <maxDim> [<batch_size>]
 
 ## CUSTOMIZATION
 

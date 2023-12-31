@@ -32,16 +32,19 @@ void CritCells<ComplexType, DistMatType>::run_Compute(int maxDim, int batch_size
     auto bins = binEdgeSimplexes();
     for (size_t dim = 2; dim <= maxDim; dim++)
     {
+        std::clog << "Starting for dim " << dim << std::endl;
         auto batch_no = 1;
         ComplexType complex;
         while (complex.active)
         {
+            std::clog << "Batch no " << batch_no++ << std::endl;
             auto batch_start_time = std::chrono::high_resolution_clock::now();
-            auto weighted_simplicies = dsimplices_batches(complex, dim, batch_size); // Worker is invokation counter
-            std::cout << weighted_simplicies.size() << std::endl;
+            auto weighted_simplicies = dsimplices_batches(complex, dim, batch_size);
             auto batch_end_time = std::chrono::high_resolution_clock::now();
-            std::cout << "Batch time: " << std::chrono::duration<double>(batch_end_time - batch_start_time).count() << " seconds." << std::endl;
+            std::clog << "Batch time: " << std::chrono::duration<double>(batch_end_time - batch_start_time).count() << " seconds." << std::endl;
+
             auto match_start_time = std::chrono::high_resolution_clock::now();
+
             // Bin the batches
             binByWeights(weighted_simplicies, bins);
 
@@ -64,11 +67,11 @@ void CritCells<ComplexType, DistMatType>::run_Compute(int maxDim, int batch_size
                 it.second = dimMatching(it.second, dim, dim == maxDim);
 #endif
             auto match_end_time = std::chrono::high_resolution_clock::now();
-            std::cout << "Match time: " << std::chrono::duration<double>(match_end_time - match_start_time).count() << " seconds." << std::endl;
+            std::clog << "Match time: " << std::chrono::duration<double>(match_end_time - match_start_time).count() << " seconds." << std::endl;
         }
     }
     auto end_time = std::chrono::high_resolution_clock::now();
-    std::cout << "Elapsed time: " << std::chrono::duration<double>(end_time - start_time).count() << " seconds." << std::endl;
+    std::clog << "Elapsed time: " << std::chrono::duration<double>(end_time - start_time).count() << " seconds." << std::endl;
     std::cout << bins << std::endl;
 }
 
