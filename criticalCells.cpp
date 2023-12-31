@@ -27,7 +27,7 @@ void CritCells<ComplexType, DistMatType>::run_Compute(int maxDim, int batch_size
     for (size_t dim = 2; dim <= maxDim; dim++)
     {
         auto batch_no = 1;
-        ComplexType complex(this->distMatrix.size(), dim + 1);
+        ComplexType complex;
         while (complex.active)
         {
             auto batch_start_time = std::chrono::high_resolution_clock::now();
@@ -88,6 +88,8 @@ template <typename ComplexType, typename DistMatType>
 std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatType>::dsimplices_batches(ComplexType &complex, size_t dim, size_t batch_size) // Worker is invokation counter
 {
     std::map<double, std::vector<std::vector<int>>> weighted_simplexes;
+    if (!complex.is_initialized)
+        complex.initialize(this->distMatrix.size(), dim + 1);
     long long counter = 0;
     do
     {

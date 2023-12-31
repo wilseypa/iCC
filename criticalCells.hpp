@@ -42,26 +42,31 @@ struct VR // Creates a constructor for combinatorial simplexes n_pts = n, dim = 
 {
 public:
     std::vector<int> simplex;
-    bool active;
+    bool is_initialized; // Marks if the object is initialized
+    bool active;         // Marks end of simplexes
+    VR() : active(true), is_initialized(false){};
 
-    VR(size_t n_pts, size_t dim) : n_pts(n_pts), dim(dim), active(true)
+    void initialize(size_t n_pts, size_t dim)
     {
+        n_pts_ = n_pts;
+        dim_ = dim;
         for (size_t i = dim; i > 0; i--)
             simplex.push_back(i - 1);
+        is_initialized = true;
     };
 
     bool next_simplex()
     {
-        if (simplex.back() != n_pts - dim)
+        if (simplex.back() != n_pts_ - dim_)
         {
-            for (size_t i = 0; i < dim; i++)
+            for (size_t i = 0; i < dim_; i++)
             {
                 bool flag = true;
-                if (++simplex[i] == n_pts - i)
+                if (++simplex[i] == n_pts_ - i)
                 {
                     flag = false;
-                    auto reset_to = n_pts;
-                    for (size_t j = i + 1; j < dim && reset_to >= n_pts; j++)
+                    auto reset_to = n_pts_;
+                    for (size_t j = i + 1; j < dim_ && reset_to >= n_pts_; j++)
                         reset_to = simplex[j] + j + 1;
                     simplex[i] = reset_to - i;
                 }
@@ -74,8 +79,8 @@ public:
     };
 
 private:
-    size_t n_pts;
-    size_t dim;
+    size_t n_pts_;
+    size_t dim_;
 };
 
 template <typename ComplexType, typename DistMatType>
@@ -89,6 +94,6 @@ public:
 private:
     std::map<double, std::vector<std::vector<int>>> binEdgeSimplexes();                                                                             // Direct creation of edgebins to a map
     void binByWeights(std::map<double, std::vector<std::vector<int>>> &weighted_simplicies, std::map<double, std::vector<std::vector<int>>> &bins); // Merged higher dim feature to bins
-    std::map<double, std::vector<std::vector<int>>> dsimplices_batches(ComplexType &simplex_const, size_t dim, size_t batch_size);                   // Worker is invokation counter
+    std::map<double, std::vector<std::vector<int>>> dsimplices_batches(ComplexType &simplex_const, size_t dim, size_t batch_size);                  // Worker is invokation counter
     std::vector<std::vector<int>> dimMatching(std::vector<std::vector<int>> &simplexes, size_t dim, bool final);
 };

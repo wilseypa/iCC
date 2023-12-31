@@ -6,13 +6,8 @@ set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
 
 find_package(OpenMP)
 
-# Create library for hopcroft_karp
 add_library(hopcroft_karp STATIC deps/hopcroft_karp.cpp deps/hopcroft_karp.hpp)
-
-# Create library for readInput
 add_library(readInput STATIC deps/readInput.cpp deps/readInput.hpp)
-
-# Create library for distMat
 add_library(distMat STATIC deps/distMat.cpp)
 
 # Create library for CriticalCells
