@@ -5,6 +5,7 @@
 #include <map>
 #include <iostream>
 #include <chrono>
+#include <Eigen/Sparse>
 
 std::ostream &operator<<(std::ostream &os, const std::map<double, std::vector<std::vector<int>>> &bins)
 {
@@ -26,16 +27,15 @@ std::ostream &operator<<(std::ostream &os, const std::map<double, std::vector<st
     return os;
 }
 
-struct SparesDistMat
+struct SparseDistMat
 {
-    std::vector<std::vector<double>> distMatrix;
-    double distance(size_t i, size_t j) { return this->distMatrix[i][j]; };
+    Eigen::SparseMatrix<double> distMatrix;
+    inline double distance(size_t i, size_t j) const { return distMatrix.coeff(i, j); };
 };
-
 struct NormallDistMat
 {
     std::vector<std::vector<double>> distMatrix;
-    inline double distance(size_t i, size_t j) { return this->distMatrix[i][j]; };
+    inline double distance(size_t i, size_t j) const { return this->distMatrix[i][j]; };
 };
 
 struct VR // Creates a constructor for combinatorial simplexes n_pts = n, dim = r
@@ -89,6 +89,7 @@ class CritCells : public DistMatType
 public:
     CritCells(const std::string &fileName);               // FileName to read InputData from
     CritCells(std::vector<std::vector<double>> &distMat); // Input normal Distance matrix
+    CritCells(Eigen::SparseMatrix<double> &distMat);
     void run_Compute(int maxDim, int batchsize = 0);
 
 private:

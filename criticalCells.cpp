@@ -6,6 +6,12 @@
 
 #define PARALLEL
 
+template <>
+CritCells<VR, SparseDistMat>::CritCells(Eigen::SparseMatrix<double> &distMat)
+{
+    this->distMatrix = distMat;
+}
+
 template <typename ComplexType, typename DistMatType>
 CritCells<ComplexType, DistMatType>::CritCells(const std::string &fileName)
 {
