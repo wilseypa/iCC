@@ -1,5 +1,6 @@
 #include <omp.h>
 #include <algorithm>
+#include <ranges>
 #include <execution>
 
 #include "parallel_dfs_match.hpp"
@@ -42,31 +43,20 @@ int parallelDFSMatch(Bi_Graph* bi_graph, int threadnum) {
     int u = bi_graph->u;
     int v = bi_graph->v;
 
-    std::vector<int> unmatched_u_init(u, 0);
+    std::vector<int> unmatched_u_init(u, -1);
     std::vector<int> unmatched_u_final(u, 0);
     std::vector<int> dfs_flag(u + v, 0);
     std::vector<int> look_ahead_flag(u + v, 0);
 
-    int initialunmatched = 0;
-    int finalunmatched = 0;
-
     omp_set_num_threads(threadnum);
 
     //find unmatched left nodes from initialized matching
-#pragma omp parallel
-    {
-        std::vector<int> thread_buff;    //overflow? limit its size?
-#pragma omp for
-        for (int i = 0; i < u; i++) {
-            if (bi_graph->match[i] < 0 && bi_graph->adj_list[i].size() > 0) {
-                thread_buff.push_back(i);
-            }
-        }
-        if (!thread_buff.empty()) {
-            int offset = __sync_fetch_and_add(&initialunmatched, thread_buff.size());
-            std::move(thread_buff.begin(), thread_buff.end(), unmatched_u_init.begin() + offset);
-        }
-    }
+    auto view = std::ranges::views::iota(0, u);
+    std::transform(std::execution::par, view.begin(), view.end(), unmatched_u_init.begin(), [&](const auto idx) {return (bi_graph->match[idx] < 0 && bi_graph->adj_list[idx].size() > 0) ? idx : -1;});
+    unmatched_u_init.erase(std::remove(std::execution::par, unmatched_u_init.begin(), unmatched_u_init.end(), -1), unmatched_u_init.end());
+
+    int initialunmatched = unmatched_u_init.size();
+    int finalunmatched = 0;
 
     //storing aug path one path per thread
     std::vector<std::vector<int>> aug_path(threadnum, std::vector<int>(u + v, 0));
@@ -90,7 +80,7 @@ int parallelDFSMatch(Bi_Graph* bi_graph, int threadnum) {
                 bi_graph->match[aug_path_tid[j + 1]] = aug_path_tid[j];
             }
             //store the unmatched node, need atomic op on the shared count var
-            if (augpathlen == 0)
+            if (augpathlen <= 0)
                 unmatched_u_final[__sync_fetch_and_add(&finalunmatched, 1)] = ustart;
         }
 

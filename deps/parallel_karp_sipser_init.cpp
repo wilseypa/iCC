@@ -31,24 +31,17 @@ int parallelKarpSipserInit(Bi_Graph* bi_graph, int threadnum) {
     int v = bi_graph->v;
 
     std::vector<int> node_deg(u, 0);
-    std::vector<int> deg_one_node(u, 0);
     std::vector<int> visit_flag(u + v, 0);
     int nodecount = 0;
 
     omp_set_num_threads(threadnum);
 
-#pragma omp parallel for schedule(static)
-    for (int i = 0; i < u; i++) {
-        node_deg[i] = bi_graph->adj_list[i].size();
-        // std::cout<<"node deg "<<node_deg[i]<<'\n';
-        if (node_deg[i] == 1) {
-            deg_one_node[__sync_fetch_and_add(&nodecount, 1)] = i;
-        }
-    }
+    std::transform(std::execution::par, bi_graph->adj_list.begin(), bi_graph->adj_list.begin() + u, node_deg.begin(), [](const auto& adj) { return adj.size(); });
 
 #pragma omp parallel for schedule(dynamic)
-    for (int i = 0; i < nodecount; i++) {
-        findMatch(bi_graph, deg_one_node[i], visit_flag, node_deg);
+    for (int i = 0; i < u; i++) {
+        if (node_deg[i] == 1)
+            findMatch(bi_graph, i, visit_flag, node_deg);
     }
 
 #pragma omp parallel for schedule(dynamic)
@@ -57,7 +50,7 @@ int parallelKarpSipserInit(Bi_Graph* bi_graph, int threadnum) {
             findMatch(bi_graph, i, visit_flag, node_deg);
         }
     }
-    
+
     return std::count_if(std::execution::par, bi_graph->match.begin(), bi_graph->match.end(), [](int value) { return value < 0; });
 }
 
