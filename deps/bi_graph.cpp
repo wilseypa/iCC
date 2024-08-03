@@ -1,9 +1,8 @@
 #include <iostream>
-#include <vector>
 #include <random>
 #include <set>
 
-#include "bi_graph.h"
+#include "bi_graph.hpp"
 
 Bi_Graph::Bi_Graph(int leftnum, int rightnum, int maxdeg, bool random) : u(leftnum), v(rightnum), maxdegree(maxdeg) {
     if (maxdegree > v) {

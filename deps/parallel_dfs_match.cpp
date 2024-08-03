@@ -1,11 +1,8 @@
-#include <iostream>
-#include <vector>
 #include <omp.h>
 #include <algorithm>
 #include <execution>
 
-#include "bi_graph.h"
-#include "parallel_karp_sipser_init.h"
+#include "parallel_dfs_match.hpp"
 
 int dfsAugPath(Bi_Graph* bi_graph, int startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<int>& aug_path_tid) {
     int topindex = -1;
@@ -52,7 +49,6 @@ int parallelDFSMatch(Bi_Graph* bi_graph, int threadnum) {
 
     int initialunmatched = 0;
     int finalunmatched = 0;
-    int iterationcount = 0;
 
     omp_set_num_threads(threadnum);
 
@@ -77,20 +73,16 @@ int parallelDFSMatch(Bi_Graph* bi_graph, int threadnum) {
 
     while (true) {
         //shared among threads
-        iterationcount += 1;
         finalunmatched = 0;
 
         std::fill(std::execution::par, dfs_flag.begin(), dfs_flag.end(), 0);
 
 #pragma omp parallel for schedule(dynamic)
         for (int i = 0; i < initialunmatched; i++) {
-            auto tid = omp_get_thread_num();
-            auto aug_path_tid = aug_path[tid];
+            auto& aug_path_tid = aug_path[omp_get_thread_num()];
 
             int ustart = unmatched_u_init[i];
-            int augpathlen = -1;
-
-            augpathlen = dfsAugPath(bi_graph, ustart, dfs_flag, look_ahead_flag, aug_path_tid);
+            int augpathlen = dfsAugPath(bi_graph, ustart, dfs_flag, look_ahead_flag, aug_path_tid);
 
             //augmentation
             for (int j = 0; j < augpathlen; j += 2) {
@@ -100,7 +92,6 @@ int parallelDFSMatch(Bi_Graph* bi_graph, int threadnum) {
             //store the unmatched node, need atomic op on the shared count var
             if (augpathlen == 0)
                 unmatched_u_final[__sync_fetch_and_add(&finalunmatched, 1)] = ustart;
-
         }
 
         if ((finalunmatched == 0) || (initialunmatched == finalunmatched)) {

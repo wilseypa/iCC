@@ -1,10 +1,8 @@
-#include <iostream>
-#include <vector>
 #include <omp.h>
+#include <execution>
 #include <algorithm>
 
-#include "bi_graph.h"
-#include "parallel_karp_sipser_init.h"
+#include "parallel_karp_sipser_init.hpp"
 
 void findMatch(Bi_Graph* bi_graph, int uidx, std::vector<int>& visit_flag, std::vector<int>& node_deg) {
     if (__sync_fetch_and_add(&(visit_flag[uidx]), 1) != 0) {
@@ -19,7 +17,7 @@ void findMatch(Bi_Graph* bi_graph, int uidx, std::vector<int>& visit_flag, std::
             //update degree of the neighbor of v
             for (const auto& index : bi_graph->adj_list[vidx]) {
                 //found new node with degree == 1
-                if (__sync_fetch_and_add(&(node_deg[index]), -1) == 2) {
+                if (__sync_fetch_and_sub(&(node_deg[index]), 1) == 2) {
                     findMatch(bi_graph, index, visit_flag, node_deg);
                 }
             }
@@ -36,7 +34,6 @@ int parallelKarpSipserInit(Bi_Graph* bi_graph, int threadnum) {
     std::vector<int> deg_one_node(u, 0);
     std::vector<int> visit_flag(u + v, 0);
     int nodecount = 0;
-    int leftunmatched = 0;
 
     omp_set_num_threads(threadnum);
 
@@ -60,15 +57,8 @@ int parallelKarpSipserInit(Bi_Graph* bi_graph, int threadnum) {
             findMatch(bi_graph, i, visit_flag, node_deg);
         }
     }
-
-#pragma omp parallel for schedule(static)
-    for (int i = 0; i < u; i++) {
-        if (bi_graph->match[i] < 0) {
-            __sync_fetch_and_add(&leftunmatched, 1);
-        }
-    }
-
-    return leftunmatched;
+    
+    return std::count_if(std::execution::par, bi_graph->match.begin(), bi_graph->match.end(), [](int value) { return value < 0; });
 }
 
 
