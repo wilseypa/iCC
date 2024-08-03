@@ -1,5 +1,8 @@
 #include "hopcroft_karp.hpp"
 
+#include <queue>
+#include <climits>
+
 HKGraph::HKGraph() = default;
 
 HKGraph::HKGraph(int m, int n)
