@@ -1,14 +1,13 @@
-#ifndef BI_GRAPH_H
-#define BI_GRAPH_H
+#pragma once
 
 #include <vector>
 
-struct Bi_Graph{
-    private:
-    
+struct Bi_Graph {
+private:
+
     void randomBiGraphGen();
 
-    public:
+public:
 
     int u, v, maxdegree;
     std::vector<std::vector<int>> adj_list;
@@ -18,5 +17,3 @@ struct Bi_Graph{
     Bi_Graph(int leftnum, int rightnum, int degree, bool random);
     void printBiGraph();
 };
-
-#endif

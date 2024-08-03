@@ -2,19 +2,19 @@
 #include <vector>
 #include <omp.h>
 #include <algorithm>
+#include <execution>
 
 #include "bi_graph.h"
 #include "parallel_karp_sipser_init.h"
 
-int dfsAugPath(Bi_Graph* bi_graph, int startnode, int* dfs_flag, int* look_ahead_flag, int* aug_path_tid) {
+int dfsAugPath(Bi_Graph* bi_graph, int startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<int>& aug_path_tid) {
     int topindex = -1;
     aug_path_tid[++topindex] = startnode;
 
-    while(topindex >= 0) {
+    while (topindex >= 0) {
         int uidx = aug_path_tid[topindex];
-        int endflag = 0;
         //look ahead, look for u's unmatched neighbor
-        for (const auto& vidx: bi_graph->adj_list[uidx]) {
+        for (const auto& vidx : bi_graph->adj_list[uidx]) {
             if (__sync_fetch_and_add(&(look_ahead_flag[vidx]), 1) == 0) {
                 if (bi_graph->match[vidx] < 0) {
                     __sync_fetch_and_add(&(dfs_flag[vidx]), 1);
@@ -24,7 +24,7 @@ int dfsAugPath(Bi_Graph* bi_graph, int startnode, int* dfs_flag, int* look_ahead
             }
         }
         //dfs
-        for (const auto& vidx: bi_graph->adj_list[uidx]) {
+        for (const auto& vidx : bi_graph->adj_list[uidx]) {
             if (__sync_fetch_and_add(&(dfs_flag[vidx]), 1) == 0) {
                 if (!(bi_graph->match[vidx] < 0)) {
                     aug_path_tid[++topindex] = vidx;
@@ -32,25 +32,23 @@ int dfsAugPath(Bi_Graph* bi_graph, int startnode, int* dfs_flag, int* look_ahead
                     break;
                 }
             }
-            //searched all u's neighbor
-            endflag = 1;
         }
         //dfs cannot augment, pop
-        if (endflag) {
+        if (!bi_graph->adj_list[uidx].empty()) {
             topindex -= 2;
         }
     }
     return topindex + 1;
 }
 
-int parallelDFSMatch(Bi_Graph *bi_graph, int threadnum) {
+int parallelDFSMatch(Bi_Graph* bi_graph, int threadnum) {
     int u = bi_graph->u;
     int v = bi_graph->v;
 
-    int* unmatched_u_init = new int[u];
-    int* unmatched_u_final = new int[u];
-    int* dfs_flag = new int[u + v];
-    int* look_ahead_flag = new int[u + v];
+    std::vector<int> unmatched_u_init(u, 0);
+    std::vector<int> unmatched_u_final(u, 0);
+    std::vector<int> dfs_flag(u + v, 0);
+    std::vector<int> look_ahead_flag(u + v, 0);
 
     int initialunmatched = 0;
     int finalunmatched = 0;
@@ -61,48 +59,33 @@ int parallelDFSMatch(Bi_Graph *bi_graph, int threadnum) {
     //find unmatched left nodes from initialized matching
 #pragma omp parallel
     {
-        int ct = 0;
         std::vector<int> thread_buff;    //overflow? limit its size?
 #pragma omp for
         for (int i = 0; i < u; i++) {
             if (bi_graph->match[i] < 0 && bi_graph->adj_list[i].size() > 0) {
                 thread_buff.push_back(i);
-                ct += 1;
             }
         }
-        if (ct > 0) {
-            int offset = __sync_fetch_and_add(&initialunmatched, ct);
-            std::copy_n(thread_buff.begin(), ct, unmatched_u_init + offset);
+        if (!thread_buff.empty()) {
+            int offset = __sync_fetch_and_add(&initialunmatched, thread_buff.size());
+            std::move(thread_buff.begin(), thread_buff.end(), unmatched_u_init.begin() + offset);
         }
     }
 
-#pragma omp parallel for schedule(static)
-    for (int i = 0; i < (u + v); i++) {
-        look_ahead_flag[i] = 0;
-    }
+    //storing aug path one path per thread
+    std::vector<std::vector<int>> aug_path(threadnum, std::vector<int>(u + v, 0));
 
-    //storing aug path
-    //one path per thread
-    int** aug_path = new int* [threadnum];
-    for (int i = 0; i < threadnum; i++) {
-        aug_path[i] = new int [u + v];
-    }
-
-    while(true) {
+    while (true) {
         //shared among threads
         iterationcount += 1;
         finalunmatched = 0;
 
-#pragma omp parallel for schedule(static)
-        for (int i = 0; i < (u + v); i++) {
-            dfs_flag[i] = 0;
-            //no need to reset look ahead flag each time
-        }
+        std::fill(std::execution::par, dfs_flag.begin(), dfs_flag.end(), 0);
 
 #pragma omp parallel for schedule(dynamic)
         for (int i = 0; i < initialunmatched; i++) {
             auto tid = omp_get_thread_num();
-            int* aug_path_tid = aug_path[tid];
+            auto aug_path_tid = aug_path[tid];
 
             int ustart = unmatched_u_init[i];
             int augpathlen = -1;
@@ -110,38 +93,24 @@ int parallelDFSMatch(Bi_Graph *bi_graph, int threadnum) {
             augpathlen = dfsAugPath(bi_graph, ustart, dfs_flag, look_ahead_flag, aug_path_tid);
 
             //augmentation
-            if (augpathlen > 0) {
-                for (int j = 0; j < augpathlen; j += 2) {
-                    bi_graph->match[aug_path_tid[j]] = aug_path_tid[j + 1];
-                    bi_graph->match[aug_path_tid[j + 1]] = aug_path_tid[j];
-                }
+            for (int j = 0; j < augpathlen; j += 2) {
+                bi_graph->match[aug_path_tid[j]] = aug_path_tid[j + 1];
+                bi_graph->match[aug_path_tid[j + 1]] = aug_path_tid[j];
             }
             //store the unmatched node, need atomic op on the shared count var
-            else {
+            if (augpathlen == 0)
                 unmatched_u_final[__sync_fetch_and_add(&finalunmatched, 1)] = ustart;
-            }
+
         }
 
         if ((finalunmatched == 0) || (initialunmatched == finalunmatched)) {
             break;
         }
         //try more aug paths, let final_unmatched be the init_unmatched
-        int* tempptr = unmatched_u_final;
-        unmatched_u_final = unmatched_u_init;
-        unmatched_u_init = tempptr;
+        std::swap(unmatched_u_init, unmatched_u_final);
 
         initialunmatched = finalunmatched;
     }
-
-    //deallocate
-    delete[] unmatched_u_init;
-    delete[] unmatched_u_final;
-    delete[] dfs_flag;
-    delete[] look_ahead_flag;
-    for (int i = 0; i < threadnum; i++){
-        delete[] aug_path[i];
-    }
-    delete[] aug_path;
 
     //non-isolated unmatched
     return finalunmatched;
@@ -153,14 +122,14 @@ int main() {
 
     int unmatchedinit = parallelKarpSipserInit(&test_rand_graph, 2);
 
-    std::cout<<"unmatched after init "<<unmatchedinit<<std::endl;
+    std::cout << "unmatched after init " << unmatchedinit << std::endl;
 
     int unmatchedfinal = parallelDFSMatch(&test_rand_graph, 2);
 
-    std::cout<<"unmatched after dfs "<<unmatchedfinal<<std::endl;
+    std::cout << "unmatched after dfs " << unmatchedfinal << std::endl;
 
     for (int i = 0; i < 5; i++) {
-        std::cout<<i<<" match "<<test_rand_graph.match[i]<<'\n';
+        std::cout << i << " match " << test_rand_graph.match[i] << '\n';
     }
 
     return 0;
