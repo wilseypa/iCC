@@ -1,7 +1,5 @@
 #include "hopcroft_karp.hpp"
 
-HKGraph::HKGraph() = default;
-
 HKGraph::HKGraph(int m, int n)
 {
     this->m = m;

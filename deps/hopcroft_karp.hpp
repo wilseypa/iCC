@@ -18,7 +18,7 @@ private:
     bool bfs();
     bool dfs(int u);
 public:
-    HKGraph();
+    HKGraph() = default;
     HKGraph(int m, int n);
     void addEdge(int u, int v);
     std::vector<std::pair<int, int>> hopcroftKarpAlgorithm();
