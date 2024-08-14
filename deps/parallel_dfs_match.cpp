@@ -11,6 +11,7 @@ int dfsAugPath(Bi_Graph* bi_graph, int startnode, std::vector<int>& dfs_flag, st
 
     while (topindex >= 0) {
         int uidx = aug_path_tid[topindex];
+        int endflag = 0;
         //look ahead, look for u's unmatched neighbor
         for (const auto& vidx : bi_graph->adj_list[uidx]) {
             if (__sync_fetch_and_add(&(look_ahead_flag[vidx]), 1) == 0) {
@@ -27,12 +28,13 @@ int dfsAugPath(Bi_Graph* bi_graph, int startnode, std::vector<int>& dfs_flag, st
                 if (!(bi_graph->match[vidx] < 0)) {
                     aug_path_tid[++topindex] = vidx;
                     aug_path_tid[++topindex] = bi_graph->match[vidx];
+                    endflag = 1;
                     break;
                 }
             }
         }
         //dfs cannot augment, pop
-        if (!bi_graph->adj_list[uidx].empty()) {
+         if (!endflag) {
             topindex -= 2;
         }
     }
