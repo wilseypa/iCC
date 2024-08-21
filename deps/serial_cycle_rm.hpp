@@ -6,37 +6,30 @@
 
 #include "bi_graph.hpp"
 
-//the d simplex on a non-forked forward path forms a super node
-class Path_Node : public std::enable_shared_from_this<Path_Node>
-{
+//d simplex traversal
+class Bi_Graph_Traversal {
 public:
-    //the d-simplex on the path
-    std::vector<int> forward_simp_path;
-    //init d-simplex index in the path node
-    int uidx;
-    //construction status of the path
-    // bool finished = false;
+    //associated bi-graph
+    Bi_Graph* graphptr;
+    
+    std::vector<int> visit_flag;
 
-    std::shared_ptr<Path_Node> parent_ptr;
-    // std::vector<std::shared_ptr<Path_Node>> children_vec;
+    Bi_Graph_Traversal() = default;
+    Bi_Graph_Traversal(Bi_Graph*);
 
-    Path_Node(int u): uidx(u) {
-    }
+    int findRootIterative(int);
+    
+    std::vector<int> getParent(int uidx);
+    
+    std::vector<int> getChild(int uidx);
 
-    Path_Node(int u, std::shared_ptr<Path_Node>& par_ptr): uidx(u), parent_ptr(par_ptr) {
-    }
+    std::vector<int> getAncestor(int uidx);
 
-    std::shared_ptr<Path_Node> getSharedPtr();
-    bool acyclicBackward(Bi_Graph* bi_graph, int uidx);
+    bool isBackwardAcyclic(std::vector<int>&, std::vector<int>&, int);
+
+    int lookAheadDFS(std::queue<int>&, std::vector<int>&, int);
+
+    int traversalBFS(std::queue<int>&, int root);
+
+    int cycleRemoval(int);
 };
-
-//need to add these functions to bi_graph class
-int findRoot(Bi_Graph* bi_graph, std::vector<int>& visit_flag, std::vector<int>& root_d_simp);
-
-int pathDFS(Bi_Graph* bi_graph, std::stack<std::shared_ptr<Path_Node>>& dfs_stack, std::vector<int>& visit_flag, std::vector<int>& root_d_simp);
-
-int serialDFSCycleRemove(Bi_Graph* bi_graph);
-
-int pathBFS(Bi_Graph* bi_graph, std::queue<std::shared_ptr<Path_Node>>& bfs_queue, std::vector<int>& visit_flag, std::vector<int>& root_d_simp);
-
-int serialBFSCycleRemove(Bi_Graph* bi_graph);

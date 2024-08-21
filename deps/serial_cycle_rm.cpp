@@ -5,256 +5,240 @@
 #include <numeric>
 #include <stack>
 #include <queue>
+#include <execution>
+
 
 #include <iostream>
 
 #include "bi_graph.hpp"
 #include "serial_cycle_rm.hpp"
 
-std::shared_ptr<Path_Node> Path_Node::getSharedPtr() {
-    return shared_from_this();
+Bi_Graph_Traversal::Bi_Graph_Traversal(Bi_Graph* bi_graph) : graphptr(bi_graph) {
+    visit_flag.resize(graphptr->u, 0);
 }
 
 
-//backward acyclicity check
-bool Path_Node::acyclicBackward(Bi_Graph* bi_graph, int uidx) {
-    //check if uidx can reach one of the previous root
-    //check acyclicity within path node
-    for (auto& i: this->forward_simp_path) {
-        int imate = bi_graph->match[i];
-        //check if imate is part of uidx's facet edges
-        auto iter = std::find(bi_graph->adj_list[uidx].begin(), bi_graph->adj_list[uidx].end(), imate);
-        //found cycle
-        if (iter != std::end(bi_graph->adj_list[uidx])) {
-            return false;
+int Bi_Graph_Traversal::findRootIterative(int maxdegree) {
+    int u = graphptr->u;
+
+    //check the number of matched neighbors of d-1 simp
+    std::vector<int> u_range(u);
+    std::iota(u_range.begin(), u_range.end(), 0);
+    auto match_lambda = [&](const auto it) {return(graphptr->match[it] != -1);};
+
+    int root = -1;
+    int deg = 1;
+    while (deg <= maxdegree) {
+        for (auto& i: u_range) {
+            if (visit_flag[i] > 0) continue;
+            //par?
+            int matchnum = std::count_if(std::begin(graphptr->adj_list[i]), std::end(graphptr->adj_list[i]), match_lambda);
+            if (matchnum <= deg) {
+                root = i;
+                return root;
+            }
+        }
+        deg += 1;
+    }
+    return root;
+}
+
+
+//directly return vec. use rvo
+std::vector<int> Bi_Graph_Traversal::getParent(int uidx) {
+    std::vector<int> parent_d_simp;
+    int vidx = graphptr->match[uidx];
+    //uidx is a source node has no parent (umatched)
+    if (vidx == -1) return parent_d_simp;
+     //i is d simp
+    for (auto& i: graphptr->adj_list[vidx]) {
+        int imate = graphptr->match[i];
+        if (imate != -1 && imate != vidx) parent_d_simp.push_back(i);
+    }
+    return parent_d_simp;
+}
+
+//no need to check visit flag. if found child in searched part. it might be merging or cycle
+//in later stages, need to check visit flag when pushing to bfs queue
+std::vector<int> Bi_Graph_Traversal::getChild(int uidx) {
+    std::vector<int> child_d_simp;
+    //i is d-1 simp
+    for (auto& i: graphptr->adj_list[uidx]) {
+        int imate = graphptr->match[i];
+        if (imate != -1 && imate != uidx) child_d_simp.push_back(imate); 
+    }
+    return child_d_simp;
+}
+
+//ancestor in bfs searched part
+std::vector<int> Bi_Graph_Traversal::getAncestor(int uidx) {
+    // std::fill(std::execution::par, visit_flag.begin(), visit_flag.end(), 0);
+
+    std::vector<int> ancestor_d_simp;
+    std::queue<int> bfs_queue;
+    
+    std::vector<int> uidx_parent = std::move(getParent(uidx));
+    for (auto& i: uidx_parent) {
+        if(visit_flag[i] > 0) bfs_queue.push(i);
+    }
+
+    while (!bfs_queue.empty()) {
+        int front = bfs_queue.front();
+        ancestor_d_simp.push_back(front);
+        bfs_queue.pop();
+
+        std::vector<int> front_parent = std::move(getParent(front));
+        for(auto& i: front_parent) {
+            if (visit_flag[i] > 0) bfs_queue.push(i);
         }
     }
 
-    //check ancestors
-    std::weak_ptr<Path_Node> weak_par_ptr = this->parent_ptr;
-    while (!weak_par_ptr.expired()) {
-        std::shared_ptr<Path_Node> shared_par_ptr = weak_par_ptr.lock();
-        for (auto& i: shared_par_ptr->forward_simp_path) {
-            int imate = bi_graph->match[i];
-            //check if imate is part of uidx's facet edges
-            auto iter = std::find(bi_graph->adj_list[uidx].begin(), bi_graph->adj_list[uidx].end(), imate);
-            //found cycle
-            if (iter != std::end(bi_graph->adj_list[uidx])) {
-                return false;
-            }
+    return ancestor_d_simp;
+}
+
+
+bool Bi_Graph_Traversal::isBackwardAcyclic(std::vector<int>& ancestor_d_simp, std::vector<int>& u_child, int uidx) {
+    //par
+    for (auto& i: u_child) {
+        if (std::find(ancestor_d_simp.begin(), ancestor_d_simp.end(), i) != std::end(ancestor_d_simp)) {
+            return false;
         }
-        weak_par_ptr = shared_par_ptr->parent_ptr;
     }
     return true;
 }
 
+int Bi_Graph_Traversal::lookAheadDFS(std::queue<int>& graph_bfs_queue, std::vector<int>& ancestor_d_simp, int uidx) {
+    std::vector<int> child_d_simp = std::move(getChild(uidx));
+    if (child_d_simp.size() == 0) return 0;
 
-int findRoot(Bi_Graph* bi_graph, std::vector<int>& visit_flag, std::vector<int>& root_d_simp) {
-    int u = bi_graph->u;
-    int v = bi_graph->v;
-    //check the number of matched neighbors of d-1 simp
-    std::vector<int> v_range{v};
-    std::iota(v_range.begin(), v_range.end(), u);
-    auto match_lambda = [&](const auto idx) {return(bi_graph->match[idx] != -1);};
-    //pragma omp parallel for 
-    for (auto& v: v_range) {
-        int vmatch = std::count_if(std::begin(bi_graph->adj_list[v]), std::end(bi_graph->adj_list[v]), match_lambda);
-        //keep the v with vmatch == 1 as the root
-        if (vmatch == 1) {
-            //pragma omp critical
-            root_d_simp.push_back(bi_graph->match[v]);
+    std::stack<int> lookahead_stack;
+    for (auto& i: child_d_simp) {
+        std::vector<int> i_parent = std::move(getParent(i));
+        //if uidx is the only parent of i (the whole graph). use look ahead shortcut
+        if (i_parent.size() == 1) {
+            lookahead_stack.push(i);
+            visit_flag[i] = 1;
+        } else if (visit_flag[i] < 1) {
+            //merging node. push to global bfs queue
+            graph_bfs_queue.push(i);
+            visit_flag[i] = 1;
         }
     }
-    //if no proper root, pick the smallest matched d simp and cut the incoming path of that d simp
-    if (root_d_simp.size() == 0) {
-        int root = -1;
-        for (auto& v: v_range) {
-            if (bi_graph->match[v] != -1) {
-                root = bi_graph->match[v];
-                break;
-            }
-        }
-        int rootmate = bi_graph->match[root];
-        for (auto& u: bi_graph->adj_list[rootmate]) {
-            if (bi_graph->match[u] != -1 && u != root) {
-                int umate = bi_graph->match[u];
-                bi_graph->match[u] = -1;
-                bi_graph->match[umate] = -1;
-            }
-        }
-        root_d_simp.push_back(root);
-    }
-    return root_d_simp.size();
-}
 
+    //stat var
+    int maxsize = 0;
 
-int pathDFS(Bi_Graph* bi_graph, std::stack<std::shared_ptr<Path_Node>>& dfs_stack, std::vector<int>& visit_flag, std::vector<int>& root_d_simp) {
-    int revertedmatch = 0;
-    //work space for path node construction
-    std::vector<int> next_d_simp;
+    //start look ahead op on children of uidx
+    ancestor_d_simp.push_back(uidx);
+    int reverted = 0;
+    int flag;    //working var to indicate the end of lookahead of each node
+    //the nodes appeared in stack at the same time are independent 
+    while (!lookahead_stack.empty()) {
+        //for stat
+        if (lookahead_stack.size() > maxsize) maxsize = lookahead_stack.size();
 
-    while (!dfs_stack.empty()) {
-        auto currentptr = dfs_stack.top();
-        dfs_stack.pop();
+        flag = 0;
 
-        //check number of branch
-        next_d_simp.clear();
-        next_d_simp.push_back(currentptr->uidx);
-        std::cout << "the d simp before while true loop = " << next_d_simp.back() << '\n';
-        int branch;
-        //while no fork
-        while (true) {
+        int top = lookahead_stack.top();
+        lookahead_stack.pop();
 
-            std::cout << "current d simp in while true loop = " << next_d_simp.back() << '\n';
+        std::vector<int> top_child_d_simp = std::move(getChild(top));
+        if (top_child_d_simp.size() == 0) continue;
 
-            //if acyclic, add uidx(next_d_simp.back()) to forward_simp_path
-            if (currentptr->acyclicBackward(bi_graph, next_d_simp.back())) {
-                currentptr->forward_simp_path.push_back(next_d_simp.back());
-            } else {
-                std::cout << "reverted simp = " << next_d_simp.back() << '\n';
-                //remove the match
-                int temp = bi_graph->match[next_d_simp.back()];
-                bi_graph->match[next_d_simp.back()] = -1;
-                bi_graph->match[temp] = -1;
-                revertedmatch += 1;
-            }
-            visit_flag[next_d_simp.back()] = 1;
-
-            //find next d simp, check the neighbor of next_d_simp.back()
-            branch = 0;
-            for (const auto& v: bi_graph->adj_list[next_d_simp.back()]) {
-                int vmate = bi_graph->match[v];
-                if (vmate != -1 && visit_flag[vmate] == 0) {
-                    
-                    branch += 1;
-                    next_d_simp.push_back(vmate);
-                    visit_flag[vmate] = 1;
+        //if top is not acyclic. the lookahead of top is over
+        //push its unsearched children to bfs queue
+        if (!isBackwardAcyclic(ancestor_d_simp, top_child_d_simp, top)) {
+            int temp = graphptr->match[top];
+            graphptr->match[top] = -1;
+            graphptr->match[temp] = -1;
+            reverted += 1;
+            for (auto& i: top_child_d_simp) {
+                if (visit_flag[i] < 1) {
+                    graph_bfs_queue.push(i);
+                    visit_flag[i] = 1;
                 }
             }
-
-            std::cout << "the branch # after current d simp in while true loop = " << branch << '\n';
-
-            if (branch != 1) break;
-        }
-        //branch == 0 or branch > 1, push the new branch to the stack/queue
-        for (int i = 0; i < branch; i++) {
-            dfs_stack.push(std::make_shared<Path_Node>(next_d_simp.rbegin()[i], currentptr));
-        }
-    }
-    return revertedmatch;
-}
-
-
-int serialDFSCycleRemove(Bi_Graph* bi_graph) {
-    //assume u is the d simplex
-    int u = bi_graph->u;
-
-    int revertedmatch = 0;
-    
-    std::vector<int> visit_flag(u, 0);
-    std::vector<int> root_d_simp;
-    std::stack<std::shared_ptr<Path_Node>> dfs_stack;
-
-    int rootnum = findRoot(bi_graph, visit_flag, root_d_simp);
-    std::cout << "number of root = " << rootnum << '\n';
-
-    while (!(root_d_simp.empty())) {
-
-        int root = root_d_simp.back();
-        
-        std::cout << "current root = " << root << '\n';
-
-        dfs_stack.push(std::make_shared<Path_Node>(root));
-        visit_flag[root] = 1;
-        
-        revertedmatch += pathDFS(bi_graph, dfs_stack, visit_flag, root_d_simp);
-        
-        root_d_simp.pop_back();
-    }
-    return revertedmatch;
-}
-
-int pathBFS(Bi_Graph* bi_graph, std::queue<std::shared_ptr<Path_Node>>& bfs_queue, std::vector<int>& visit_flag, std::vector<int>& root_d_simp) {
-    int revertedmatch = 0;
-    //work space for path node construction
-    std::vector<int> next_d_simp;
-
-    while (!bfs_queue.empty()) {
-        auto currentptr = bfs_queue.front();
-        bfs_queue.pop();
-
-        //check number of branch
-        next_d_simp.clear();
-        next_d_simp.push_back(currentptr->uidx);
-        std::cout << "the d simp before while true loop = " << next_d_simp.back() << '\n';
-        int branch;
-        //while no fork
-        while (true) {
-
-            std::cout << "current d simp in while true loop = " << next_d_simp.back() << '\n';
-
-            //if acyclic, add uidx(next_d_simp.back()) to forward_simp_path
-            if (currentptr->acyclicBackward(bi_graph, next_d_simp.back())) {
-                currentptr->forward_simp_path.push_back(next_d_simp.back());
-            } else {
-                std::cout << "reverted simp = " << next_d_simp.back() << '\n';
-                //remove the match
-                int temp = bi_graph->match[next_d_simp.back()];
-                bi_graph->match[next_d_simp.back()] = -1;
-                bi_graph->match[temp] = -1;
-                revertedmatch += 1;
+        } else {
+        //check if the child of top can be pushed to look ahead stack
+            for (auto& i: top_child_d_simp) {
+                std::vector<int> i_parent = std::move(getParent(i));
+                //if top is the only parent of i. keep look ahead op
+                if (i_parent.size() == 1) {
+                    lookahead_stack.push(i);
+                    visit_flag[i] = 1;
+                    flag = 1;
+                } else {
+                    //if more than one parent. check visit flag and push to queue
+                    if (visit_flag[i] < 1) {
+                        graph_bfs_queue.push(i);
+                        visit_flag[i] = 1;
+                    }
+                } 
+                
             }
-            visit_flag[next_d_simp.back()] = 1;
+        }
+        //if any of top's child is pushed to look ahead stack, update ancestor
+        if (flag) ancestor_d_simp.push_back(top);
+        //not all nodes in the stack have ances-des relationship with top
+        //but this does not bring extra cycle rm. simplfied implementation
+    }
 
-            //find next d simp, check the neighbor of next_d_simp.back()
-            branch = 0;
-            for (const auto& v: bi_graph->adj_list[next_d_simp.back()]) {
-                int vmate = bi_graph->match[v];
-                if (vmate != -1 && visit_flag[vmate] == 0) {
-                    
-                    branch += 1;
-                    next_d_simp.push_back(vmate);
-                    visit_flag[vmate] = 1;
+    std::cout<<"max LA stack size = "<<maxsize<<'\n';
+
+    return reverted;
+ }
+
+
+int Bi_Graph_Traversal::traversalBFS(std::queue<int>& graph_bfs_queue, int root) {
+    int reverted = 0;
+
+    graph_bfs_queue.push(root);
+    visit_flag[root] = 1;
+
+    while (!graph_bfs_queue.empty()) {
+        int front = graph_bfs_queue.front();
+        graph_bfs_queue.pop();
+
+        std::vector<int> ancestor_d_simp = std::move(getAncestor(front));
+        std::vector<int> front_child = std::move(getChild(front));
+
+        if (!isBackwardAcyclic(ancestor_d_simp, front_child, front)) {
+            int temp = graphptr->match[front];
+            graphptr->match[front] = -1;
+            graphptr->match[temp] = -1;
+            reverted += 1;
+            for (auto& i: front_child) {
+                if (visit_flag[i] < 1) {
+                    graph_bfs_queue.push(i);
+                    visit_flag[i] = 1;
                 }
             }
-
-            std::cout << "the branch # after current d simp in while true loop = " << branch << '\n';
-
-            if (branch != 1) break;
-        }
-        //branch == 0 or branch > 1, push the new branch to the stack/queue
-        for (int i = 0; i < branch; i++) {
-            bfs_queue.push(std::make_shared<Path_Node>(next_d_simp.rbegin()[i], currentptr));
+        } else {
+            //look ahead and push descendant to bfs queue
+            reverted += lookAheadDFS(graph_bfs_queue, ancestor_d_simp, front);
         }
     }
-    return revertedmatch;
+    return reverted;
 }
 
-int serialBFSCycleRemove(Bi_Graph* bi_graph) {
-    //assume u is the d simplex
-    int u = bi_graph->u;
 
-    int revertedmatch = 0;
-    
-    std::vector<int> visit_flag(u, 0);
-    std::vector<int> root_d_simp;
-    std::queue<std::shared_ptr<Path_Node>> bfs_queue;
 
-    int rootnum = findRoot(bi_graph, visit_flag, root_d_simp);
-    std::cout << "number of root = " << rootnum << '\n';
+int Bi_Graph_Traversal::cycleRemoval(int maxdegree) {
+    //assume u is the d simplex of d interface
+    int u = graphptr->u;
 
-    while (!(root_d_simp.empty())) {
+    int reverted = 0;
 
-        int root = root_d_simp.back();
-        
+    int root = findRootIterative(maxdegree);
+    std::queue<int> graph_bfs_queue;
+
+    while (root != -1) {
+
         std::cout << "current root = " << root << '\n';
 
-        bfs_queue.push(std::make_shared<Path_Node>(root));
-        visit_flag[root] = 1;
-        
-        revertedmatch += pathBFS(bi_graph, bfs_queue, visit_flag, root_d_simp);
-        
-        root_d_simp.pop_back();
+        reverted += traversalBFS(graph_bfs_queue, root);
+
+        root = findRootIterative(maxdegree);
     }
-    return revertedmatch;
+    return reverted;
 }
