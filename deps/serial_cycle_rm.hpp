@@ -3,6 +3,7 @@
 #include <memory>
 #include <stack>
 #include <queue>
+#include <atomic>
 
 #include "bi_graph.hpp"
 
@@ -29,7 +30,13 @@ public:
 
     int lookAheadDFS(std::queue<int>&, std::vector<int>&, int);
 
-    int traversalBFS(std::queue<int>&, int root);
+    int serialBFS(std::queue<int>&, int);
 
-    int cycleRemoval(int);
+    int serialCycleRemoval(int maxdegree);
+
+    void threadBackwardDFS(std::atomic<int>&, int, int);
+
+    int parallelBFS(std::queue<int>&, int, int, int);
+
+    int parallelRathod(int maxdegree, int threadnum);
 };
