@@ -1,43 +1,39 @@
 #pragma once
 
-#include <memory>
-#include <stack>
 #include <queue>
-#include <atomic>
 
 #include "bi_graph.hpp"
 
-// d simplex traversal
-class Bi_Graph_Traversal
-{
+//d simplex traversal
+class Bi_Graph_Traversal {
 public:
-    // associated bi-graph
-    Bi_Graph *graphptr;
-
+    //associated bi-graph
+    Bi_Graph* graphptr;
+    
     std::vector<int> root_flag;
 
     Bi_Graph_Traversal() = default;
-    Bi_Graph_Traversal(Bi_Graph *);
+    Bi_Graph_Traversal(Bi_Graph*);
 
     int findRootIterative(int);
-
+    
     std::vector<int> getParent(int uidx);
-
+    
     std::vector<int> getChild(int uidx);
 
-    std::vector<int> getAncestor(int uidx);
+    std::vector<int> getAncestor(int rootnum, int uidx);
 
-    bool isBackwardAcyclic(std::vector<int> &, std::vector<int> &, int);
+    bool isBackwardAcyclic(std::vector<int>&, std::vector<int>&);
 
-    int lookAheadDFS(std::queue<int> &, std::vector<int> &, int);
+    int lookAheadDFS(std::queue<int>&, std::vector<int>&, int, int);
 
-    int serialBFS(std::queue<int> &, int);
+    int serialBFS(int, int);
 
     int serialCycleRemoval(int maxdegree);
 
-    void threadBackwardDFS(int &, int);
+    int threadBackwardBFS(int rootnum, int root);
 
-    int parallelBFS(int, int);
+    int parallelBFS(int rootnum, int root);
 
-    int parallelRathod(int maxdegree, int threadnum);
+    int parallelRathod(int maxdegree);
 };
