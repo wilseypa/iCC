@@ -25,7 +25,7 @@ public:
 
     bool isBackwardAcyclic(std::vector<int>&, std::vector<int>&);
 
-    int lookAheadDFS(std::queue<int>&, std::vector<int>&, int, int);
+    int lookAheadDFS(std::queue<int>&, std::vector<int>&, std::vector<int>&, int, int);
 
     int serialBFS(int, int);
 
