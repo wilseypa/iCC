@@ -3,6 +3,7 @@
 #include <ranges>
 #include <numeric>
 #include <stack>
+#include <deque>
 #include <queue>
 #include <set>
 #include <execution>
@@ -121,25 +122,26 @@ bool Bi_Graph_Traversal::isBackwardAcyclic(std::vector<int>& ancestor_d_simp, st
     return true;
 }
 
-int Bi_Graph_Traversal::lookAheadDFS(std::queue<int>& graph_bfs_queue, std::vector<int>& ancestor_d_simp, std::vector<int>& child_d_simp, int rootnum, int uidx) {
+int Bi_Graph_Traversal::lookAheadDFS(std::deque<int>& graph_bfs_queue, std::vector<int>& ancestor_d_simp, std::vector<int>& child_d_simp, int rootnum, int uidx) {
     if (child_d_simp.size() == 0) return 0;
 
     std::vector<int> lookahead_vec;
+
+    // auto push_lambda = [&](const auto i) {return (std::find(graph_bfs_queue.begin(), graph_bfs_queue.end(), i) == graph_bfs_queue.end());};
 
     for (auto& i: child_d_simp) {
         std::vector<int> i_parent = getParent(i);
         //if uidx is the only parent of i (in the whole graph). use look ahead shortcut
         if (i_parent.size() == 1) {
             lookahead_vec.push_back(i);
-        } else if (root_flag[i] == 0 || root_flag[i] == rootnum) {
+        } else if (std::find(graph_bfs_queue.begin(), graph_bfs_queue.end(), i) == graph_bfs_queue.end()) {
             //if i has more than 1 par and has not been searched yet (or in current bfs component). push to global bfs queue
-            graph_bfs_queue.push(i);
-            // root_flag[i] = -1;
+            graph_bfs_queue.push_back(i);
         }
     }
 
     //stat var
-    int maxsize = 0;
+    // int maxsize = 0;
 
     //start look ahead op on children of uidx
     ancestor_d_simp.push_back(uidx);
@@ -148,7 +150,7 @@ int Bi_Graph_Traversal::lookAheadDFS(std::queue<int>& graph_bfs_queue, std::vect
     //the nodes appeared in lookahead stack at the same time are independent 
     while (!lookahead_vec.empty()) {
         //for stat
-        if (lookahead_vec.size() > maxsize) maxsize = lookahead_vec.size();
+        // if (lookahead_vec.size() > maxsize) maxsize = lookahead_vec.size();
 
         flag = false;
 
@@ -183,12 +185,8 @@ int Bi_Graph_Traversal::lookAheadDFS(std::queue<int>& graph_bfs_queue, std::vect
                     lookahead_vec.push_back(i);
                     //raise flag for adding top to ancestor
                     flag = true;
-                } else {
-                    //if more than one parent. check visit flag and push to queue
-                    if (root_flag[i] == 0 || root_flag[i] == rootnum) {
-                        graph_bfs_queue.push(i);
-                        // root_flag[i] = -1;
-                    }
+                } else if (std::find(graph_bfs_queue.begin(), graph_bfs_queue.end(), i) == graph_bfs_queue.end()) {
+                    graph_bfs_queue.push_back(i);
                 } 
             }
         }
@@ -207,14 +205,14 @@ int Bi_Graph_Traversal::lookAheadDFS(std::queue<int>& graph_bfs_queue, std::vect
 int Bi_Graph_Traversal::serialBFS(int rootnum, int root) {
     int reverted = 0;
 
-    std::queue<int> bfs_queue;
-    bfs_queue.push(root);
+    std::deque<int> bfs_queue;
+    bfs_queue.push_back(root);
 
     // std::cout<<"started at root = "<<root<<'\n';
 
     while (!bfs_queue.empty()) {
         int front = bfs_queue.front();
-        bfs_queue.pop();
+        bfs_queue.pop_front();
         root_flag[front] = rootnum;
         
         std::vector<int> front_child = getChild(front);
@@ -236,7 +234,7 @@ int Bi_Graph_Traversal::serialBFS(int rootnum, int root) {
             reverted += lookAheadDFS(bfs_queue, ancestor_d_simp, front_child, rootnum, front);
         }
 
-        // std::cout<<"queue size after LA = "<<bfs_queue.size()<<'\n';
+        // std::cout<<"queue front = "<<front<<'\n';
 
     }
     
@@ -259,7 +257,7 @@ int Bi_Graph_Traversal::serialCycleRemoval(int maxdegree) {
 
     while (root != -1) {
 
-        // std::cout << "current root = " << root << '\n';
+        std::cout << "current root = " << root << '\n';
 
         rootnum += 1;
 
@@ -313,12 +311,14 @@ int Bi_Graph_Traversal::parallelBFS(int rootnum, int root) {
 
     int reverted = 0;
 
-    std::queue<int> graph_bfs_queue;
-    graph_bfs_queue.push(root);
+    std::deque<int> graph_bfs_queue;
+    graph_bfs_queue.push_back(root);
+
+    auto push_lambda = [&](const auto i) {return (graphptr->match[i] != -1 && std::find(graph_bfs_queue.begin(), graph_bfs_queue.end(), i) == graph_bfs_queue.end());};
 
     while (!graph_bfs_queue.empty()) {
         int front = graph_bfs_queue.front();
-        graph_bfs_queue.pop();
+        graph_bfs_queue.pop_front();
         root_flag[front] = rootnum;
 
         //std::cout<<"root = " <<root<<"  front = "<<front<<'\n';
@@ -344,10 +344,7 @@ int Bi_Graph_Traversal::parallelBFS(int rootnum, int root) {
         }
         
         //back to the main thread, mark up and push acyclic leading up-edges to the queue 
-        for (auto& i : front_child) {
-            // root_flag[i] = rootnum;
-            if (graphptr->match[i] != -1) graph_bfs_queue.push(i);
-        }   
+        std::copy_if(front_child.begin(), front_child.end(), std::back_inserter(graph_bfs_queue), push_lambda);
     }
 
     return reverted;
@@ -364,7 +361,7 @@ int Bi_Graph_Traversal::parallelRathod(int maxdegree) {
 
         rootnum += 1;
         
-        // std::cout <<"root num = " <<rootnum << "  current root = " << root << '\n';
+        std::cout <<"root num = " <<rootnum << "  current root = " << root << '\n';
 
         reverted += parallelBFS(rootnum, root);
 
