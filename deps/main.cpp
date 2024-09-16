@@ -2,19 +2,18 @@
 #include <chrono>
 
 #include "bi_graph.hpp"
-#include "parallel_karp_sipser_init.hpp"
-#include "parallel_dfs_match.hpp"
 #include "cycle_rm.hpp"
 
-int main() {
+int main()
+{
     Bi_Graph rand_graph = Bi_Graph(1000, 800, 4, true);
     // test_rand_graph.printBiGraph();
 
-    int unmatchedinit = parallelKarpSipserInit(&rand_graph, 4);
+    int unmatchedinit = rand_graph.parallelKarpSipserInit(4);
 
-    std::cout<<"unmatched after init "<<unmatchedinit<<'\n';
+    std::cout << "unmatched after init " << unmatchedinit << '\n';
 
-    int unmatchedfinal = parallelDFSMatch(&rand_graph, 4);
+    int unmatchedfinal = rand_graph.parallelDFSMatch(4);
 
     std::cout << "unmatched after dfs " << unmatchedfinal << '\n';
 
@@ -24,8 +23,6 @@ int main() {
     //         std::cout<<"matching error !!!  i mate = "<<rand_graph.match[i]<<"  imate match = "<<rand_graph.match[imate]<<'\n';
     //     }
     // }
-
-
 
     Bi_Graph_Traversal bi_graph_trav0 = Bi_Graph_Traversal(&rand_graph);
     Bi_Graph rand_graph_cp(rand_graph);
@@ -41,9 +38,8 @@ int main() {
     auto pt1 = std::chrono::high_resolution_clock::now();
     auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(pt1 - pt0);
 
-
-    std::cout<<"serial reverted = "<<revertedmatch0<<'\n';
-    std::cout<<"para reverted = "<<revertedmatch1<<'\n';
+    std::cout << "serial reverted = " << revertedmatch0 << '\n';
+    std::cout << "para reverted = " << revertedmatch1 << '\n';
 
     auto diff = st_ms.count() - pt_ms.count();
 
