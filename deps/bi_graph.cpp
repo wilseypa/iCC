@@ -144,7 +144,7 @@ int Bi_Graph::parallelKarpSipserInit(int threadnum)
 #pragma omp parallel for schedule(dynamic)
     for (int i = 0; i < this->u; i++)
     {
-        if (node_deg[i].load() > 0 && visit_flag[i].fetch_add(1) == 0)
+        if (node_deg[i].load() > 1 && visit_flag[i].fetch_add(1) == 0)
         {
             findMatch(i, visit_flag, node_deg);
         }
