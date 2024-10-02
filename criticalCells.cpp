@@ -146,11 +146,12 @@ std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::dimMatching(s
 
     std::for_each(res.first.rbegin(), res.first.rend(), [&simps](auto index)
                   { simps.erase(std::next(simps.begin(), index - 1)); });
-    std::for_each(res.second.rbegin(), res.second.rend(), [&cofaces](auto index)
-                  { cofaces.erase(std::next(cofaces.begin(), index - 1)); });
-
     std::move(simps.begin(), simps.end(), std::back_inserter(critCells));
     if (!final)
+    {
+        std::for_each(res.second.rbegin(), res.second.rend(), [&cofaces](auto index)
+                      { cofaces.erase(std::next(cofaces.begin(), index - 1)); });
         std::move(cofaces.begin(), cofaces.end(), std::back_inserter(critCells));
+    }
     return critCells;
 }
