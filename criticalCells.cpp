@@ -115,43 +115,43 @@ std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatTy
 template <typename ComplexType, typename DistMatType>
 std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::dimMatching(std::vector<std::vector<int>> &simplexes, size_t dim, bool final)
 {
-    std::vector<std::vector<int>> critCells, simps, cofaces;
-    for (auto &simplex : simplexes)
+    std::sort(simplexes.begin(), simplexes.end(), [](const auto &first, const auto &second)
+              { return first.size() < second.size(); });
+    auto critCells_end = std::find_if(simplexes.begin(), simplexes.end(), [dim](const auto &vect)
+                                      { return vect.size() >= dim; });
+    auto simps_end = std::find_if(critCells_end, simplexes.end(), [dim](const auto &vect)
+                                  { return vect.size() > dim; });
+    if (critCells_end == simps_end || simps_end == simplexes.end())
     {
-        if (simplex.size() == dim + 1)
-            cofaces.emplace_back(std::move(simplex));
-        else if (simplex.size() == dim)
-            simps.emplace_back(std::move(simplex));
-        else if (simplex.size() < dim)
-            critCells.emplace_back(std::move(simplex));
+        if (final)
+            simplexes.erase(simps_end, simplexes.end());
+        return simplexes;
     }
-    simplexes.clear();
-    if (simps.empty() || cofaces.empty())
+
+    HKGraph csr_matrix(std::distance(simps_end, critCells_end), std::distance(simplexes.end(), simps_end));
+
+    size_t i = 1;
+    for (auto it_1 = critCells_end; it_1 != simps_end; ++i)
     {
-        std::move(simps.begin(), simps.end(), std::back_inserter(critCells));
-        if (!final)
-            std::move(cofaces.begin(), cofaces.end(), std::back_inserter(critCells));
-        return critCells;
-    }
-    HKGraph csr_matrix(simps.size(), cofaces.size());
-    for (std::size_t i = 0; i < simps.size(); ++i)
-    {
-        for (std::size_t j = 0; j < cofaces.size(); ++j)
+        size_t j = 1;
+        for (auto it_2 = simps_end; it_2 != simplexes.end(); ++j)
         {
-            if (std::includes(cofaces[j].begin(), cofaces[j].end(), simps[i].begin(), simps[i].end()))
-                csr_matrix.addEdge(i + 1, j + 1); // Intial index 1
+            if (std::includes(it_2->begin(), it_2->end(), it_1->begin(), it_1->end()))
+                csr_matrix.addEdge(i, j); // Intial index 1
+            j++;
         }
+        i++;
     }
+
     auto res = csr_matrix.custom_hopcroftKarpAlgorithm();
 
-    std::for_each(res.first.rbegin(), res.first.rend(), [&simps](auto index)
-                  { simps.erase(std::next(simps.begin(), index - 1)); });
-    std::move(simps.begin(), simps.end(), std::back_inserter(critCells));
-    if (!final)
-    {
-        std::for_each(res.second.rbegin(), res.second.rend(), [&cofaces](auto index)
-                      { cofaces.erase(std::next(cofaces.begin(), index - 1)); });
-        std::move(cofaces.begin(), cofaces.end(), std::back_inserter(critCells));
-    }
-    return critCells;
+    if (final)
+        simplexes.erase(simps_end, simplexes.end());
+    else
+        std::for_each(res.second.rbegin(), res.second.rend(), [&](auto index)
+                      { simplexes.erase(std::next(simps_end, index)); });
+    std::for_each(res.first.rbegin(), res.first.rend(), [&](auto index)
+                  { simplexes.erase(std::next(critCells_end, index)); });
+
+    return simplexes;
 }
