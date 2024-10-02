@@ -105,9 +105,10 @@ std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatTy
         double max_dist = 0;
         for (int i = 0; i < dim; i++)
             for (int j = i + 1; j <= dim; j++)
-                max_dist = std::max(max_dist, this->distance(complex.simplex[j], complex.simplex[i]));
-        weighted_simplexes[max_dist].push_back({complex.simplex.rbegin(), complex.simplex.rend()});
-    } while (complex.next_simplex() && (!batch_size || batch_size > ++counter));
+                max_dist = std::max(max_dist, this->distance(complex.simplex[i], complex.simplex[j]));
+        weighted_simplexes[max_dist].push_back(complex.simplex);
+        complex.next_simplex();
+    } while (complex.active && (!batch_size || batch_size > ++counter));
     return weighted_simplexes;
 }
 
