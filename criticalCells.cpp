@@ -4,7 +4,7 @@
 #include "criticalCells.hpp"
 #include <omp.h>
 
-#define PARALLEL
+// #define PARALLEL
 
 template <>
 CritCells<VR, SparseDistMat>::CritCells(Eigen::SparseMatrix<double> &distMat)
@@ -59,12 +59,12 @@ void CritCells<ComplexType, DistMatType>::run_Compute(int maxDim, int batch_size
                 bool isLastThread = (i + 1 == num_threads);
                 auto end = isLastThread ? bins.end() : std::next(bins.begin(), block_size * (i + 1));
                 for (; it != end; it++)
-                    it->second = dimMatching(it->second, dim, dim == maxDim);
+                    dimMatching(it->second, dim, dim == maxDim);
             }
 
 #else
             for (auto &it : bins)
-                it.second = dimMatching(it.second, dim, dim == maxDim);
+                dimMatching(it.second, dim, dim == maxDim);
 #endif
             auto match_end_time = std::chrono::high_resolution_clock::now();
             std::clog << "Match time: " << std::chrono::duration<double>(match_end_time - match_start_time).count() << " seconds." << std::endl;
@@ -89,6 +89,7 @@ template <typename ComplexType, typename DistMatType>
 void CritCells<ComplexType, DistMatType>::binByWeights(std::map<double, std::vector<std::vector<int>>> &weighted_simplicies, std::map<double, std::vector<std::vector<int>>> &bins) // Merged higher dim feature to bins
 {
     for (auto &[weight, simplexes] : weighted_simplicies)
+        bins[weight].emplace_back(std::move(simplexes));
         std::move(simplexes.begin(), simplexes.end(), std::back_inserter(bins[weight]));
     return;
 }
@@ -113,45 +114,56 @@ std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatTy
 }
 
 template <typename ComplexType, typename DistMatType>
-std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::dimMatching(std::vector<std::vector<int>> &simplexes, size_t dim, bool final)
+void CritCells<ComplexType, DistMatType>::dimMatching(std::vector<std::vector<int>> &simplexes, size_t dim, bool final)
 {
     std::sort(simplexes.begin(), simplexes.end(), [](const auto &first, const auto &second)
               { return first.size() < second.size(); });
-    auto critCells_end = std::find_if(simplexes.begin(), simplexes.end(), [dim](const auto &vect)
-                                      { return vect.size() >= dim; });
-    auto simps_end = std::find_if(critCells_end, simplexes.end(), [dim](const auto &vect)
-                                  { return vect.size() > dim; });
-    if (critCells_end == simps_end || simps_end == simplexes.end())
+    auto simps_iter = std::find_if(simplexes.begin(), simplexes.end(), [dim](const auto &vect)
+                                   { return vect.size() == dim; });
+
+    auto cofaces_iter = std::find_if(simplexes.begin(), simplexes.end(), [dim](const auto &vect)
+                                     { return vect.size() == dim + 1; });
+
+    // Check if there are no simplices or cofaces
+    if (simps_iter == cofaces_iter || cofaces_iter == simplexes.end())
     {
         if (final)
-            simplexes.erase(simps_end, simplexes.end());
-        return simplexes;
+            simplexes.erase(cofaces_iter, simplexes.end());
+        return; // Exit early if there's nothing to process
     }
 
-    HKGraph csr_matrix(std::distance(simps_end, critCells_end), std::distance(simplexes.end(), simps_end));
+    size_t num_simps = std::distance(simps_iter, cofaces_iter);
+    size_t num_cofaces = std::distance(cofaces_iter, simplexes.end());
 
-    size_t i = 1;
-    for (auto it_1 = critCells_end; it_1 != simps_end; ++i)
+    HKGraph csr_matrix(num_simps, num_cofaces);
+
+    for (size_t i = 0; i < num_simps; ++i)
     {
-        size_t j = 1;
-        for (auto it_2 = simps_end; it_2 != simplexes.end(); ++j)
+        for (size_t j = 0; j < num_cofaces; ++j)
         {
-            if (std::includes(it_2->begin(), it_2->end(), it_1->begin(), it_1->end()))
-                csr_matrix.addEdge(i, j); // Intial index 1
-            j++;
+            if (std::includes((cofaces_iter + j)->begin(), (cofaces_iter + j)->end(), (simps_iter + i)->begin(), (simps_iter + i)->end()))
+            {
+                csr_matrix.addEdge(i + 1, j + 1); // Initial index 1
+            }
         }
-        i++;
     }
 
     auto res = csr_matrix.custom_hopcroftKarpAlgorithm();
 
     if (final)
-        simplexes.erase(simps_end, simplexes.end());
+    {
+        simplexes.erase(cofaces_iter, simplexes.end());
+    }
     else
-        std::for_each(res.second.rbegin(), res.second.rend(), [&](auto index)
-                      { simplexes.erase(std::next(simps_end, index)); });
-    std::for_each(res.first.rbegin(), res.first.rend(), [&](auto index)
-                  { simplexes.erase(std::next(critCells_end, index)); });
+    {
+        for (auto index : res.second)
+        {
+            simplexes.erase(cofaces_iter + index - 1);
+        }
+    }
 
-    return simplexes;
+    for (auto index : res.first)
+    {
+        simplexes.erase(simps_iter + index - 1);
+    }
 }
