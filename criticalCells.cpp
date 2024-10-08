@@ -3,9 +3,10 @@
 #include "hopcroft_karp.hpp"
 #include "criticalCells.hpp"
 #include "biGraphMorseMatch.hpp"
-#include <omp.h>
-
-#define PARALLEL
+#include "omp.h"
+#ifdef MPI_ENABLED
+#include "mpi.h"
+#endif
 
 template <>
 CritCells<VR, SparseDistMat>::CritCells(Eigen::SparseMatrix<double> &distMat)
@@ -30,7 +31,8 @@ template <typename ComplexType, typename DistMatType>
 void CritCells<ComplexType, DistMatType>::run_Compute(int maxDim, int batch_size)
 {
     auto start_time = std::chrono::high_resolution_clock::now();
-    auto bins = binEdgeSimplexes();
+    ComplexType temp_complex;
+    auto bins = dsimplices_batches(temp_complex, 1, 0);
     for (size_t dim = 2; dim <= maxDim; dim++)
     {
         std::clog << "Starting for dim " << dim << std::endl;
@@ -48,25 +50,8 @@ void CritCells<ComplexType, DistMatType>::run_Compute(int maxDim, int batch_size
 
             // Bin the batches
             binByWeights(weighted_simplicies, bins);
-
-            // Dim Matching functionality
-            int num_threads = 20;
-#ifdef PARALLEL
-#pragma omp parallel for
-            for (int i = 0; i < num_threads; i++)
-            {
-                size_t block_size = floor((double)bins.size() / num_threads);
-                auto it = std::next(bins.begin(), block_size * i);
-                bool isLastThread = (i + 1 == num_threads);
-                auto end = isLastThread ? bins.end() : std::next(bins.begin(), block_size * (i + 1));
-                for (; it != end; it++)
-                    it->second = dimMatching(it->second, dim, dim == maxDim);
-            }
-
-#else
             for (auto &it : bins)
                 it.second = dimMatching(it.second, dim, dim == maxDim);
-#endif
             auto match_end_time = std::chrono::high_resolution_clock::now();
             std::clog << "Match time: " << std::chrono::duration<double>(match_end_time - match_start_time).count() << " seconds." << std::endl;
         }
