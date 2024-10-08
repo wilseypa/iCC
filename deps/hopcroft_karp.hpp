@@ -1,8 +1,7 @@
 #pragma once
 
 #include <set>
-#include <queue>
-#include <climits>
+#include <vector>
 
 class HKGraph
 {

@@ -44,38 +44,34 @@ public:
     std::vector<int> simplex;
     bool is_initialized; // Marks if the object is initialized
     bool active;         // Marks end of simplexes
-    VR() : active(true), is_initialized(false){};
+    VR() : active(true), is_initialized(false) {};
 
     void initialize(size_t n_pts, size_t dim)
     {
         n_pts_ = n_pts;
         dim_ = dim;
-        for (size_t i = dim; i > 0; i--)
-            simplex.push_back(i - 1);
+        simplex.resize(dim); // Resize the vector to the appropriate size
+        std::iota(simplex.begin(), simplex.end(), 0);
         is_initialized = true;
     };
 
-    bool next_simplex()
+    void next_simplex()
     {
-        if (simplex.back() != n_pts_ - dim_)
+        if (simplex[0] == n_pts_ - dim_)
         {
-            for (size_t i = 0; i < dim_; i++)
-            {
-                bool flag = true;
-                if (++simplex[i] == n_pts_ - i)
-                {
-                    flag = false;
-                    auto reset_to = n_pts_;
-                    for (size_t j = i + 1; j < dim_ && reset_to >= n_pts_; j++)
-                        reset_to = simplex[j] + j + 1;
-                    simplex[i] = reset_to - i;
-                }
-                else if (flag)
-                    return true;
-            }
+            active = false;
+            return; // No more simplices can be generated.
         }
-        active = false;
-        return false; // Not really needed just avoiding compiler warnings
+
+        size_t j = dim_ - 1;
+
+        while (simplex[j] - j == n_pts_ - dim_)
+            j--;
+
+        simplex[j]++;
+
+        for (size_t i = j + 1; i < dim_; i++)
+            simplex[i] = simplex[j] + i - j;
     };
 
 private:

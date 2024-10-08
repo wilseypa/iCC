@@ -22,10 +22,7 @@ inline double vectors_distance(const std::vector<double>& a, const std::vector<d
 
 std::vector<std::vector<double>> distMat(std::vector<std::vector<double>>& inputData)
 {
-  std::vector<std::vector<double>> distMatrix;
-  if (!distMatrix.empty())
-    distMatrix.clear();
-  distMatrix.resize(inputData.size(), std::vector<double>(inputData.size(), 0));
+  std::vector<std::vector<double>> distMatrix(inputData.size(), std::vector<double>(inputData.size(), 0));
   for (size_t i = 0; i < inputData.size(); i++)
     for (size_t j = i + 1; j < inputData.size(); j++)
       distMatrix[i][j] = vectors_distance(inputData[i], inputData[j]);
