@@ -1,7 +1,8 @@
-#include "deps/distMat.cpp"
-#include "deps/readInput.hpp"
-#include "deps/hopcroft_karp.hpp"
+#include "distMat.cpp"
+#include "readInput.hpp"
+#include "hopcroft_karp.hpp"
 #include "criticalCells.hpp"
+#include "biGraphMorseMatch.hpp"
 #include <omp.h>
 
 #define PARALLEL

@@ -1,14 +1,16 @@
-project("Parallel_Match")
 cmake_minimum_required(VERSION 3.22)
 
 set (CMAKE_CXX_STANDARD 23)
 
 find_package(OpenMP REQUIRED)
-find_package(Eigen3 REQUIRED)
 
-add_library(bi_graph STATIC bi_graph.cpp)
-add_library(cycle_rm STATIC cycle_rm.cpp)
+add_library(hopcroft_karp STATIC hopcroft_karp.cpp)
+target_include_directories(hopcroft_karp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
-# Create executable
-add_executable(Parallel_Match main.cpp)
-target_link_libraries(Parallel_Match PRIVATE bi_graph cycle_rm OpenMP::OpenMP_CXX)
+add_library(biGraphMorseMatch STATIC biGraphMorseMatch.cpp)
+target_link_libraries(biGraphMorseMatch PUBLIC OpenMP::OpenMP_CXX)
+
+add_library(readInput STATIC readInput.cpp)
+target_include_directories(readInput PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_library(distMat STATIC distMat.cpp)
