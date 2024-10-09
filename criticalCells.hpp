@@ -7,6 +7,8 @@
 #include <chrono>
 #include <Eigen/Sparse>
 
+#include <set>
+
 std::ostream &operator<<(std::ostream &os, const std::map<double, std::vector<std::vector<int>>> &bins)
 {
     for (const auto &[weight, simplexes] : bins)
@@ -93,4 +95,8 @@ private:
     void binByWeights(std::map<double, std::vector<std::vector<int>>> &weighted_simplicies, std::map<double, std::vector<std::vector<int>>> &bins); // Merged higher dim feature to bins
     std::map<double, std::vector<std::vector<int>>> dsimplices_batches(ComplexType &simplex_const, size_t dim, size_t batch_size);                  // Worker is invokation counter
     std::vector<std::vector<int>> dimMatching(std::vector<std::vector<int>> &simplexes, size_t dim, bool final);
+
+    /*bins by weight range*/
+    std::set<std::vector<int>> getSortedEdge();
+    std::vector<std::vector<int>> dSimplexBinByWeightRange(int dimension, double minweight, double maxweight, std::set<std::vector<int>>& sorted_edge_set);
 };

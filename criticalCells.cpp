@@ -71,6 +71,31 @@ std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatTy
     return binned_edges;
 }
 
+
+
+template <typename ComplexType, typename DistMatType>
+std::set<std::vector<int>> CritCells<ComplexType, DistMatType>::getSortedEdge()
+{
+    auto sort_lambda = [this](std::vector<int>& edge_i, std::vector<int>& edge_j) { return (this->distance(edge_i[0], edge_i[1]) < this->distance(edge_j[0], edge_j[1])); };
+    std::set<std::vector<int>, decltype(sort_lambda)> edge_set;
+    for (int i = 0; i < this->distMatrix.size() - 1; i++) {
+        for (int j = i + 1; j < this->distMatrix.size(); j++) {
+            edge_set.insert({i, j});
+        }
+    }
+    return edge_set;
+}
+
+template <typename ComplexType, typename DistMatType>
+std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::dSimplexBinByWeightRange(int dimension, double minweight, double maxweight, std::set<std::vector<int>>& sorted_edge_set)
+{
+    auto findmin_lambda = [minweight, this](std::vector<int>& edge) { return (this->distance(edge[0], edge[1]) > minweight); };
+    auto findmax_lambda = [maxweight, this](std::vector<int>& edge) { return (this->distance(edge[0], edge[1]) > maxweight); };
+    //to do 
+    //find the seed edges. enumerate d simps 
+}
+
+
 template <typename ComplexType, typename DistMatType>
 void CritCells<ComplexType, DistMatType>::binByWeights(std::map<double, std::vector<std::vector<int>>> &weighted_simplicies, std::map<double, std::vector<std::vector<int>>> &bins) // Merged higher dim feature to bins
 {
