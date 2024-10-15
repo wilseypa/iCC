@@ -74,26 +74,103 @@ std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatTy
 
 
 template <typename ComplexType, typename DistMatType>
-std::set<std::vector<int>> CritCells<ComplexType, DistMatType>::getSortedEdge()
+std::set<std::vector<int>> CritCells<ComplexType, DistMatType>::getSortedEdges()
 {
     auto sort_lambda = [this](std::vector<int>& edge_i, std::vector<int>& edge_j) { return (this->distance(edge_i[0], edge_i[1]) < this->distance(edge_j[0], edge_j[1])); };
-    std::set<std::vector<int>, decltype(sort_lambda)> edge_set;
+    std::vector<<std::vector<int>> edge_vec;
     for (int i = 0; i < this->distMatrix.size() - 1; i++) {
         for (int j = i + 1; j < this->distMatrix.size(); j++) {
             edge_set.insert({i, j});
         }
     }
-    return edge_set;
+    return std::ranges::sort(edge_vec, sort_lambda);
 }
 
 template <typename ComplexType, typename DistMatType>
-std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::dSimplexBinByWeightRange(int dimension, double minweight, double maxweight, std::set<std::vector<int>>& sorted_edge_set)
+std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::getEdgesByWeightRange(int dimension, double minweight, double maxweight, std::vector<std::vector<int>>& sorted_edges)
 {
-    auto findmin_lambda = [minweight, this](std::vector<int>& edge) { return (this->distance(edge[0], edge[1]) > minweight); };
-    auto findmax_lambda = [maxweight, this](std::vector<int>& edge) { return (this->distance(edge[0], edge[1]) > maxweight); };
-    //to do 
-    //find the seed edges. enumerate d simps 
+    auto findmin_lambda = [minweight, this](std::vector<int>& edge) { return (this->distMatrix(edge[0], edge[1]) > minweight); };
+    auto findmax_lambda = [maxweight, this](std::vector<int>& edge) { return (this->distMatrix(edge[0], edge[1]) > maxweight); };
+
+    std::vector<std::vector<int>>::iterator minit, maxit;
+    if (minweight == 0) {
+        minit = sorted_edges.begin();
+    } else {
+        minit = std::find_if(sorted_edges.begin(), sorted_edges.end(), findmin_lambda);
+    }
+    maxit = std::find_if(sorted_edges.begin(), sorted_edges.end(), findmax_lambda);
+    
+    std::vector<std::vector<int>> edge_bin(minit, maxit);
+    return edge_bin;
 }
+
+template <typename ComplexType, typename DistMatType>
+std::vector<std::vector<int>>::iterator CritCells<ComplexType, DistMatType>::getMaxWeightEdgeIter(std::vector<std::vector<int>>& sorted_edges, std::vector<int>& simplex)
+{
+    int dim = simplex.size() - 1;
+    auto maxiter = sorted_edges.begin();
+    for (int i = 0; i < dim; i++){
+        for (int j = i; j < dim + 1; j++) {
+            if (i > j) std::swap(i, j);
+            auto it = std::find(sorted_edges.begin(), sorted_edges.end(), std::vector<int>{i,j});
+            if (it > maxiter) maxiter = it;
+        }
+    }
+    return maxiter;
+}
+
+template <typename ComplexType, typename DistMatType>
+double CritCells<ComplexType, DistMatType>::getMaxWeight(std::vector<int>& simplex)
+{
+    int dim = simplex.size() - 1;
+    double maxweight = 0;
+    for (int i = 0; i < dim; i++){
+        for (int j = i; j < dim + 1; j++) {
+            if (i > j) std::swap(i, j);
+            if (this->distMatrix[i][j] > maxweight) maxweight = this->distMatrix[i][j];
+        }
+    }
+    return maxweight;
+}
+
+template <typename ComplexType, typename DistMatType>
+std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::getLEWeightCofacet(std::vector<std::vector<int>>& sorted_edges, std::vector<std::vector<int>>& simplex_vec)
+{   
+    std::vector<std::vector<int>> cofacet_vec;
+    size_t npts = this->distMatrix.size();
+
+    int threadnum = 4;
+    omp_set_num_threads(theadnum);
+    std::vector<std::vector<int>> thread_workspace(threadnum, std::vector<int>());
+
+    for(auto& simplex: simplex_vec) {
+        double simpweight = getMaxWeight(simplex);
+#pragma omp  parallel for schedule(dynamic)
+        int flag = 0;
+        thread_workspace[omp_get_thread_num()].clear();
+        for (int i = 0; i < npts; i++) {
+            if (i >= std::min(simplex)) continue;
+            for (int j: simplex) {
+                double weight = this->distMatrix[i][j];
+                if (weight > simpweight) {
+                    flag = 1;
+                    break;
+                }
+            }
+            if (!flag) thread_workspace[omp_get_thread_num()].push_back(i);
+            flag = 0;
+        }
+
+        for (auto& cofacet_pt: thread_workspace)
+            for(auto& pt: cofacet_pt) {
+                std::copy(simplex.begin(), simplex.end(), std::back_inserter(cofacet_vec));
+                (cofacet_vec.back()).push_back(pt);
+            }
+    }
+    
+    return cofacet_vec;
+}
+
 
 
 template <typename ComplexType, typename DistMatType>
