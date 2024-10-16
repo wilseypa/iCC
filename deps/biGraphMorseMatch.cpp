@@ -420,7 +420,7 @@ int Bi_Graph_Match::serialCycleRemoval() {
     return reverted;
 }
 
-std::vector<int> Bi_Graph_Match::getCritcialIndex() {
+std::vector<int> Bi_Graph_Match::getCriticalIndex() {
     std::vector<int> critical_index;
     //need to reserve the space?
     for (int i = u; i < (u + v); i++) {

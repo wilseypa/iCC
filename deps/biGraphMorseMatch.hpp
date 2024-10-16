@@ -36,7 +36,7 @@ public:
 
     int serialCycleRemoval();
 
-    std::vector<int> getCritcialIndex();
+    std::vector<int> getCriticalIndex();
 
     void addEdge(int u, int v);
 
