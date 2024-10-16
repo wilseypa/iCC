@@ -41,4 +41,10 @@ public:
     void addEdge(int u, int v);
 
     Bi_Graph_Match(int leftnum, int rightnum, int leftdim, int threadnum);
+
+    void updateDimension(int newleftnum, int newrightnum);
+
+    void buildInterface(std::vector<std::vector<int>>& simplex_bin, std::vector<std::vector<int>>& cofacet_bin, std::vector<int>& active_index);
+
+    std::vector<int> getActiveIndex();
 };

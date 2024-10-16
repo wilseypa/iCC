@@ -423,9 +423,9 @@ int Bi_Graph_Match::serialCycleRemoval() {
 std::vector<int> Bi_Graph_Match::getCritcialIndex() {
     std::vector<int> critical_index;
     //need to reserve the space?
-    for (int i = 0; i < (u + v); i++) {
-        //for kth coface, its index i == k + u
-        if (match_list[i] < 0) critical_index.push_back(i);
+    for (int i = u; i < (u + v); i++) {
+        //for kth simplex, its index in graph i == k + u
+        if (match_list[i] < 0) critical_index.push_back(i - u);
     }
     return critical_index;
 }
@@ -441,3 +441,47 @@ Bi_Graph_Match::Bi_Graph_Match(int leftnum, int rightnum, int leftdim, int threa
     adj_list.resize(u + v);
     match_list.resize(u + v, -1);
 }
+
+void Bi_Graph_Match::updateDimension(int newleftnum, int newrightnum) {
+    u = newleftnum;
+    v = newrightnum;
+    udegree += 1;
+    adj_list.clear();
+    adj_list.resize(u + v);
+    match_list.clear();
+    match_list.resize(u + v, -1);
+}
+
+void Bi_Graph_Match::buildInterface(std::vector<std::vector<int>>& simplex_bin, std::vector<std::vector<int>>& cofacet_bin, std::vector<int>& active_index) {
+    int cofacetnum = cofacet_bin.size();
+    
+    //openmp??????
+
+    for (int i = 0; i < cofacetnum; i++) {
+        for (auto j: active_index) {
+            if (std::includes(cofacet_bin[i].begin(), cofacet_bin[i].end(), simplex_bin[j].begin(), simplex_bin[j].end())) addEdge(i, j);
+        }
+    }
+}
+
+std::vector<int> Bi_Graph_Match::getActiveIndex() {
+    std::vector<int> active_index;
+    //need to reserve the space?
+    for (int i = 0; i < u; i++) {
+        if (match_list[i] < 0) active_index.push_back(i);
+    }
+    return active_index;
+}
+
+//to do
+//if epsmin != 0, pass empty vec as d-1 simp
+//bi_graph_match.build_interface(d-simp, d-1-simp, dimension)
+
+//outline
+//get sorted edge
+//get first edge bin
+//for dim = 1 to n
+//build interface 
+//save d-1 cirtical
+//build cc.cofacet. take d-1 simp's spot
+//swap d d-1 simp

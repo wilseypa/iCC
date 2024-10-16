@@ -89,14 +89,19 @@ public:
     CritCells(std::vector<std::vector<double>> &distMat); // Input normal Distance matrix
     CritCells(Eigen::SparseMatrix<double> &distMat);
     void run_Compute(int maxDim, int batchsize = 0);
+    
+    /*bins by weight range*/
+    //change later
+    std::set<std::vector<int>> getSortedEdges();
+    std::vector<std::vector<int>> getEdgesByWeightRange(std::vector<std::vector<int>>& sorted_edges, double minweight, double maxweight);
+    double getSimplexWeight(std::vector<int>& simplex);
+    std::vector<std::vector<int>> getLEWeightCofacet(std::vector<std::vector<int>>& sorted_edges, std::vector<std::vector<int>>& simplex_bin, int threadnum);
+    std::vector<std::vector<double>> run_MorseMatch(int maxdimension, double mineps, double maxeps);
+
 
 private:
     std::map<double, std::vector<std::vector<int>>> binEdgeSimplexes();                                                                             // Direct creation of edgebins to a map
     void binByWeights(std::map<double, std::vector<std::vector<int>>> &weighted_simplicies, std::map<double, std::vector<std::vector<int>>> &bins); // Merged higher dim feature to bins
     std::map<double, std::vector<std::vector<int>>> dsimplices_batches(ComplexType &simplex_const, size_t dim, size_t batch_size);                  // Worker is invokation counter
     std::vector<std::vector<int>> dimMatching(std::vector<std::vector<int>> &simplexes, size_t dim, bool final);
-
-    /*bins by weight range*/
-    std::set<std::vector<int>> getSortedEdge();
-    std::vector<std::vector<int>> dSimplexBinByWeightRange(int dimension, double minweight, double maxweight, std::set<std::vector<int>>& sorted_edge_set);
 };
