@@ -127,10 +127,10 @@ double CritCells<ComplexType, DistMatType>::getSimplexWeight(std::vector<int>& s
 {
     int dim = simplex.size() - 1;
     double maxweight = 0;
-    for (int i = 0; i < dim; i++){
-        for (int j = i; j < dim + 1; j++) {
-            if (i > j) std::swap(i, j);
-            if (this->distMatrix[i][j] > maxweight) maxweight = this->distMatrix[i][j];
+    for (int i = 0; i < simplex.size() - 1; i++){
+        for (int j = i + 1; j < simplex.size(); j++) {
+            if (this->distMatrix[i][j] > maxweight) 
+                maxweight = this->distMatrix[i][j];
         }
     }
     return maxweight;
