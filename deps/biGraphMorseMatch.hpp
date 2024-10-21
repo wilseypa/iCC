@@ -10,7 +10,7 @@ private:
     int udegree;
     int maxthreadnum;    //affect the memory consumption during bipartite matching
 
-    std::vector<std::vector<int>> adj_list;
+    // std::vector<std::vector<int>> adj_list;
     std::vector<int> match_list;
     std::vector<int> root_flag;
 
@@ -38,6 +38,8 @@ public:
 
     std::vector<int> getCriticalIndex();
 
+    std::vector<int> getTopDimCriticalIndex();
+
     void addEdge(int u, int v);
 
     Bi_Graph_Match(int leftnum, int rightnum, int leftdim, int threadnum);
@@ -47,4 +49,7 @@ public:
     void buildInterface(std::vector<std::vector<int>>& simplex_bin, std::vector<std::vector<int>>& cofacet_bin, std::vector<int>& active_index);
 
     std::vector<int> getActiveIndex();
+
+    std::vector<std::vector<int>> adj_list;
+
 };

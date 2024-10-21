@@ -75,28 +75,30 @@ std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatTy
 }
 
 template <typename ComplexType, typename DistMatType>
-std::set<std::vector<int>> CritCells<ComplexType, DistMatType>::getSortedEdges()
+std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::getSortedEdges()
 {
     auto sort_lambda = [this](std::vector<int> &edge_i, std::vector<int> &edge_j)
-    { return (this->distance(edge_i[0], edge_i[1]) < this->distance(edge_j[0], edge_j[1])); };
+    { return (this->distMatrix[edge_i[0]][edge_j[1]] < this->distMatrix[edge_j[0]][edge_j[1]]); };
     std::vector<std::vector<int>> edge_vec;
     for (int i = 0; i < this->distMatrix.size() - 1; i++)
     {
         for (int j = i + 1; j < this->distMatrix.size(); j++)
         {
-            edge_vec.push_back({i, j});
+            edge_vec.push_back(std::vector<int>{i, j});
         }
     }
-    return std::ranges::sort(edge_vec, sort_lambda);
+    std::ranges::sort(edge_vec, sort_lambda);
+
+    return edge_vec;
 }
 
 template <typename ComplexType, typename DistMatType>
 std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::getEdgesByWeightRange(std::vector<std::vector<int>> &sorted_edges, double minweight, double maxweight)
 {
     auto findmin_lambda = [minweight, this](std::vector<int> &edge)
-    { return (this->distMatrix(edge[0], edge[1]) > minweight); };
+    { return (this->distMatrix[edge[0]][edge[1]] > minweight); };
     auto findmax_lambda = [maxweight, this](std::vector<int> &edge)
-    { return (this->distMatrix(edge[0], edge[1]) > maxweight); };
+    { return (this->distMatrix[edge[0]][edge[1]] > maxweight); };
 
     std::vector<std::vector<int>>::iterator minit, maxit;
     if (minweight == 0)
@@ -131,14 +133,13 @@ std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::getEdgesByWei
 template <typename ComplexType, typename DistMatType>
 double CritCells<ComplexType, DistMatType>::getSimplexWeight(std::vector<int> &simplex)
 {
-    int dim = simplex.size() - 1;
     double maxweight = 0;
     for (int i = 0; i < simplex.size() - 1; i++)
     {
         for (int j = i + 1; j < simplex.size(); j++)
         {
-            if (this->distMatrix[i][j] > maxweight)
-                maxweight = this->distMatrix[i][j];
+            if (this->distMatrix[simplex[i]][simplex[j]] > maxweight)
+                maxweight = this->distMatrix[simplex[i]][simplex[j]];
         }
     }
     return maxweight;
@@ -150,18 +151,22 @@ std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::getLEWeightCo
     std::vector<std::vector<int>> cofacet_bin;
     size_t npts = this->distMatrix.size();
 
-    omp_set_num_threads(threadnum);
+    omp_set_num_threads(1);
     std::vector<std::vector<int>> thread_workspace(simplexes.size(), std::vector<int>());
 
 #pragma omp parallel for
     for (size_t i = 0; i < simplexes.size(); i++)
     {
         double simpweight = getSimplexWeight(simplexes[i]);
+
         int last_idx = *std::min(simplexes[i].begin(), simplexes[i].end());
         for (int j = 0; j < last_idx; j++)
         {
-            auto weight = *std::max_element(simplexes[i].begin(), simplexes[i].end(), [this, j](auto first, auto second)
+            auto idx = *std::max_element(simplexes[i].begin(), simplexes[i].end(), [this, j](auto first, auto second)
                                             { return this->distMatrix[j][first] < this->distMatrix[j][second]; });
+            
+            double weight = this->distMatrix[j][idx];
+
             if (weight < simpweight)
                 thread_workspace[i].push_back(j);
         }
@@ -180,15 +185,18 @@ std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::getLEWeightCo
 template <typename ComplexType, typename DistMatType>
 std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseMatch(int maxdimension, double mineps, double maxeps)
 {
-    std::vector<std::vector<int>> sorted_edges = getSortedEdges;
+    std::vector<std::vector<int>> sorted_edges = getSortedEdges();
 
     std::vector<std::vector<int>> simplex_bin(this->distMatrix.size());
-    std::iota(simplex_bin.begin(), simplex_bin.end(), 0);
+    for(int i = 0; i < this->distMatrix.size(); i++) simplex_bin[i].push_back(i);
 
     std::vector<std::vector<int>> cofacet_bin = getEdgesByWeightRange(sorted_edges, mineps, maxeps);
-
+    
     std::vector<std::vector<double>> critical_weight;
-    std::vector<int> dim_active_index;
+
+    std::vector<int> dim_active_index(this->distMatrix.size());
+    std::iota(dim_active_index.begin(), dim_active_index.end(), 0);
+
     std::vector<int> dim_critical_index;
 
     int initleftdeg = 1 + 1;
@@ -197,12 +205,25 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
 
     for (int dim = 1; dim < maxdimension; dim++)
     {
-        bi_graph.buildInterface(simplex_bin, cofacet_bin, dim_active_index);
+        
+        bi_graph.buildInterface(cofacet_bin, simplex_bin, dim_active_index);
+
         bi_graph.parallelDFSMatch();
         bi_graph.serialCycleRemoval();
 
         dim_active_index = bi_graph.getActiveIndex();
-        dim_critical_index = bi_graph.getCriticalIndex();
+
+        // for(auto& i: dim_active_index) std::cout<<i<<" ";
+        // std::cout<<'\n';
+        // std::cout<<'\n';
+
+        if (dim > 1) dim_critical_index = bi_graph.getCriticalIndex();
+
+        // std::cout<<"critical idx"<<'\n';
+        // for(auto& i: dim_critical_index) std::cout<<i<<" ";
+        // std::cout<<'\n';
+        // std::cout<<'\n';
+
         // std for each
         std::vector<double> dim_critical_weight;
         for (auto i : dim_critical_index)
@@ -212,10 +233,10 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
         }
         critical_weight.push_back(dim_critical_weight);
 
-        simplex_bin = getLEWeightCofacet(sorted_edges, simplex_bin, threadnum);
-        std::swap(simplex_bin, cofacet_bin);
+        simplex_bin = getLEWeightCofacet(sorted_edges, cofacet_bin, threadnum);
 
-        bi_graph.updateDimension(cofacet_bin.size(), simplex_bin.size());
+        std::swap(simplex_bin, cofacet_bin);
+        bi_graph.updateDimension(cofacet_bin.size(), simplex_bin.size());    
     }
 
     return critical_weight;

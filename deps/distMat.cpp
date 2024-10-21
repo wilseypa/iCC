@@ -26,5 +26,6 @@ std::vector<std::vector<double>> distMat(std::vector<std::vector<double>>& input
   for (size_t i = 0; i < inputData.size(); i++)
     for (size_t j = i + 1; j < inputData.size(); j++)
       distMatrix[i][j] = vectors_distance(inputData[i], inputData[j]);
+  
   return distMatrix;
 }

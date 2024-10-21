@@ -430,6 +430,16 @@ std::vector<int> Bi_Graph_Match::getCriticalIndex() {
     return critical_index;
 }
 
+std::vector<int> Bi_Graph_Match::getTopDimCriticalIndex() 
+{
+    std::vector<int> critical_index;
+    for(int i = 0; i < u; i++) 
+    {
+        if (match_list[i] < 0) critical_index.push_back(i);
+    }
+    return critical_index;
+}
+
 
 void Bi_Graph_Match::addEdge(int leftnode, int rightnode) {
     adj_list[leftnode].push_back(u + rightnode);
@@ -452,14 +462,22 @@ void Bi_Graph_Match::updateDimension(int newleftnum, int newrightnum) {
     match_list.resize(u + v, -1);
 }
 
-void Bi_Graph_Match::buildInterface(std::vector<std::vector<int>>& simplex_bin, std::vector<std::vector<int>>& cofacet_bin, std::vector<int>& active_index) {
+void Bi_Graph_Match::buildInterface(std::vector<std::vector<int>>& cofacet_bin, std::vector<std::vector<int>>& simplex_bin, std::vector<int>& active_index) {
     int cofacetnum = cofacet_bin.size();
     
     //openmp??????
 
     for (int i = 0; i < cofacetnum; i++) {
         for (auto j: active_index) {
-            if (std::includes(cofacet_bin[i].begin(), cofacet_bin[i].end(), simplex_bin[j].begin(), simplex_bin[j].end())) addEdge(i, j);
+            if (std::includes(cofacet_bin[i].begin(), cofacet_bin[i].end(), simplex_bin[j].begin(), simplex_bin[j].end())) 
+            {   
+                // for(auto s: cofacet_bin[i]) std::cout<<s<<" ";
+                // std::cout<<"  ";
+                // for(auto t: simplex_bin[j]) std::cout<<t<<" ";
+                // std::cout<<'\n';
+                addEdge(i, j);
+            }
+            
         }
     }
 }

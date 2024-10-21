@@ -92,7 +92,7 @@ public:
     
     /*bins by weight range*/
     //change later
-    std::set<std::vector<int>> getSortedEdges();
+    std::vector<std::vector<int>> getSortedEdges();
     std::vector<std::vector<int>> getEdgesByWeightRange(std::vector<std::vector<int>>& sorted_edges, double minweight, double maxweight);
     double getSimplexWeight(std::vector<int>& simplex);
     std::vector<std::vector<int>> getLEWeightCofacet(std::vector<std::vector<int>>& sorted_edges, std::vector<std::vector<int>>& simplex_bin, int threadnum);
