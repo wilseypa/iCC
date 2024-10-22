@@ -88,23 +88,7 @@ std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::getSortedEdge
         }
     }
 
-    // before sort
-    for (int i = 0; i < 10; i++)
-    {
-        std::cout << edge_vec[i][0] << " " << edge_vec[i][1] << "  ";
-        std::cout << getSimplexWeight(edge_vec[i]) << '\n';
-    }
-    std::cout << '\n';
-
     std::ranges::sort(edge_vec.begin(), edge_vec.end(), sort_lambda);
-
-    // after sort
-    for (int i = 0; i < 10; i++)
-    {
-        std::cout << edge_vec[i][0] << " " << edge_vec[i][1] << "  ";
-        std::cout << getSimplexWeight(edge_vec[i]) << '\n';
-    }
-    std::cout << '\n';
 
     return edge_vec;
 }
@@ -272,21 +256,14 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
         bi_graph.buildInterface(cofacet_bin, simplex_bin, dim_active_index);
 
         bi_graph.parallelDFSMatch();
-        bi_graph.serialCycleRemoval();
+        int reverted = bi_graph.serialCycleRemoval();
+        std::cout<<"dim = "<<dim<<"  reverted = "<<reverted<<'\n';
 
         std::vector<int> dim_critical_index = bi_graph.getCriticalIndex(dim_active_index);
-        std::cout << "active idx" << '\n';
-        for (auto &i : dim_active_index)
-            std::cout << i << " ";
-        std::cout << '\n';
-        std::cout << '\n';
-        std::cout << "critical idx" << '\n';
-        for (auto &i : dim_critical_index)
-            std::cout << i << " ";
-        std::cout << '\n';
-        std::cout << '\n';
+        std::cout<<"dim = "<<dim<<"  dim - 1 critical idx size = "<<dim_critical_index.size()<<'\n';
 
         dim_active_index = bi_graph.getActiveIndex();
+        std::cout<<"cofact active idx size = "<<dim_active_index.size()<<"  cofacet size = "<<cofacet_bin.size()<<'\n';
 
         // std for each
         std::vector<double> dim_critical_weight;

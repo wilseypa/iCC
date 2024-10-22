@@ -465,9 +465,9 @@ bool Bi_Graph_Match::isFacet(std::vector<int>& cofacet, std::vector<int>& facet)
 void Bi_Graph_Match::buildInterface(std::vector<std::vector<int>>& cofacet_bin, std::vector<std::vector<int>>& simplex_bin, std::vector<int>& active_index) {    
     //openmp??????
 
-    for (int i = 0; i < cofacet_bin.size(); i++) {
-        // for (auto it = active_index.rbegin(); it != active_index.rend(); it++) 
-        for (auto it = active_index.begin(); it != active_index.end(); it++) 
+    for (int i = cofacet_bin.size() - 1; i >= 0; i--) {
+        for (auto it = active_index.rbegin(); it != active_index.rend(); it++) 
+        //for (auto it = active_index.begin(); it != active_index.end(); it++) 
         {
             // if (std::includes(cofacet_bin[i].begin(), cofacet_bin[i].end(), simplex_bin[j].begin(), simplex_bin[j].end())) 
             if (isFacet(cofacet_bin[i], simplex_bin[*it]))
