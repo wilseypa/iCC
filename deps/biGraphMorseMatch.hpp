@@ -44,6 +44,8 @@ public:
 
     void updateDimension(int newleftnum, int newrightnum);
 
+    bool isFacet(std::vector<int>& cofacet, std::vector<int>& facet);
+
     void buildInterface(std::vector<std::vector<int>>& simplex_bin, std::vector<std::vector<int>>& cofacet_bin, std::vector<int>& active_index);
 
     std::vector<int> getActiveIndex();

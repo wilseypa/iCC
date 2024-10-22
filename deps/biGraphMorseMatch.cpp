@@ -452,24 +452,34 @@ void Bi_Graph_Match::updateDimension(int newleftnum, int newrightnum) {
     match_list.resize(u + v, -1);
 }
 
-void Bi_Graph_Match::buildInterface(std::vector<std::vector<int>>& cofacet_bin, std::vector<std::vector<int>>& simplex_bin, std::vector<int>& active_index) {
-    int cofacetnum = cofacet_bin.size();
-    
+bool Bi_Graph_Match::isFacet(std::vector<int>& cofacet, std::vector<int>& facet)
+{
+    for(auto i: facet)
+    {
+        if (std::find(cofacet.begin(), cofacet.end(), i) == cofacet.end()) return false;
+    }
+    return true;
+}
+
+void Bi_Graph_Match::buildInterface(std::vector<std::vector<int>>& cofacet_bin, std::vector<std::vector<int>>& simplex_bin, std::vector<int>& active_index) {    
     //openmp??????
 
-    for (int i = 0; i < cofacetnum; i++) {
+    for (int i = 0; i < cofacet_bin.size(); i++) {
         for (auto j: active_index) {
-            if (std::includes(cofacet_bin[i].begin(), cofacet_bin[i].end(), simplex_bin[j].begin(), simplex_bin[j].end())) 
+            // if (std::includes(cofacet_bin[i].begin(), cofacet_bin[i].end(), simplex_bin[j].begin(), simplex_bin[j].end())) 
+            if (isFacet(cofacet_bin[i], simplex_bin[j]))
             {   
-                // for(auto s: cofacet_bin[i]) std::cout<<s<<" ";
-                // std::cout<<"  ";
-                // for(auto t: simplex_bin[j]) std::cout<<t<<" ";
-                // std::cout<<'\n';
                 addEdge(i, j);
             }
             
         }
     }
+
+    // for(int i = 0; i < 20; i++) std::cout<<adj_list[i].size()<<"  ";
+    // std::cout<<'\n';
+    // for(int i = 0; i < 20; i++) std::cout<<adj_list[u+i].size()<<"  ";
+    // std::cout<<'\n';
+
 }
 
 std::vector<int> Bi_Graph_Match::getActiveIndex() {

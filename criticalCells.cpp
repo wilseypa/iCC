@@ -145,7 +145,7 @@ std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::getLEWeightCo
     {
         double simpweight = getSimplexWeight(simplexes[i]);
 
-        int last_idx = *std::min(simplexes[i].begin(), simplexes[i].end());
+        int last_idx = *std::min_element(simplexes[i].begin(), simplexes[i].end());
         for (int j = 0; j < last_idx; j++)
         {
             auto maxidx = *std::max_element(simplexes[i].begin(), simplexes[i].end(), [this, j](auto first, auto second)
@@ -153,8 +153,7 @@ std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::getLEWeightCo
             
             double weight = this->distMatrix[j][maxidx];
 
-            if (weight < simpweight)
-                thread_workspace[i].push_back(j);
+            if (weight < simpweight) thread_workspace[i].push_back(j);
         }
     }
     for (size_t i = 0; i < simplexes.size(); i++)
@@ -242,14 +241,7 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
 
     for (int dim = 2; dim <= maxdimension; dim++)
     {
-
-        for(auto i : simplex_bin[0]) std::cout<<i<<"  ";
-        std::cout<<'\n';
-
-        for(auto i : cofacet_bin[0]) std::cout<<i<<"  ";
-        std::cout<<'\n';
-
-        std::cout<<"dim active idx size = "<<dim_active_index.size()<<'\n';
+        // std::cout<<"dim active idx size = "<<dim_active_index.size()<<'\n';
         bi_graph.buildInterface(cofacet_bin, simplex_bin, dim_active_index);
 
         bi_graph.parallelDFSMatch();
@@ -283,7 +275,7 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
             bi_graph.updateDimension(cofacet_bin.size(), simplex_bin.size());  
         } 
         else
-        {
+        {   
             for (auto i: dim_active_index)
             {   
                 double weight = getSimplexWeight(cofacet_bin[i]);
