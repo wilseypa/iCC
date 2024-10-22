@@ -420,25 +420,15 @@ int Bi_Graph_Match::serialCycleRemoval() {
     return reverted;
 }
 
-std::vector<int> Bi_Graph_Match::getCriticalIndex() {
-    std::vector<int> critical_index;
-    //need to reserve the space?
-    for (int i = u; i < (u + v); i++) {
-        //for kth simplex, its index in graph i == k + u
-        if (match_list[i] < 0) critical_index.push_back(i - u);
-    }
-    return critical_index;
-}
-
-std::vector<int> Bi_Graph_Match::getTopDimCriticalIndex() 
-{
-    std::vector<int> critical_index;
-    for(int i = 0; i < u; i++) 
-    {
-        if (match_list[i] < 0) critical_index.push_back(i);
-    }
-    return critical_index;
-}
+// std::vector<int> Bi_Graph_Match::getTopDimCriticalIndex() 
+// {
+//     std::vector<int> critical_index;
+//     for(int i = 0; i < u; i++) 
+//     {
+//         if (match_list[i] < 0) critical_index.push_back(i);
+//     }
+//     return critical_index;
+// }
 
 
 void Bi_Graph_Match::addEdge(int leftnode, int rightnode) {
@@ -489,6 +479,20 @@ std::vector<int> Bi_Graph_Match::getActiveIndex() {
         if (match_list[i] < 0) active_index.push_back(i);
     }
     return active_index;
+}
+
+std::vector<int> Bi_Graph_Match::getCriticalIndex(std::vector<int>& dim_active_index) 
+{
+    std::vector<int> critical_index;
+    //need to reserve the space?
+    for (int i = u; i < (u + v); i++) {
+        //for kth simplex, its index in graph i == k + u
+        if (match_list[i] < 0)
+        {
+            if (std::find(dim_active_index.begin(), dim_active_index.end(), i - u) != dim_active_index.end()) critical_index.push_back(i - u);
+        }            
+    }
+    return critical_index;
 }
 
 //to do

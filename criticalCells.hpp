@@ -95,9 +95,11 @@ public:
     std::vector<std::vector<int>> getSortedEdges();
     std::vector<std::vector<int>> getEdgesByWeightRange(std::vector<std::vector<int>>& sorted_edges, double minweight, double maxweight);
     double getSimplexWeight(std::vector<int>& simplex);
-    std::vector<std::vector<int>> getLEWeightCofacet(std::vector<std::vector<int>>& sorted_edges, std::vector<std::vector<int>>& simplex_bin, int threadnum);
+    std::vector<std::vector<int>> getLEWeightCofacet(std::vector<std::vector<int>>& simplex_bin, int threadnum);
+    int findRoot(std::vector<int>& parent_idx, int x);
+    void setUnion(std::vector<int>& parent_idx, int x, int y);
+    std::vector<int> getMSTEdgeIndices(std::vector<std::vector<int>>& sorted_edges);
     std::vector<std::vector<double>> run_MorseMatch(int maxdimension, double mineps, double maxeps);
-
 
 private:
     std::map<double, std::vector<std::vector<int>>> binEdgeSimplexes();                                                                             // Direct creation of edgebins to a map
