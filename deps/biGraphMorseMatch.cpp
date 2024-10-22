@@ -131,9 +131,10 @@ int Bi_Graph_Match::dfsAugPath(int startnode, std::vector<int>& dfs_flag, std::v
 
 int Bi_Graph_Match::findRoot() {
     auto root_lambda = [&](const auto i) {return (root_flag[i] == 0);};
-    auto iota{std::views::iota(0, u)};
-    auto it = std::ranges::find_if(iota, root_lambda);
-    if (it != iota.end()) {
+    std::vector<int> range(u);
+    std::iota(range.begin(), range.end(), 0);
+    auto it = std::find_if(range.begin(), range.end(), root_lambda);
+    if (it != range.end()) {
         return *it;
     } else {
         return -1;
@@ -465,11 +466,13 @@ void Bi_Graph_Match::buildInterface(std::vector<std::vector<int>>& cofacet_bin, 
     //openmp??????
 
     for (int i = 0; i < cofacet_bin.size(); i++) {
-        for (auto j: active_index) {
+        // for (auto it = active_index.rbegin(); it != active_index.rend(); it++) 
+        for (auto it = active_index.begin(); it != active_index.end(); it++) 
+        {
             // if (std::includes(cofacet_bin[i].begin(), cofacet_bin[i].end(), simplex_bin[j].begin(), simplex_bin[j].end())) 
-            if (isFacet(cofacet_bin[i], simplex_bin[j]))
+            if (isFacet(cofacet_bin[i], simplex_bin[*it]))
             {   
-                addEdge(i, j);
+                addEdge(i, *it);
             }
             
         }

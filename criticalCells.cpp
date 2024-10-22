@@ -87,7 +87,24 @@ std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::getSortedEdge
             edge_vec.push_back(std::vector<int>{i, j});
         }
     }
-    std::ranges::sort(edge_vec, sort_lambda);
+
+    //before sort
+    for (int i = 0; i < 10; i++)
+    {   
+        std::cout<<edge_vec[i][0]<<" "<<edge_vec[i][1]<<"  ";
+        std::cout<<getSimplexWeight(edge_vec[i])<<'\n';
+    }
+    std::cout<<'\n';
+
+    std::ranges::sort(edge_vec.begin(), edge_vec.end(), sort_lambda);
+
+    //after sort
+    for (int i = 0; i < 10; i++)
+    {   
+        std::cout<<edge_vec[i][0]<<" "<<edge_vec[i][1]<<"  ";
+        std::cout<<getSimplexWeight(edge_vec[i])<<'\n';
+    }
+    std::cout<<'\n';
 
     return edge_vec;
 }
@@ -121,11 +138,14 @@ double CritCells<ComplexType, DistMatType>::getSimplexWeight(std::vector<int> &s
 {
     double maxweight = 0;
     for (int i = 0; i < simplex.size() - 1; i++)
-    {
+    {   
+        int m = simplex[i];
         for (int j = i + 1; j < simplex.size(); j++)
         {
-            if (this->distMatrix[simplex[i]][simplex[j]] > maxweight)
-                maxweight = this->distMatrix[simplex[i]][simplex[j]];
+            int n = simplex[j];
+            if (m > n) std::swap(m, n);
+            if (this->distMatrix[m][n] > maxweight)
+                maxweight = this->distMatrix[m][n];
         }
     }
     return maxweight;
@@ -221,6 +241,12 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
     std::vector<std::vector<int>> sorted_edges = getSortedEdges();
 
     std::vector<std::vector<int>> simplex_bin = getEdgesByWeightRange(sorted_edges, mineps, maxeps);
+
+    // for (int i = 0; i < 10; i++)
+    // {
+    //     std::cout<<getSimplexWeight(sorted_edges[i])<<"  ";
+    // }
+    // std::cout<<'\n';
 
     std::vector<int> mst_edge_index = getMSTEdgeIndices(simplex_bin);
 
