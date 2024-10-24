@@ -79,6 +79,55 @@ private:
     size_t dim_;
 };
 
+strcut AlphaNode
+{
+    int point;
+    int height;
+    
+}
+
+struct Alpha // Creates a constructor for combinatorial simplexes n_pts = n, dim = r
+{
+public:
+    std::vector<std::vector<bool>> neighbourhood;
+    std::vector<int> simplex;
+    bool is_initialized; // Marks if the object is initialized
+    bool active;         // Marks end of simplexes
+    VR() : active(true), is_initialized(false) {};
+
+    void initialize(size_t n_pts, size_t dim)
+    {
+        n_pts_ = n_pts;
+        dim_ = dim;
+        simplex.resize(dim); // Resize the vector to the appropriate size
+        std::iota(simplex.begin(), simplex.end(), 0);
+        is_initialized = true;
+    };
+
+    void next_simplex()
+    {
+        if (simplex[0] == n_pts_ - dim_)
+        {
+            active = false;
+            return; // No more simplices can be generated.
+        }
+
+        size_t j = dim_ - 1;
+
+        while (simplex[j] - j == n_pts_ - dim_)
+            j--;
+
+        simplex[j]++;
+
+        for (size_t i = j + 1; i < dim_; i++)
+            simplex[i] = simplex[j] + i - j;
+    };
+
+private:
+    size_t n_pts_;
+    size_t dim_;
+};
+
 template <typename ComplexType, typename DistMatType>
 class CritCells : public DistMatType
 {
