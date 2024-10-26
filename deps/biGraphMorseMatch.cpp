@@ -466,13 +466,14 @@ void Bi_Graph_Match::buildInterface(std::vector<std::vector<int>>& cofacet_bin, 
     //openmp??????
 
     for (int i = cofacet_bin.size() - 1; i >= 0; i--) {
-        for (auto it = active_index.rbegin(); it != active_index.rend(); it++) 
+        for (int j = active_index.size() - 1; j >= 0; j--)
+        // for (auto it = active_index.rbegin(); it != active_index.rend(); it++) 
         //for (auto it = active_index.begin(); it != active_index.end(); it++) 
         {
-            // if (std::includes(cofacet_bin[i].begin(), cofacet_bin[i].end(), simplex_bin[j].begin(), simplex_bin[j].end())) 
-            if (isFacet(cofacet_bin[i], simplex_bin[*it]))
+            if (std::includes(cofacet_bin[i].begin(), cofacet_bin[i].end(), simplex_bin[j].begin(), simplex_bin[j].end())) 
+            // if (isFacet(cofacet_bin[i], simplex_bin[*it]))
             {   
-                addEdge(i, *it);
+                addEdge(i, j);
             }
             
         }

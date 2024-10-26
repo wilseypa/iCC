@@ -92,10 +92,11 @@ public:
     
     /*bins by weight range*/
     //change later
-    std::vector<std::vector<int>> getSortedEdges();
+    std::vector<std::vector<int>> getSortedEdges(double maxweight);
     std::vector<std::vector<int>> getEdgesByWeightRange(std::vector<std::vector<int>>& sorted_edges, double minweight, double maxweight);
     double getSimplexWeight(std::vector<int>& simplex);
-    std::vector<std::vector<int>> getLEWeightCofacet(std::vector<std::vector<int>>& simplex_bin, int threadnum);
+    std::vector<std::vector<int>> sortSimplex(std::vector<std::vector<int>>& simplex_bin);
+    std::vector<std::vector<int>> getCofacetBin(std::vector<std::vector<int>>& simplex_bin, double maxweight, int threadnum);
     int findRoot(std::vector<int>& parent_idx, int x);
     void setUnion(std::vector<int>& parent_idx, int x, int y);
     std::vector<int> getMSTEdgeIndices(std::vector<std::vector<int>>& sorted_edges);
