@@ -34,6 +34,9 @@ void Bi_Graph_Match::parallelKarpSipserInit() {
         }
     }
 
+    auto unmatched = std::count_if(std::execution::par, match_list.begin() + u, match_list.end(), [](int value) { return value < 0; });
+    std::cout<<"unmatched dim - 1 after init = "<<unmatched<<'\n';
+
     return;
 }
 
@@ -453,20 +456,23 @@ void Bi_Graph_Match::updateDimension(int newleftnum, int newrightnum) {
     match_list.resize(u + v, -1);
 }
 
-bool Bi_Graph_Match::isFacet(std::vector<int>& cofacet, std::vector<int>& facet)
-{
-    for(auto i: facet)
-    {
-        if (std::find(cofacet.begin(), cofacet.end(), i) == cofacet.end()) return false;
-    }
-    return true;
-}
+// bool Bi_Graph_Match::isFacet(std::vector<int>& cofacet, std::vector<int>& facet)
+// {
+//     for(auto i: facet)
+//     {
+//         if (std::find(cofacet.begin(), cofacet.end(), i) == cofacet.end()) return false;
+//     }
+//     return true;
+// }
 
 void Bi_Graph_Match::buildInterface(std::vector<std::vector<int>>& cofacet_bin, std::vector<std::vector<int>>& simplex_bin, std::vector<int>& active_index) {    
     //openmp??????
 
-    for (int i = cofacet_bin.size() - 1; i >= 0; i--) {
+    // for (int i = cofacet_bin.size() - 1; i >= 0; i--) {
+    for(int i = 0; i < cofacet_bin.size(); i++)
+    {
         for (int j = active_index.size() - 1; j >= 0; j--)
+        // for (int j = 0; j < active_index.size(); j++)
         // for (auto it = active_index.rbegin(); it != active_index.rend(); it++) 
         //for (auto it = active_index.begin(); it != active_index.end(); it++) 
         {
@@ -479,10 +485,17 @@ void Bi_Graph_Match::buildInterface(std::vector<std::vector<int>>& cofacet_bin, 
         }
     }
 
-    // for(int i = 0; i < 20; i++) std::cout<<adj_list[i].size()<<"  ";
-    // std::cout<<'\n';
-    // for(int i = 0; i < 20; i++) std::cout<<adj_list[u+i].size()<<"  ";
-    // std::cout<<'\n';
+    for (int i = 0; i < 10; i++){
+        std::cout<<i<<" -> ";
+        for(auto j : adj_list[i]) std::cout<<j - u<<" ";
+        std::cout<<'\n';
+    }
+
+    for (int i = u - 20; i < u; i++){
+        std::cout<<i<<" -> ";
+        for(auto j : adj_list[i]) std::cout<<j - u<<" ";
+        std::cout<<'\n';
+    }
 
 }
 

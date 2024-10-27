@@ -15,7 +15,7 @@ private:
     std::vector<int> root_flag;
 
     //parallel init for bipartite matching
-    void parallelKarpSipserInit();
+    
     void pairDegreeOne(int uidx, std::vector<int>& visit_flag, std::vector<int>& node_deg);
     void pairUnmatched(int uidx, std::vector<int>& visit_flag);
 
@@ -32,6 +32,7 @@ private:
     int serialBFS(std::vector<int>& ancestor_simp, int rootnum, int root);
 
 public:
+    void parallelKarpSipserInit();
     void parallelDFSMatch();
 
     int serialCycleRemoval();
@@ -44,7 +45,7 @@ public:
 
     void updateDimension(int newleftnum, int newrightnum);
 
-    bool isFacet(std::vector<int>& cofacet, std::vector<int>& facet);
+    // bool isFacet(std::vector<int>& cofacet, std::vector<int>& facet);
 
     void buildInterface(std::vector<std::vector<int>>& simplex_bin, std::vector<std::vector<int>>& cofacet_bin, std::vector<int>& active_index);
 
