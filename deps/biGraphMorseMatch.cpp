@@ -485,17 +485,17 @@ void Bi_Graph_Match::buildInterface(std::vector<std::vector<int>>& cofacet_bin, 
         }
     }
 
-    for (int i = 0; i < 10; i++){
-        std::cout<<i<<" -> ";
-        for(auto j : adj_list[i]) std::cout<<j - u<<" ";
-        std::cout<<'\n';
-    }
+    // for (int i = 0; i < 10; i++){
+    //     std::cout<<i<<" -> ";
+    //     for(auto j : adj_list[i]) std::cout<<j - u<<" ";
+    //     std::cout<<'\n';
+    // }
 
-    for (int i = u - 20; i < u; i++){
-        std::cout<<i<<" -> ";
-        for(auto j : adj_list[i]) std::cout<<j - u<<" ";
-        std::cout<<'\n';
-    }
+    // for (int i = u - 10; i < u; i++){
+    //     std::cout<<i<<" -> ";
+    //     for(auto j : adj_list[i]) std::cout<<j - u<<" ";
+    //     std::cout<<'\n';
+    // }
 
 }
 
