@@ -75,21 +75,17 @@ std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatTy
 }
 
 template <typename ComplexType, typename DistMatType>
-std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::getSortedEdges(double maxweight)
+std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::getEdges(double maxweight)
 {
-    auto sort_lambda = [this](std::vector<int> &edge_i, std::vector<int> &edge_j)
-    { return (this->distMatrix[edge_i[0]][edge_i[1]] < this->distMatrix[edge_j[0]][edge_j[1]]); };
     std::vector<std::vector<int>> edge_vec;
     for (int i = 0; i < this->distMatrix.size() - 1; i++)
     {
         for (int j = i + 1; j < this->distMatrix.size(); j++)
-        {   
-            if (this->distMatrix[i][j] < maxweight) edge_vec.push_back(std::vector<int>{i, j});
+        {
+            if (this->distMatrix[i][j] < maxweight)
+                edge_vec.push_back(std::vector<int>{i, j});
         }
     }
-
-    std::ranges::sort(edge_vec.begin(), edge_vec.end(), sort_lambda);
-
     return edge_vec;
 }
 
@@ -117,30 +113,20 @@ std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::getEdgesByWei
 }
 
 template <typename ComplexType, typename DistMatType>
-double CritCells<ComplexType, DistMatType>::getSimplexWeight(std::vector<int> &simplex)
+double CritCells<ComplexType, DistMatType>::getSimplexWeight(const std::vector<int> &simplex)
 {
     double maxweight = 0;
     for (int i = 0; i < simplex.size() - 1; i++)
-    {
-        int m = simplex[i];
         for (int j = i + 1; j < simplex.size(); j++)
-        {
-            int n = simplex[j];
-            // if (m > n)
-            //     std::swap(m, n);
-            if (this->distMatrix[m][n] > maxweight)
-                maxweight = this->distMatrix[m][n];
-        }
-    }
+            maxweight = std::max(maxweight, this->distMatrix[simplex[i]][simplex[j]]);
     return maxweight;
 }
 
 template <typename ComplexType, typename DistMatType>
-std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::sortSimplex(std::vector<std::vector<int>>& simplex_bin)
+void CritCells<ComplexType, DistMatType>::sortSimplex(std::vector<std::vector<int>> &simplex_bin)
 {
-    auto simplex_sort = [this](std::vector<int>& lhs, std::vector<int>& rhs) {return (this->getSimplexWeight(lhs) < this->getSimplexWeight(rhs));};
-    std::ranges::sort(simplex_bin.begin(), simplex_bin.end(), simplex_sort);
-    return simplex_bin;
+    std::sort(simplex_bin.begin(), simplex_bin.end(), [this](const auto &lhs, const auto &rhs)
+              { return getSimplexWeight(lhs) < getSimplexWeight(rhs); });
 }
 
 template <typename ComplexType, typename DistMatType>
@@ -173,7 +159,7 @@ std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::getCofacetBin
     {
         for (auto &pt : thread_workspace[i])
         {
-            //add pt first, keep the vertices in sorted order
+            // add pt first, keep the vertices in sorted order
             cofacet_bin.push_back(std::vector<int>{pt});
             std::copy(simplexe_bin[i].begin(), simplexe_bin[i].end(), std::back_inserter(cofacet_bin.back()));
         }
@@ -234,8 +220,8 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
 {
     int threadnum = 1;
 
-    std::vector<std::vector<int>> simplex_bin = getSortedEdges(maxeps);
-
+    std::vector<std::vector<int>> simplex_bin = getEdges(maxeps);
+    sortSimplex(simplex_bin);
     // std::vector<std::vector<int>> simplex_bin = getEdgesByWeightRange(sorted_edges, mineps, maxeps);
 
     std::vector<int> mst_edge_index = getMSTEdgeIndices(simplex_bin);
@@ -254,7 +240,7 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
 
     std::vector<std::vector<int>> cofacet_bin = getCofacetBin(simplex_bin, maxeps, threadnum);
 
-    std::cout<<"d2 simp size = "<<cofacet_bin.size()<<'\n';
+    std::cout << "d2 simp size = " << cofacet_bin.size() << '\n';
 
     // for(int i = 0; i < 10; i++)
     // {
@@ -272,13 +258,13 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
         bi_graph.parallelKarpSipserInit();
         bi_graph.parallelDFSMatch();
         int reverted = bi_graph.serialCycleRemoval();
-        std::cout<<"dim = "<<dim<<"  reverted = "<<reverted<<'\n';
+        std::cout << "dim = " << dim << "  reverted = " << reverted << '\n';
 
         std::vector<int> dim_critical_index = bi_graph.getCriticalIndex(dim_active_index);
-        std::cout<<"dim = "<<dim<<"  dim - 1 critical idx size = "<<dim_critical_index.size()<<'\n';
+        std::cout << "dim = " << dim << "  dim - 1 critical idx size = " << dim_critical_index.size() << '\n';
 
         dim_active_index = bi_graph.getActiveIndex();
-        std::cout<<"cofact active idx size = "<<dim_active_index.size()<<"  cofacet size = "<<cofacet_bin.size()<<'\n';
+        std::cout << "cofact active idx size = " << dim_active_index.size() << "  cofacet size = " << cofacet_bin.size() << '\n';
 
         // std for each
         std::vector<double> dim_critical_weight;
@@ -326,11 +312,7 @@ std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatTy
     long long counter = 0;
     do
     {
-        double max_dist = 0;
-        for (int i = 0; i < dim; i++)
-            for (int j = i + 1; j <= dim; j++)
-                max_dist = std::max(max_dist, this->distance(complex.simplex[i], complex.simplex[j]));
-        weighted_simplexes[max_dist].push_back(complex.simplex);
+        weighted_simplexes[getSimplexWeight(complex.simplex)].push_back(complex.simplex);
         complex.next_simplex();
     } while (complex.active && (!batch_size || batch_size > ++counter));
     return weighted_simplexes;
