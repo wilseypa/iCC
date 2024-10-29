@@ -268,13 +268,13 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
         dim_active_index = bi_graph.getActiveIndex();
         std::cout << "cofact active idx size = " << dim_active_index.size() << "  cofacet size = " << cofacet_bin.size() << '\n';
 
-        if (dim == 3)
-        {
-            auto it = std::find(simplex_bin.begin(), simplex_bin.end(), std::vector<int>{9, 14, 15});
-            int dist = it - simplex_bin.begin();
-            std::cout<<"d simp cofacet size = "<<(bi_graph.adj_list[cofacet_bin.size() + dist]).size()<<'\n';
+        // if (dim == 3)
+        // {
+        //     auto it = std::find(simplex_bin.begin(), simplex_bin.end(), std::vector<int>{9, 14, 15});
+        //     int dist = it - simplex_bin.begin();
+        //     std::cout<<"d simp cofacet size = "<<(bi_graph.adj_list[cofacet_bin.size() + dist]).size()<<'\n';
 
-        }
+        // }
 
         // std for each
         std::vector<double> dim_critical_weight;
