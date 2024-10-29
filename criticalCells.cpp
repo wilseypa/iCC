@@ -218,7 +218,7 @@ std::vector<int> CritCells<ComplexType, DistMatType>::getMSTEdgeIndices(std::vec
 template <typename ComplexType, typename DistMatType>
 std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseMatch(int maxdimension, double mineps, double maxeps)
 {
-    int threadnum = 1;
+    int threadnum = 4;
 
     std::vector<std::vector<int>> simplex_bin = getEdges(maxeps);
     sortSimplex(simplex_bin);
@@ -255,6 +255,8 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
         // std::cout<<"dim active idx size = "<<dim_active_index.size()<<'\n';
         bi_graph.buildInterface(cofacet_bin, simplex_bin, dim_active_index);
 
+        std::cout << "simp bin active idx size = " << dim_active_index.size() << "  simp bin size = " << simplex_bin.size() << '\n';
+
         bi_graph.parallelKarpSipserInit();
         bi_graph.parallelDFSMatch();
         int reverted = bi_graph.serialCycleRemoval();
@@ -265,6 +267,14 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
 
         dim_active_index = bi_graph.getActiveIndex();
         std::cout << "cofact active idx size = " << dim_active_index.size() << "  cofacet size = " << cofacet_bin.size() << '\n';
+
+        if (dim == 3)
+        {
+            auto it = std::find(simplex_bin.begin(), simplex_bin.end(), std::vector<int>{9, 14, 15});
+            int dist = it - simplex_bin.begin();
+            std::cout<<"d simp cofacet size = "<<(bi_graph.adj_list[cofacet_bin.size() + dist]).size()<<'\n';
+
+        }
 
         // std for each
         std::vector<double> dim_critical_weight;
@@ -281,6 +291,10 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
             std::swap(simplex_bin, cofacet_bin);
             bi_graph.updateDimension(cofacet_bin.size(), simplex_bin.size());
         }
+
+        
+        
+
         // else
         // {
         //     for (auto i : dim_active_index)

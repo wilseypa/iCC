@@ -28,7 +28,9 @@ void Bi_Graph_Match::parallelKarpSipserInit() {
     }
 
 #pragma omp parallel for schedule(dynamic)
-    for (int i = 0; i < u; i++) {
+    // for (int i = 0; i < u; i++)
+    for (int i = u; i >= 0; i--) 
+    {
         if (visit_flag[i] == 0 && node_deg[i] > 0) {
             pairUnmatched(i, visit_flag);
         }
@@ -468,33 +470,38 @@ void Bi_Graph_Match::updateDimension(int newleftnum, int newrightnum) {
 void Bi_Graph_Match::buildInterface(std::vector<std::vector<int>>& cofacet_bin, std::vector<std::vector<int>>& simplex_bin, std::vector<int>& active_index) {    
     //openmp??????
 
-    // for (int i = cofacet_bin.size() - 1; i >= 0; i--) {
     for(int i = 0; i < cofacet_bin.size(); i++)
     {
         for (int j = active_index.size() - 1; j >= 0; j--)
-        // for (int j = 0; j < active_index.size(); j++)
-        // for (auto it = active_index.rbegin(); it != active_index.rend(); it++) 
-        //for (auto it = active_index.begin(); it != active_index.end(); it++) 
         {
-            if (std::includes(cofacet_bin[i].begin(), cofacet_bin[i].end(), simplex_bin[j].begin(), simplex_bin[j].end())) 
-            // if (isFacet(cofacet_bin[i], simplex_bin[*it]))
+            if (std::includes(cofacet_bin[i].begin(), cofacet_bin[i].end(), simplex_bin[active_index[j]].begin(), simplex_bin[active_index[j]].end())) 
             {   
-                addEdge(i, j);
+                this->addEdge(i, active_index[j]);
             }
             
         }
     }
 
-    // for (int i = 0; i < 10; i++){
-    //     std::cout<<i<<" -> ";
-    //     for(auto j : adj_list[i]) std::cout<<j - u<<" ";
-    //     std::cout<<'\n';
+    //check adj size
+    // for (auto i: active_index)
+    // {
+    //     if (adj_list[i + u].size() == 0)
+    //     {   
+    //         std::cout<<"empty simplex = ";
+    //         for(auto k : simplex_bin[i])
+    //         {
+    //             std::cout<<k<<"  ";
+    //         }
+    //         std::cout<<'\n';
+    //     }
     // }
 
-    // for (int i = u - 10; i < u; i++){
-    //     std::cout<<i<<" -> ";
-    //     for(auto j : adj_list[i]) std::cout<<j - u<<" ";
-    //     std::cout<<'\n';
+    // for (auto i: active_index)
+    // {
+    //     if (simplex_bin[i] == std::vector<int>{15, 17})
+    //     {
+    //         std::cout<<"15 17 adj size = "<<adj_list[i + u].size()<<'\n';
+    //     }
     // }
 
 }
@@ -516,21 +523,23 @@ std::vector<int> Bi_Graph_Match::getCriticalIndex(std::vector<int>& dim_active_i
         //for kth simplex, its index in graph i == k + u
         if (match_list[i] < 0)
         {
-            if (std::find(dim_active_index.begin(), dim_active_index.end(), i - u) != dim_active_index.end()) critical_index.push_back(i - u);
+            if (std::find(dim_active_index.begin(), dim_active_index.end(), (i - u)) != dim_active_index.end()) 
+            {
+                // int ct = 0;
+                // for(auto j: adj_list[i])
+                // {
+                //     if (match_list[j] < 0) ct += 1;
+                // }
+                // std::cout<<"crit index = "<<i - u<<"  unmatched neighbor = "<<ct<<'\n';
+                // std::cout<<"crit index = "<<i - u<<" neighbor size = "<<adj_list[i].size()<<'\n';
+                if (adj_list[i].size() == 0)
+                {
+                    std::cout<<"crit index = "<<*(std::find(dim_active_index.begin(), dim_active_index.end(), (i - u)))<<'\n';
+                }
+
+                critical_index.push_back(i - u);
+            }
         }            
     }
     return critical_index;
 }
-
-//to do
-//if epsmin != 0, pass empty vec as d-1 simp
-//bi_graph_match.build_interface(d-simp, d-1-simp, dimension)
-
-//outline
-//get sorted edge
-//get first edge bin
-//for dim = 1 to n
-//build interface 
-//save d-1 cirtical
-//build cc.cofacet. take d-1 simp's spot
-//swap d d-1 simp

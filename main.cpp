@@ -7,13 +7,13 @@ int main()
 {   std::string filename = "testdata3d.csv";
     CritCells<VR, NormallDistMat> cc(filename);
 
-    auto critical_weight = cc.run_MorseMatch(3, 0, 8);
+    auto critical_weight = cc.run_MorseMatch(3, 0, 4.3);
 
-    // for(auto& dim_cw: critical_weight)
-    // {
-    //     for (auto& w: dim_cw) std::cout<<w<<"  ";
-    //     std::cout<<'\n';
-    // }
+    for(auto& dim_cw: critical_weight)
+    {
+        for (auto& w: dim_cw) std::cout<<w<<"  ";
+        std::cout<<'\n';
+    }
 
     return 0;
 }
