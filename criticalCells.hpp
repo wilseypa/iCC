@@ -102,6 +102,9 @@ public:
     std::vector<int> getMSTEdgeIndices(std::vector<std::vector<int>>& sorted_edges);
     std::vector<std::vector<double>> run_MorseMatch(int maxdimension, double mineps, double maxeps);
 
+    std::vector<std::vector<double>> run_MorseMatchStepwise(int maxdimension, double mineps, double maxeps, double stepsize = 1.0);
+
+
 private:
     std::map<double, std::vector<std::vector<int>>> binEdgeSimplexes();                                                                             // Direct creation of edgebins to a map
     void binByWeights(std::map<double, std::vector<std::vector<int>>> &weighted_simplicies, std::map<double, std::vector<std::vector<int>>> &bins); // Merged higher dim feature to bins

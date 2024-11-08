@@ -51,6 +51,12 @@ public:
 
     std::vector<int> getActiveIndex();
 
+    //move to private later
     std::vector<std::vector<int>> adj_list;
+
+
+    void reduceInterface(std::vector<int>& critical_index);
+
+    void appendInterface(std::vector<std::vector<int>>& simplex_bin, std::vector<std::vector<int>>& cofacet_bin, std::vector<int>& active_index, int mincofacetindex, int maxcofacetindex, int maxsimplexindex);
 
 };
