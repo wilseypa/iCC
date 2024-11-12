@@ -467,13 +467,18 @@ void Bi_Graph_Match::updateDimension(int newleftnum, int newrightnum) {
 //     return true;
 // }
 
-void Bi_Graph_Match::buildInterface(std::vector<std::vector<int>>& cofacet_bin, std::vector<std::vector<int>>& simplex_bin, std::vector<int>& active_index) {    
+
+
+void Bi_Graph_Match::buildInterface(const std::vector<std::vector<int>>& cofacet_bin, int cofacet_index_min, int cofacet_index_max, const std::vector<std::vector<int>>& simplex_bin, int simplex_index_max, const std::vector<int>& active_index) 
+{    
     //openmp??????
 
-    for(int i = 0; i < cofacet_bin.size(); i++)
+    for(int i = cofacet_index_min; i < cofacet_index_max; i++)
     {
         for (int j = active_index.size() - 1; j >= 0; j--)
         {
+            if (j >= simplex_index_max) continue;
+
             if (std::includes(cofacet_bin[i].begin(), cofacet_bin[i].end(), simplex_bin[active_index[j]].begin(), simplex_bin[active_index[j]].end())) 
             {   
                 this->addEdge(i, active_index[j]);
@@ -482,7 +487,7 @@ void Bi_Graph_Match::buildInterface(std::vector<std::vector<int>>& cofacet_bin, 
         }
     }
 
-    //check adj size
+    // check adj size
     // for (auto i: active_index)
     // {
     //     if (adj_list[i + u].size() == 0)
@@ -515,11 +520,11 @@ std::vector<int> Bi_Graph_Match::getActiveIndex() {
     return active_index;
 }
 
-std::vector<int> Bi_Graph_Match::getCriticalIndex(std::vector<int>& dim_active_index) 
+std::vector<int> Bi_Graph_Match::getCriticalIndex(const std::vector<int>& dim_active_index, int simplex_index_max) 
 {
     std::vector<int> critical_index;
     //need to reserve the space?
-    for (int i = u; i < (u + v); i++) {
+    for (int i = u; i < (u + simplex_index_max); i++) {
         //for kth simplex, its index in graph i == k + u
         if (match_list[i] < 0)
         {

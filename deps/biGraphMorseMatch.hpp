@@ -37,8 +37,6 @@ public:
 
     int serialCycleRemoval();
 
-    std::vector<int> getCriticalIndex(std::vector<int>& dim_active_index);
-
     void addEdge(int u, int v);
 
     Bi_Graph_Match(int leftnum, int rightnum, int leftdim, int threadnum);
@@ -47,16 +45,18 @@ public:
 
     // bool isFacet(std::vector<int>& cofacet, std::vector<int>& facet);
 
-    void buildInterface(std::vector<std::vector<int>>& simplex_bin, std::vector<std::vector<int>>& cofacet_bin, std::vector<int>& active_index);
+    void buildInterface(const std::vector<std::vector<int>>& cofacet_bin, int cofacet_index_min, int cofacet_index_max, const std::vector<std::vector<int>>& simplex_bin, int simplex_index_max, const std::vector<int>& active_index);
 
-    std::vector<int> getActiveIndex();
+    std::vector<int> getActiveIndex(); 
+    
+    std::vector<int> getCriticalIndex(const std::vector<int>& dim_active_index, int simplex_index_max);
 
     //move to private later
     std::vector<std::vector<int>> adj_list;
 
 
-    void reduceInterface(std::vector<int>& critical_index);
+    // void reduceInterface(std::vector<int>& critical_index);
 
-    void appendInterface(std::vector<std::vector<int>>& simplex_bin, std::vector<std::vector<int>>& cofacet_bin, std::vector<int>& active_index, int mincofacetindex, int maxcofacetindex, int maxsimplexindex);
+    // void appendInterface(std::vector<std::vector<int>>& simplex_bin, std::vector<std::vector<int>>& cofacet_bin, std::vector<int>& active_index, int mincofacetindex, int maxcofacetindex, int maxsimplexindex);
 
 };
