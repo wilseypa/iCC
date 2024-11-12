@@ -36,8 +36,8 @@ void Bi_Graph_Match::parallelKarpSipserInit() {
         }
     }
 
-    auto unmatched = std::count_if(std::execution::par, match_list.begin() + u, match_list.end(), [](int value) { return value < 0; });
-    std::cout<<"unmatched dim - 1 after init = "<<unmatched<<'\n';
+    // auto unmatched = std::count_if(std::execution::par, match_list.begin() + u, match_list.end(), [](int value) { return value < 0; });
+    // std::cout<<"unmatched dim - 1 after init = "<<unmatched<<'\n';
 
     return;
 }
@@ -471,13 +471,13 @@ void Bi_Graph_Match::updateDimension(int newleftnum, int newrightnum) {
 
 void Bi_Graph_Match::buildInterface(const std::vector<std::vector<int>>& cofacet_bin, int cofacet_index_min, int cofacet_index_max, const std::vector<std::vector<int>>& simplex_bin, int simplex_index_max, const std::vector<int>& active_index) 
 {    
-    //openmp??????
+    std::fill(match_list.begin(), match_list.end(), -1);
 
     for(int i = cofacet_index_min; i < cofacet_index_max; i++)
     {
         for (int j = active_index.size() - 1; j >= 0; j--)
         {
-            if (j >= simplex_index_max) continue;
+            if (active_index[j] >= simplex_index_max) continue;
 
             if (std::includes(cofacet_bin[i].begin(), cofacet_bin[i].end(), simplex_bin[active_index[j]].begin(), simplex_bin[active_index[j]].end())) 
             {   
@@ -490,7 +490,7 @@ void Bi_Graph_Match::buildInterface(const std::vector<std::vector<int>>& cofacet
     // check adj size
     // for (auto i: active_index)
     // {
-    //     if (adj_list[i + u].size() == 0)
+    //     if (i < simplex_index_max && adj_list[i + u].size() == 0)
     //     {   
     //         std::cout<<"empty simplex = ";
     //         for(auto k : simplex_bin[i])
@@ -536,11 +536,11 @@ std::vector<int> Bi_Graph_Match::getCriticalIndex(const std::vector<int>& dim_ac
                 //     if (match_list[j] < 0) ct += 1;
                 // }
                 // std::cout<<"crit index = "<<i - u<<"  unmatched neighbor = "<<ct<<'\n';
-                // std::cout<<"crit index = "<<i - u<<" neighbor size = "<<adj_list[i].size()<<'\n';
-                if (adj_list[i].size() == 0)
-                {
-                    std::cout<<"crit index = "<<*(std::find(dim_active_index.begin(), dim_active_index.end(), (i - u)))<<'\n';
-                }
+                std::cout<<"crit index = "<<i - u<<" neighbor size = "<<adj_list[i].size()<<'\n';
+                // if (adj_list[i].size() == 0)
+                // {
+                //     std::cout<<"crit index = "<<*(std::find(dim_active_index.begin(), dim_active_index.end(), (i - u)))<<'\n';
+                // }
 
                 critical_index.push_back(i - u);
             }

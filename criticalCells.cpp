@@ -338,7 +338,7 @@ std::vector<int> CritCells<ComplexType, DistMatType>::getStepwiseIndex(std::vect
 template <typename ComplexType, typename DistMatType>
 std::vector< std::vector< std::pair<double, double> > > CritCells<ComplexType, DistMatType>::run_MorseMatchStepwise(int maxdimension, double maxeps, double stepsize)
 {
-    int threadnum = 4;
+    int threadnum = 1;
 
     std::vector<std::vector<int>> simplex_bin = getEdges(maxeps);
     sortSimplex(simplex_bin);
@@ -370,18 +370,27 @@ std::vector< std::vector< std::pair<double, double> > > CritCells<ComplexType, D
         //simplex/cofacet index for each step
         std::vector<int> simplex_index = getStepwiseIndex(simplex_bin, mineps, maxeps, stepsize);
         std::vector<int> cofacet_index = getStepwiseIndex(cofacet_bin, mineps, maxeps, stepsize);
+ 
         
         for(auto s: simplex_index) std::cout<<s<<"  ";
         std::cout<<'\n';
         for(auto s: cofacet_index) std::cout<<s<<"  ";
         std::cout<<"\n\n";
+        
+        if (true)
+        {
+            for(auto it = simplex_index.begin(); it != simplex_index.end() - 1; it++) std::cout<<getSimplexWeight(simplex_bin[*it])<<"  ";
+            std::cout<<'\n';
+            for(auto it = cofacet_index.begin(); it != cofacet_index.end() - 1; it++) std::cout<<getSimplexWeight(cofacet_bin[*it])<<"  ";
+            std::cout<<'\n';
+        }
 
         std::vector<int> critical_index_before, critical_index_after;
         std::vector< std::pair<double, double> > dim_persistent_pairs;
 
         int stepnum = simplex_index.size() - 1;
 
-        for (int m = 1; m < stepnum; m++)
+        for (int m = 1; m <= stepnum; m++)
         {
             bi_graph.buildInterface(cofacet_bin, cofacet_index[m - 1], cofacet_index[m], simplex_bin, simplex_index[m], dim_active_index);
 
@@ -391,7 +400,7 @@ std::vector< std::vector< std::pair<double, double> > > CritCells<ComplexType, D
             
             std::cout<<"dim = "<<dim<<"  step = "<<m<<" reverted = "<<reverted<<'\n';
 
-            critical_index_after = bi_graph.getCriticalIndex(dim_active_index, simplex_index[m]);
+            critical_index_after = bi_graph.getCriticalIndex(dim_active_index, simplex_index[m]);  //double check
 
             for(auto& i: critical_index_before)
             {
@@ -399,7 +408,7 @@ std::vector< std::vector< std::pair<double, double> > > CritCells<ComplexType, D
                 {
                     double birth = getSimplexWeight(simplex_bin[i]);
 
-                    double eps = (m - 1) * stepsize;    //eps of current step
+                    double eps = mineps + (m - 1) * stepsize;    //eps of current step
                     double death = (eps < maxeps) ? eps : maxeps;
 
                     std::cout<<"dim = "<<dim<<"  birth = "<<birth<<"  death = "<<death<<'\n';
@@ -409,11 +418,31 @@ std::vector< std::vector< std::pair<double, double> > > CritCells<ComplexType, D
             }
 
             std::swap(critical_index_before, critical_index_after);
+
+            if (m == stepnum)
+            {
+                for(auto& i: critical_index_before)
+                {
+                    if (i >= simplex_index[m - 1])
+                    {
+                        double birth = getSimplexWeight(simplex_bin[i]);
+
+                        double eps = mineps + m * stepsize;    //eps of current step
+                        double death = (eps < maxeps) ? eps : maxeps;
+
+                        std::cout<<"dim = "<<dim<<"  birth = "<<birth<<"  death = "<<death<<'\n';
+
+                        dim_persistent_pairs.push_back(std::make_pair(birth, death));
+                    }
+                }
+            }
         }
 
         persistent_pairs.push_back(std::move(dim_persistent_pairs));
 
         dim_active_index = bi_graph.getActiveIndex();
+
+        std::cout<<"dim = "<<dim<<"  cofacet size = "<<cofacet_bin.size()<<"  active cofacet = "<<dim_active_index.size()<<'\n';
 
         if (dim < maxdimension)
         {
