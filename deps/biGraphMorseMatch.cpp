@@ -473,11 +473,11 @@ void Bi_Graph_Match::buildInterface(const std::vector<std::vector<int>>& cofacet
 {    
     std::fill(match_list.begin(), match_list.end(), -1);
 
-    for(int i = cofacet_index_min; i < cofacet_index_max; i++)
+    for(int i = cofacet_index_min; i < cofacet_bin.size(); i++)
     {
         for (int j = active_index.size() - 1; j >= 0; j--)
         {
-            if (active_index[j] >= simplex_index_max) continue;
+            //if (active_index[j] >= simplex_index_max) continue;
 
             if (std::includes(cofacet_bin[i].begin(), cofacet_bin[i].end(), simplex_bin[active_index[j]].begin(), simplex_bin[active_index[j]].end())) 
             {   
@@ -523,6 +523,7 @@ std::vector<int> Bi_Graph_Match::getActiveIndex() {
 std::vector<int> Bi_Graph_Match::getCriticalIndex(const std::vector<int>& dim_active_index, int simplex_index_max) 
 {
     std::vector<int> critical_index;
+
     //need to reserve the space?
     for (int i = u; i < (u + simplex_index_max); i++) {
         //for kth simplex, its index in graph i == k + u
@@ -536,7 +537,7 @@ std::vector<int> Bi_Graph_Match::getCriticalIndex(const std::vector<int>& dim_ac
                 //     if (match_list[j] < 0) ct += 1;
                 // }
                 // std::cout<<"crit index = "<<i - u<<"  unmatched neighbor = "<<ct<<'\n';
-                std::cout<<"crit index = "<<i - u<<" neighbor size = "<<adj_list[i].size()<<'\n';
+                //std::cout<<"crit index = "<<i - u<<" neighbor size = "<<adj_list[i].size()<<'\n';
                 // if (adj_list[i].size() == 0)
                 // {
                 //     std::cout<<"crit index = "<<*(std::find(dim_active_index.begin(), dim_active_index.end(), (i - u)))<<'\n';
