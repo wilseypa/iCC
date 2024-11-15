@@ -218,7 +218,7 @@ std::vector<int> CritCells<ComplexType, DistMatType>::getMSTEdgeIndices(std::vec
 template <typename ComplexType, typename DistMatType>
 std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseMatch(int maxdimension, double mineps, double maxeps)
 {
-    int threadnum = 2;
+    int threadnum = 1;
 
     std::vector<std::vector<int>> simplex_bin = getEdges(maxeps);
     sortSimplex(simplex_bin);
@@ -252,6 +252,15 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
         std::cout <<"  cofacet size = " << cofacet_bin.size() << '\n';
 
         bi_graph.parallelKarpSipserInit();
+
+        if (dim == 2)
+        {   
+            std::vector<std::vector<int>> target_simp{{6, 11, 16}, {9, 11, 16}, {11, 12, 16}, {11, 16, 19}};
+            std::cout<<"dim = "<<dim<<'\n';
+            bi_graph.checkCofacet(cofacet_bin, simplex_bin, target_simp);
+            std::cout<<'\n';
+        }
+
         bi_graph.parallelDFSMatch();
         int reverted = bi_graph.serialCycleRemoval();
         std::cout << "dim = " << dim << "  reverted = " << reverted << '\n';
@@ -259,15 +268,27 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
         std::vector<int> dim_critical_index = bi_graph.getCriticalIndex(dim_active_index, simplex_bin.size());
         std::cout << "dim = " << dim << "  dim - 1 critical idx size = " << dim_critical_index.size() << '\n';
 
+        
+
         dim_active_index = bi_graph.getActiveIndex();
         std::cout << "cofact active idx size = " << dim_active_index.size() << "  cofacet size = " << cofacet_bin.size() << '\n';
+        
+       
+        if (dim == 2)
+        {   
+            std::vector<std::vector<int>> target_simp{{6, 11, 16}, {9, 11, 16}, {11, 12, 16}, {11, 16, 19}};
+            std::cout<<"dim = "<<dim<<'\n';
+            bi_graph.checkCofacet(cofacet_bin, simplex_bin, target_simp);
+            std::cout<<'\n';
+        }
+
 
         // if (dim == 3)
-        // {
-        //     auto it = std::find(simplex_bin.begin(), simplex_bin.end(), std::vector<int>{9, 14, 15});
-        //     int dist = it - simplex_bin.begin();
-        //     std::cout<<"d simp cofacet size = "<<(bi_graph.adj_list[cofacet_bin.size() + dist]).size()<<'\n';
-
+        // {   
+        //     std::vector<std::vector<int>> target_simp{{6, 11, 16}, {9, 11, 16}, {11, 12, 16}, {11, 16, 19}};
+        //     std::cout<<"dim = "<<dim<<'\n';
+        //     bi_graph.checkSimplex(cofacet_bin, simplex_bin, target_simp);
+        //     std::cout<<'\n';
         // }
 
         // std for each

@@ -23,13 +23,16 @@ void Bi_Graph_Match::parallelKarpSipserInit() {
 
 #pragma omp parallel for schedule(dynamic)
     for (int i = 0; i < u; i++) {
+
+        if (i == 251) std::cout<<'\n'<<node_deg[i]<<'\n';
+
         if (node_deg[i] == 1)
             pairDegreeOne(i, visit_flag, node_deg);
     }
 
-#pragma omp parallel for schedule(dynamic)
-    // for (int i = 0; i < u; i++)
-    for (int i = u; i >= 0; i--) 
+//#pragma omp parallel for schedule(dynamic)
+    for (int i = 0; i < u; i++)
+    //for (int i = u - 1; i >= 0; i--)
     {
         if (visit_flag[i] == 0 && node_deg[i] > 0) {
             pairUnmatched(i, visit_flag);
@@ -81,9 +84,28 @@ void Bi_Graph_Match::pairDegreeOne(int uidx, std::vector<int>& visit_flag, std::
 }
 
 void Bi_Graph_Match::pairUnmatched(int uidx, std::vector<int>& visit_flag) {
+
+    if(uidx == 248)
+    {
+        std::cout<<"in pairunmatched uidx adj visit flag = ";
+        for (auto i: adj_list[uidx]){
+            std::cout<<visit_flag[i]<<"  ";
+        }
+        std::cout<<'\n';
+    }
+
     if (__sync_fetch_and_add(&(visit_flag[uidx]), 1) != 0) {
         return;
     }
+
+    // if(uidx == 250)
+    // {
+    //     std::cout<<"in pairunmatched uidx adj visit flag = ";
+    //     for (auto i: adj_list[uidx]){
+    //         std::cout<<visit_flag[i]<<"  ";
+    //     }
+    //     std::cout<<'\n';
+    // }
 
     for (const auto& vidx : adj_list[uidx]) {
         if (__sync_fetch_and_add(&(visit_flag[vidx]), 1) == 0) {
@@ -348,7 +370,8 @@ void Bi_Graph_Match::parallelDFSMatch() {
         int ct = 0;
         std::vector<int> thread_buff;    //overflow? limit its size?
 #pragma omp for
-        for (int i = 0; i < u; i++) {
+        for (int i = 0; i < u; i++) 
+        {
             if (match_list[i] < 0 && adj_list[i].size() > 0) {
                 thread_buff.push_back(i);
                 ct += 1;
@@ -371,7 +394,9 @@ void Bi_Graph_Match::parallelDFSMatch() {
         std::fill(std::execution::par, dfs_flag.begin(), dfs_flag.end(), 0);
 
 #pragma omp parallel for schedule(dynamic)
-        for (int i = 0; i < initialunmatched; i++) {
+        // for (int i = 0; i < initialunmatched; i++)
+        for (int i = initialunmatched - 1; i >= 0; i--)
+        {
             auto& aug_path_tid = aug_path[omp_get_thread_num()];
 
             int ustart = unmatched_u_init[i];
@@ -548,4 +573,35 @@ std::vector<int> Bi_Graph_Match::getCriticalIndex(const std::vector<int>& dim_ac
         }            
     }
     return critical_index;
+}
+
+
+void Bi_Graph_Match::checkSimplex(std::vector<std::vector<int>>& cofacet_bin, std::vector<std::vector<int>>& simplex_bin, std::vector<std::vector<int>>& target_simplex)
+{
+    for (auto& simplex: target_simplex)
+    {
+        auto it = std::find(simplex_bin.begin(), simplex_bin.end(), simplex);
+        int index = std::distance(simplex_bin.begin(), it);
+        std::cout<<"target simplex = ";
+        for(auto pt: simplex) std::cout<<pt<<" ";
+        std::cout<<"  index = "<<index;
+        std::cout<<"  adj index = ";
+        for(auto idx: adj_list[u + index]) std::cout<<idx<<" ";
+        std::cout<<"  match = "<<match_list[u + index]<<'\n';
+    }
+}
+
+void Bi_Graph_Match::checkCofacet(std::vector<std::vector<int>>& cofacet_bin, std::vector<std::vector<int>>& simplex_bin, std::vector<std::vector<int>>& target_cofacet)
+{
+    for (auto& cofacet: target_cofacet)
+    {
+        auto it = std::find(cofacet_bin.begin(), cofacet_bin.end(), cofacet);
+        int index = std::distance(cofacet_bin.begin(), it);
+        std::cout<<"target cofacet = ";
+        for(auto pt: cofacet) std::cout<<pt<<" ";
+        std::cout<<"  index = "<<index;
+        std::cout<<"  adj index = ";
+        for(auto idx: adj_list[index]) std::cout<<idx - u<<" ";
+        std::cout<<"  match = "<<match_list[index] - u<<'\n';
+    }
 }
