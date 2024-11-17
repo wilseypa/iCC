@@ -14,6 +14,7 @@
 
 void Bi_Graph_Match::parallelKarpSipserInit() {
     std::vector<int> node_deg(u, 0);
+    // std::vector<int> node_deg(v, 0);
     std::vector<int> visit_flag(u + v, 0);
     // int nodecount = 0;
 
@@ -22,17 +23,20 @@ void Bi_Graph_Match::parallelKarpSipserInit() {
     std::transform(std::execution::par, adj_list.begin(), adj_list.begin() + u, node_deg.begin(), [](const auto& u_adj) { return u_adj.size(); });
 
 #pragma omp parallel for schedule(dynamic)
-    for (int i = 0; i < u; i++) {
+    for (int i = 0; i < u; i++)
+    // for (int i = u; i < (u + v); i++)
+    {
 
-        if (i == 251) std::cout<<'\n'<<node_deg[i]<<'\n';
+        // if (i == 248) std::cout<<'\n'<<node_deg[i]<<"  "<<adj_list[i].size()<<'\n';
 
         if (node_deg[i] == 1)
             pairDegreeOne(i, visit_flag, node_deg);
     }
 
-//#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(dynamic)
     for (int i = 0; i < u; i++)
     //for (int i = u - 1; i >= 0; i--)
+    // for (int i = u; i < (u + v); i++)
     {
         if (visit_flag[i] == 0 && node_deg[i] > 0) {
             pairUnmatched(i, visit_flag);
@@ -85,14 +89,14 @@ void Bi_Graph_Match::pairDegreeOne(int uidx, std::vector<int>& visit_flag, std::
 
 void Bi_Graph_Match::pairUnmatched(int uidx, std::vector<int>& visit_flag) {
 
-    if(uidx == 248)
-    {
-        std::cout<<"in pairunmatched uidx adj visit flag = ";
-        for (auto i: adj_list[uidx]){
-            std::cout<<visit_flag[i]<<"  ";
-        }
-        std::cout<<'\n';
-    }
+    // if(uidx == 248)
+    // {
+    //     std::cout<<"in pairunmatched uidx adj visit flag = ";
+    //     for (auto i: adj_list[uidx]){
+    //         std::cout<<visit_flag[i]<<"  ";
+    //     }
+    //     std::cout<<'\n';
+    // }
 
     if (__sync_fetch_and_add(&(visit_flag[uidx]), 1) != 0) {
         return;

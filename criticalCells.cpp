@@ -255,41 +255,66 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
 
         if (dim == 2)
         {   
+            std::cout<<"after init  ";
             std::vector<std::vector<int>> target_simp{{6, 11, 16}, {9, 11, 16}, {11, 12, 16}, {11, 16, 19}};
             std::cout<<"dim = "<<dim<<'\n';
             bi_graph.checkCofacet(cofacet_bin, simplex_bin, target_simp);
             std::cout<<'\n';
         }
+
+        if (dim == 2)
+        {   
+            std::cout<<"after init  ";
+            std::vector<std::vector<int>> target_simp{{6, 11}, {11, 12}, {12, 16}, {16, 19}};
+            std::cout<<"dim = "<<dim<<'\n';
+            bi_graph.checkSimplex(cofacet_bin, simplex_bin, target_simp);
+            std::cout<<'\n';
+        }
+
 
         bi_graph.parallelDFSMatch();
         int reverted = bi_graph.serialCycleRemoval();
         std::cout << "dim = " << dim << "  reverted = " << reverted << '\n';
 
-        std::vector<int> dim_critical_index = bi_graph.getCriticalIndex(dim_active_index, simplex_bin.size());
-        std::cout << "dim = " << dim << "  dim - 1 critical idx size = " << dim_critical_index.size() << '\n';
-
-        
-
-        dim_active_index = bi_graph.getActiveIndex();
-        std::cout << "cofact active idx size = " << dim_active_index.size() << "  cofacet size = " << cofacet_bin.size() << '\n';
-        
-       
         if (dim == 2)
         {   
+            std::cout<<"after match  ";
             std::vector<std::vector<int>> target_simp{{6, 11, 16}, {9, 11, 16}, {11, 12, 16}, {11, 16, 19}};
             std::cout<<"dim = "<<dim<<'\n';
             bi_graph.checkCofacet(cofacet_bin, simplex_bin, target_simp);
             std::cout<<'\n';
         }
 
+        if (dim == 2)
+        {   
+            std::cout<<"after match  ";
+            std::vector<std::vector<int>> target_simp{{6, 11}, {11, 12}, {12, 16}, {16, 19}};
+            std::cout<<"dim = "<<dim<<'\n';
+            bi_graph.checkSimplex(cofacet_bin, simplex_bin, target_simp);
+            std::cout<<'\n';
+        }
 
-        // if (dim == 3)
-        // {   
-        //     std::vector<std::vector<int>> target_simp{{6, 11, 16}, {9, 11, 16}, {11, 12, 16}, {11, 16, 19}};
-        //     std::cout<<"dim = "<<dim<<'\n';
-        //     bi_graph.checkSimplex(cofacet_bin, simplex_bin, target_simp);
-        //     std::cout<<'\n';
+
+        std::vector<int> dim_critical_index = bi_graph.getCriticalIndex(dim_active_index, simplex_bin.size());
+        std::cout << "dim = " << dim << "  dim - 1 critical idx size = " << dim_critical_index.size() << '\n';
+
+
+        dim_active_index = bi_graph.getActiveIndex();
+        // if (dim == 2)
+        // {
+        //     dim_active_index.resize(cofacet_bin.size(), 0);
+        //     std::iota(dim_active_index.begin(), dim_active_index.end(), 0);
         // }
+        std::cout << "cofact active idx size = " << dim_active_index.size() << "  cofacet size = " << cofacet_bin.size() << '\n';
+        
+        if (dim == 3)
+        {   
+            std::cout<<"after cycle rm  ";
+            std::vector<std::vector<int>> target_simp{{6, 11, 16}, {9, 11, 16}, {11, 12, 16}, {11, 16, 19}};
+            std::cout<<"dim = "<<dim<<'\n';
+            bi_graph.checkSimplex(cofacet_bin, simplex_bin, target_simp);
+            std::cout<<'\n';
+        }
 
         // std for each
         std::vector<double> dim_critical_weight;
