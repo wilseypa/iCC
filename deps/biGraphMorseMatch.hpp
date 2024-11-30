@@ -33,7 +33,12 @@ private:
 
 public:
     void parallelKarpSipserInit();
+
+    void parallelMaxFacetInit(int cofacet_index_min, int cofacet_index_max, int facet_index_min, int facet_index_max);
+
     void parallelDFSMatch();
+
+
 
     int serialCycleRemoval();
 

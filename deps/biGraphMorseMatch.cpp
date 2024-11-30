@@ -23,11 +23,11 @@ void Bi_Graph_Match::parallelKarpSipserInit() {
     std::transform(std::execution::par, adj_list.begin(), adj_list.begin() + u, node_deg.begin(), [](const auto& u_adj) { return u_adj.size(); });
 
 #pragma omp parallel for schedule(dynamic)
-    for (int i = 0; i < u; i++)
-    // for (int i = u; i < (u + v); i++)
+    // for (int i = 0; i < u; i++)
+    for (int i = u -1; i >= 0; i--)
     {
 
-        // if (i == 248) std::cout<<'\n'<<node_deg[i]<<"  "<<adj_list[i].size()<<'\n';
+        if (i == 251) std::cout<<'\n'<<node_deg[i]<<"  "<<adj_list[i].size()<<'\n';
 
         if (node_deg[i] == 1)
             pairDegreeOne(i, visit_flag, node_deg);
@@ -119,6 +119,80 @@ void Bi_Graph_Match::pairUnmatched(int uidx, std::vector<int>& visit_flag) {
             return;
         }
     }
+    return;
+}
+
+void Bi_Graph_Match::parallelMaxFacetInit(int cofacet_index_min, int cofacet_index_max, int facet_index_min, int facet_index_max)
+{
+    //convert index
+    int umin = cofacet_index_min;
+    int umax = cofacet_index_max;
+    int vmin = facet_index_min + u;
+    int vmax = facet_index_max + u;
+
+    std::vector<int> visit_flag_u(umax - umin, 0);
+    std::vector<int> visit_flag_v(vmax - vmin, 0);
+
+    omp_set_num_threads(maxthreadnum);
+
+//match max facet
+#pragma omp parallel for schedule(static)
+    for (int i = vmin; i < vmax; i++)
+    {
+        for (const auto uidx: adj_list[i])    //uidx in v adj is in ascending order
+        {
+            auto vit = adj_list[uidx].begin();    //vidx in u adj is in descending order
+            if (i == *vit)    //i == max facet of uidx
+            {
+                //no race here
+                visit_flag_u[uidx - umin] += 1;
+                visit_flag_v[i - vmin] += 1;
+                match_list[uidx] = i;
+                match_list[i] = uidx;
+                break;
+            }
+        }
+    }
+
+// //match max available facet
+// #pragma omp parallel for schedule(static)
+//     for (int j = umin; j < umax; j++)
+//     {
+//         if (__sync_fetch_and_add(&(visit_flag_u[j - umin]), 1) == 0)
+//         {
+//             for(auto vit = adj_list[j].begin() + 1; vit != adj_list[j].end(); vit++)
+//             {
+//                 if (__sync_fetch_and_add(&(visit_flag_v[*vit - vmin]), 1) == 0)
+//                 {
+//                     match_list[j] = *vit;
+//                     match_list[*vit] = j;
+//                     break;
+//                 }
+//             }
+//         }
+//     }
+
+    //non para
+    for (int j = umin; j < umax; j++)
+    {
+        if (visit_flag_u[j - umin] == 0)
+        {
+            for (auto vit = adj_list[j].begin() + 1; vit != adj_list[j].end(); vit++)
+            {
+                if (visit_flag_v[*vit - vmin] == 0)
+                {
+                    visit_flag_v[*vit - vmin] += 1;
+                    match_list[j] = *vit;
+                    match_list[*vit] = j;
+                    break;
+                }
+            }
+        }
+    }
+
+    auto unmatched = std::count_if(std::execution::par, match_list.begin() + u, match_list.end(), [](int value) { return value < 0; });
+    std::cout<<"unmatched dim - 1 after init = "<<unmatched<<'\n';
+
     return;
 }
 

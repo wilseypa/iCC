@@ -251,7 +251,9 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
         std::cout <<"dim = " <<dim<< "  simp bin active idx size = " << dim_active_index.size() << "  simp bin size = " << simplex_bin.size();
         std::cout <<"  cofacet size = " << cofacet_bin.size() << '\n';
 
-        bi_graph.parallelKarpSipserInit();
+        // bi_graph.parallelKarpSipserInit();
+
+        bi_graph.parallelMaxFacetInit(0, cofacet_bin.size(), 0, simplex_bin.size());
 
         if (dim == 2)
         {   
@@ -273,6 +275,7 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
 
 
         bi_graph.parallelDFSMatch();
+
         int reverted = bi_graph.serialCycleRemoval();
         std::cout << "dim = " << dim << "  reverted = " << reverted << '\n';
 
