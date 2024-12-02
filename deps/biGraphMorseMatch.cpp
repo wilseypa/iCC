@@ -27,7 +27,7 @@ void Bi_Graph_Match::parallelKarpSipserInit() {
     for (int i = u -1; i >= 0; i--)
     {
 
-        if (i == 251) std::cout<<'\n'<<node_deg[i]<<"  "<<adj_list[i].size()<<'\n';
+        // if (i == 251) std::cout<<'\n'<<node_deg[i]<<"  "<<adj_list[i].size()<<'\n';
 
         if (node_deg[i] == 1)
             pairDegreeOne(i, visit_flag, node_deg);
@@ -122,6 +122,7 @@ void Bi_Graph_Match::pairUnmatched(int uidx, std::vector<int>& visit_flag) {
     return;
 }
 
+
 void Bi_Graph_Match::parallelMaxFacetInit(int cofacet_index_min, int cofacet_index_max, int facet_index_min, int facet_index_max)
 {
     //convert index
@@ -132,6 +133,9 @@ void Bi_Graph_Match::parallelMaxFacetInit(int cofacet_index_min, int cofacet_ind
 
     std::vector<int> visit_flag_u(umax - umin, 0);
     std::vector<int> visit_flag_v(vmax - vmin, 0);
+
+    std::vector<int> node_deg(vmax - vmin, 0);
+    std::transform(std::execution::par, adj_list.begin() + vmin, adj_list.begin() + vmax, node_deg.begin(), [](const auto& u_adj) { return u_adj.size(); });
 
     omp_set_num_threads(maxthreadnum);
 
@@ -149,10 +153,33 @@ void Bi_Graph_Match::parallelMaxFacetInit(int cofacet_index_min, int cofacet_ind
                 visit_flag_v[i - vmin] += 1;
                 match_list[uidx] = i;
                 match_list[i] = uidx;
+
+                //update node deg
+                for (const auto vidx: adj_list[uidx]) __sync_fetch_and_sub(&(node_deg[vidx - vmin]), 1);
+
                 break;
             }
         }
     }
+
+// elementary collapse
+#pragma omp parallel for schedule(static)
+    for (int i = vmin; i < vmax; i++)
+    {
+        if (node_deg[i - vmin] == 1 && __sync_fetch_and_add(&(visit_flag_v[i - vmin]), 1) == 0)
+        {
+            for (const auto uidx: adj_list[i])
+            {
+                if (__sync_fetch_and_add(&(visit_flag_u[uidx - umin]), 1) == 0)
+                {
+                    std::cout<<"elementary collapse vidx = "<<i - vmin<<"\n";
+                    match_list[uidx] = i;
+                    match_list[i] = uidx;
+                }
+            }
+        }
+    }
+
 
 // //match max available facet
 // #pragma omp parallel for schedule(static)
@@ -172,23 +199,48 @@ void Bi_Graph_Match::parallelMaxFacetInit(int cofacet_index_min, int cofacet_ind
 //         }
 //     }
 
-    //non para
+    //non para match max available facet
     for (int j = umin; j < umax; j++)
     {
         if (visit_flag_u[j - umin] == 0)
         {
-            for (auto vit = adj_list[j].begin() + 1; vit != adj_list[j].end(); vit++)
+            for (const auto vidx: adj_list[j])
             {
-                if (visit_flag_v[*vit - vmin] == 0)
+                if (visit_flag_v[vidx - vmin] == 0)
                 {
-                    visit_flag_v[*vit - vmin] += 1;
-                    match_list[j] = *vit;
-                    match_list[*vit] = j;
+                    visit_flag_v[vidx - vmin] += 1;
+                    match_list[j] = vidx;
+                    match_list[vidx] = j;
                     break;
                 }
             }
+
+            // if (adj_list[j].size() > 1)
+            // {
+            //     if (visit_flag_v[adj_list[j][1] - vmin] == 0)
+            //     {
+            //         visit_flag_v[adj_list[j][1] - vmin] += 1;
+            //         match_list[j] = adj_list[j][1];
+            //         match_list[adj_list[j][1]] = j;
+            //     }
+            // }
         }
     }
+
+    // //non para min cofacet
+    // for (int i = vmin; i < vmax; i++)
+    // //for (int i = vmax - 1; i >= vmin; i--)
+    // {
+    //     if ((visit_flag_v[i - vmin] == 0) && !(adj_list[i].empty()))
+    //     {
+    //         if (visit_flag_u[adj_list[i][0] - umin] == 0)
+    //         {
+    //             visit_flag_u[adj_list[i][0] - umin] += 1;
+    //             match_list[adj_list[i][0]] = i;
+    //             match_list[i] = adj_list[i][0];
+    //         }
+    //     }
+    // }
 
     auto unmatched = std::count_if(std::execution::par, match_list.begin() + u, match_list.end(), [](int value) { return value < 0; });
     std::cout<<"unmatched dim - 1 after init = "<<unmatched<<'\n';
