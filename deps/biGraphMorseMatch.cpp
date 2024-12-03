@@ -505,6 +505,9 @@ int Bi_Graph_Match::lookAheadDFS(std::deque<int>& graph_bfs_queue, std::vector<i
         if (!isBackwardAcyclic(ancestor_d_simp, child_workspace)) {
             
             int temp = match_list[top];
+
+            std::cout<<"in LA func cycle stack top = "<<top<<"  front match = "<<temp<<"\n";
+
             match_list[top] = -1;
             match_list[temp] = -1;
             reverted += 1;
@@ -555,6 +558,9 @@ int Bi_Graph_Match::lookAheadDFS(std::deque<int>& graph_bfs_queue, std::vector<i
 
         if (!isBackwardAcyclic(ancestor_d_simp, front_child)) {
             int temp = match_list[front];
+
+            std::cout<<"in bfs func cycle deq front = "<<front<<"  front match = "<<temp<<"\n";
+
             match_list[front] = -1;
             match_list[temp] = -1;
             reverted += 1;

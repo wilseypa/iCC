@@ -258,7 +258,7 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
         if (dim == 2)
         {   
             std::cout<<"after init  ";
-            std::vector<int> target_idx{326, 277, 116, 99};
+            std::vector<int> target_idx{326, 277, 230, 118, 116, 99};
             std::cout<<"dim = "<<dim<<'\n';
             bi_graph.checkCofacetByIndex(cofacet_bin, simplex_bin, target_idx);
             std::cout<<'\n';
@@ -267,7 +267,7 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
         if (dim == 2)
         {   
             std::cout<<"after init  ";
-            std::vector<int> target_idx{61, 65};
+            std::vector<int> target_idx{61, 65, 75};
             std::cout<<"dim = "<<dim<<'\n';
             bi_graph.checkSimplexByIndex(cofacet_bin, simplex_bin, target_idx);
             std::cout<<'\n';
@@ -282,7 +282,7 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
         if (dim == 2)
         {   
             std::cout<<"after match/rm  ";
-            std::vector<int> target_idx{326, 277, 116, 99};
+            std::vector<int> target_idx{326, 277, 230, 118, 116, 99};
             std::cout<<"dim = "<<dim<<'\n';
             bi_graph.checkCofacetByIndex(cofacet_bin, simplex_bin, target_idx);
             std::cout<<'\n';
@@ -291,7 +291,7 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
         if (dim == 2)
         {   
             std::cout<<"after match/rm  ";
-            std::vector<int> target_idx{61, 65};
+            std::vector<int> target_idx{61, 65, 75};
             std::cout<<"dim = "<<dim<<'\n';
             bi_graph.checkSimplexByIndex(cofacet_bin, simplex_bin, target_idx);
             std::cout<<'\n';
