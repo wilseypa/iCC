@@ -326,19 +326,26 @@ int Bi_Graph_Match::leftLookingDFSAugPath(int startnode, std::vector<int>& dfs_f
         int uidx = aug_path_tid[topindex];
         int endflag = 0;
         //look ahead, look for u's unmatched neighbor
-        for (const auto& vidx : adj_list[uidx]) {
-            if (__sync_fetch_and_add(&(look_ahead_flag[vidx]), 1) == 0) {
-                if (match_list[vidx] < 0) {
-                    __sync_fetch_and_add(&(dfs_flag[vidx]), 1);
-                    aug_path_tid[++topindex] = vidx;
-                    return topindex + 1;    //path length
+        if (topindex != 0)
+        {
+            for (const auto& vidx : adj_list[uidx]) 
+            {
+                if (__sync_fetch_and_add(&(look_ahead_flag[vidx]), 1) == 0) 
+                {
+                    if (match_list[vidx] < 0) 
+                    {
+                        __sync_fetch_and_add(&(dfs_flag[vidx]), 1);
+                        aug_path_tid[++topindex] = vidx;
+                        return topindex + 1;    //path length
+                    }
                 }
             }
         }
-        //dfs
+        
+        //left looking dfs
         for (const auto& vidx : adj_list[uidx]) 
         {
-            if (match_list[vidx] < uidx && match_list[vidx] >= 0)
+            if (match_list[vidx] >= 0 && match_list[vidx] < uidx)
             {
                 if (__sync_fetch_and_add(&(dfs_flag[vidx]), 1) == 0) 
                 {
@@ -378,7 +385,7 @@ int Bi_Graph_Match::getParent(std::vector<int>& parent_workspace, int uidx) {
      //i is d simp
     for (auto& i: adj_list[vidx]) {
         int imate = match_list[i];
-        if (imate != vidx) parent_workspace.push_back(i);
+        if (imate != -1 && imate != vidx) parent_workspace.push_back(i);
     }
     return parent_workspace.size();
 }
@@ -437,9 +444,15 @@ bool Bi_Graph_Match::isBackwardAcyclic(std::vector<int>& ancestor_d_simp, std::v
     for (auto& i: u_child) {
         if (root_flag[i] == 0) continue;
         if (std::find(ancestor_d_simp.begin(), ancestor_d_simp.end(), i) != ancestor_d_simp.end()) {
+            std::cout<<"found cycle at = "<<i<<"   ancestor simp = ";
+            for(auto i: ancestor_d_simp) std::cout<<i<<"  ";
+            std::cout<<"  child simp = ";
+            for(auto j: u_child) std::cout<<j<<"  ";
+            std::cout<<'\n';
             return false;
         }
     }
+
     return true;
 }
 
@@ -807,5 +820,33 @@ void Bi_Graph_Match::checkCofacet(std::vector<std::vector<int>>& cofacet_bin, st
         std::cout<<"  adj index = ";
         for(auto idx: adj_list[index]) std::cout<<idx - u<<" ";
         std::cout<<"  match = "<<match_list[index] - u<<'\n';
+    }
+}
+
+void Bi_Graph_Match::checkSimplexByIndex(std::vector<std::vector<int>>& cofacet_bin, std::vector<std::vector<int>>& simplex_bin, std::vector<int>& target_simplex_index)
+{
+    for (auto& i: target_simplex_index)
+    {
+        auto simplex = simplex_bin[i];
+        std::cout<<"target simplex = ";
+        for(auto pt: simplex) std::cout<<pt<<" ";
+        std::cout<<"  index = "<<i;
+        std::cout<<"  adj index = ";
+        for(auto idx: adj_list[u + i]) std::cout<<idx<<" ";
+        std::cout<<"  match = "<<match_list[u + i]<<'\n';
+    }
+}
+
+void Bi_Graph_Match::checkCofacetByIndex(std::vector<std::vector<int>>& cofacet_bin, std::vector<std::vector<int>>& simplex_bin, std::vector<int>& target_cofacet_index)
+{
+    for (auto& i: target_cofacet_index)
+    {
+        auto cofacet = cofacet_bin[i];
+        std::cout<<"target cofacet = ";
+        for(auto pt: cofacet) std::cout<<pt<<" ";
+        std::cout<<"  index = "<<i;
+        std::cout<<"  adj index = ";
+        for(auto idx: adj_list[i]) std::cout<<idx - u<<" ";
+        std::cout<<"  match = "<<match_list[i] - u<<'\n';
     }
 }
