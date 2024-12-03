@@ -19,8 +19,12 @@ private:
     void pairDegreeOne(int uidx, std::vector<int>& visit_flag, std::vector<int>& node_deg);
     void pairUnmatched(int uidx, std::vector<int>& visit_flag);
 
+    void elementaryCollapse(int vidx, int umin, int vmin, std::vector<int>& visit_flag_u, std::vector<int>& visit_flag_v, std::vector<int>& node_deg);
+
     //parallel bipartite matching helper function
     int dfsAugPath(int startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<int>& aug_path_tid);
+
+    int leftLookingDFSAugPath(int startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<int>& aug_path_tid);
 
     //cycle removal helper function
     int findRoot();
