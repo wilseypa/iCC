@@ -259,16 +259,33 @@ void Bi_Graph_Match::parallelMaxFacetInit(int cofacet_index_min, int cofacet_ind
     //     }
     // }
 
-    // //non para min cofacet
+    //non para min cofacet
+    for (int i = vmin; i < vmax; i++)
+    {
+        if ((visit_flag_v[i - vmin] == 0) && !(adj_list[i].empty()))
+        {
+            if (visit_flag_u[adj_list[i][0] - umin] == 0)
+            {
+                visit_flag_u[adj_list[i][0] - umin] += 1;
+                match_list[adj_list[i][0]] = i;
+                match_list[i] = adj_list[i][0];
+            }
+        }
+    }
+
+    // //non para unmatched v
     // for (int i = vmin; i < vmax; i++)
     // {
-    //     if ((visit_flag_v[i - vmin] == 0) && !(adj_list[i].empty()))
+    //     if (visit_flag_v[i - vmin] == 0)
     //     {
-    //         if (visit_flag_u[adj_list[i][0] - umin] == 0)
+    //         for (auto uidx: adj_list[i])
     //         {
-    //             visit_flag_u[adj_list[i][0] - umin] += 1;
-    //             match_list[adj_list[i][0]] = i;
-    //             match_list[i] = adj_list[i][0];
+    //             if (visit_flag_u[uidx - umin] == 0)
+    //             {
+    //                 visit_flag_u[uidx - umin] += 1;
+    //                 match_list[uidx] = i;
+    //                 match_list[i] = uidx;
+    //             }
     //         }
     //     }
     // }
@@ -327,6 +344,7 @@ int Bi_Graph_Match::leftLookingDFSAugPath(int startnode, std::vector<int>& dfs_f
         int endflag = 0;
         //look ahead, look for u's unmatched neighbor
         if (topindex != 0)
+        // if (1)
         {
             for (const auto& vidx : adj_list[uidx]) 
             {
@@ -345,7 +363,9 @@ int Bi_Graph_Match::leftLookingDFSAugPath(int startnode, std::vector<int>& dfs_f
         //left looking dfs
         for (const auto& vidx : adj_list[uidx]) 
         {
-            if (match_list[vidx] >= 0 && match_list[vidx] < uidx)
+            // if (match_list[vidx] >= 0 && match_list[vidx] < uidx)
+            if (match_list[vidx] > uidx)
+            // if (match_list[vidx] >= 0)
             {
                 if (__sync_fetch_and_add(&(dfs_flag[vidx]), 1) == 0) 
                 {
@@ -405,7 +425,7 @@ void Bi_Graph_Match::getAncestor(std::vector<int>& ancestor_workspace, int rootn
     //use rootnum to confine the ancestor search in current "bfs component"
     ancestor_workspace.clear();
 
-    std::queue<int> bfs_queue;
+    std::deque<int> bfs_queue;
     std::vector<int> parent_workspace;
     parent_workspace.reserve(udegree);
 
@@ -415,20 +435,20 @@ void Bi_Graph_Match::getAncestor(std::vector<int>& ancestor_workspace, int rootn
     
     getParent(parent_workspace, uidx);
     for (auto& i: parent_workspace) {
-        if(root_flag[i] == rootnum) bfs_queue.push(i);
+        if(root_flag[i] == rootnum) bfs_queue.push_back(i);
     }
 
     //cycle can be found during this process but need ancestors for look up
     while (!bfs_queue.empty()) {
         int front = std::move(bfs_queue.front());
-        bfs_queue.pop();
-        ancestor_workspace.push_back(front);
+        bfs_queue.pop_front();
+        if (std::find(ancestor_workspace.begin(), ancestor_workspace.end(), front) == ancestor_workspace.end()) ancestor_workspace.push_back(front);
         
         //parent of queue front
         getParent(parent_workspace, front);
         for(auto& i: parent_workspace) {
-            if (root_flag[i] == rootnum && std::find(ancestor_workspace.begin(), ancestor_workspace.end(), i) == ancestor_workspace.end()) {
-                bfs_queue.push(i);
+            if (root_flag[i] == rootnum && std::find(bfs_queue.begin(), bfs_queue.end(), i) == bfs_queue.end()) {
+                bfs_queue.push_back(i);
             }
         }
     }
@@ -480,6 +500,7 @@ int Bi_Graph_Match::lookAheadDFS(std::deque<int>& graph_bfs_queue, std::vector<i
     }
 
     //start look ahead op on children of uidx
+
     ancestor_d_simp.push_back(uidx);
     int reverted = 0;
     bool flag;    //working var
@@ -505,8 +526,6 @@ int Bi_Graph_Match::lookAheadDFS(std::deque<int>& graph_bfs_queue, std::vector<i
         if (!isBackwardAcyclic(ancestor_d_simp, child_workspace)) {
             
             int temp = match_list[top];
-
-            std::cout<<"in LA func cycle stack top = "<<top<<"  front match = "<<temp<<"\n";
 
             match_list[top] = -1;
             match_list[temp] = -1;
@@ -558,8 +577,6 @@ int Bi_Graph_Match::lookAheadDFS(std::deque<int>& graph_bfs_queue, std::vector<i
 
         if (!isBackwardAcyclic(ancestor_d_simp, front_child)) {
             int temp = match_list[front];
-
-            std::cout<<"in bfs func cycle deq front = "<<front<<"  front match = "<<temp<<"\n";
 
             match_list[front] = -1;
             match_list[temp] = -1;

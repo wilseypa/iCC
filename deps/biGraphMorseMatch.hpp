@@ -11,7 +11,7 @@ private:
     int maxthreadnum;    //affect the memory consumption during bipartite matching
 
     // std::vector<std::vector<int>> adj_list;
-    std::vector<int> match_list;
+    // std::vector<int> match_list;
     std::vector<int> root_flag;
 
     //parallel init for bipartite matching
@@ -62,7 +62,7 @@ public:
 
     //move to private later
     std::vector<std::vector<int>> adj_list;
-
+    std::vector<int> match_list;
 
     void checkSimplex(std::vector<std::vector<int>>& cofacet_bin, std::vector<std::vector<int>>& simplex_bin, std::vector<std::vector<int>>& target_simplex);
 
