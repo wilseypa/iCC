@@ -259,19 +259,19 @@ void Bi_Graph_Match::parallelMaxFacetInit(int cofacet_index_min, int cofacet_ind
     //     }
     // }
 
-    //non para min cofacet
-    for (int i = vmin; i < vmax; i++)
-    {
-        if ((visit_flag_v[i - vmin] == 0) && !(adj_list[i].empty()))
-        {
-            if (visit_flag_u[adj_list[i][0] - umin] == 0)
-            {
-                visit_flag_u[adj_list[i][0] - umin] += 1;
-                match_list[adj_list[i][0]] = i;
-                match_list[i] = adj_list[i][0];
-            }
-        }
-    }
+    // //non para min cofacet
+    // for (int i = vmin; i < vmax; i++)
+    // {
+    //     if ((visit_flag_v[i - vmin] == 0) && !(adj_list[i].empty()))
+    //     {
+    //         if (visit_flag_u[adj_list[i][0] - umin] == 0)
+    //         {
+    //             visit_flag_u[adj_list[i][0] - umin] += 1;
+    //             match_list[adj_list[i][0]] = i;
+    //             match_list[i] = adj_list[i][0];
+    //         }
+    //     }
+    // }
 
     // //non para unmatched v
     // for (int i = vmin; i < vmax; i++)
@@ -363,8 +363,8 @@ int Bi_Graph_Match::leftLookingDFSAugPath(int startnode, std::vector<int>& dfs_f
         //left looking dfs
         for (const auto& vidx : adj_list[uidx]) 
         {
-            // if (match_list[vidx] >= 0 && match_list[vidx] < uidx)
-            if (match_list[vidx] > uidx)
+            if (match_list[vidx] >= 0 && match_list[vidx] < uidx)
+            // if (match_list[vidx] > uidx)
             // if (match_list[vidx] >= 0)
             {
                 if (__sync_fetch_and_add(&(dfs_flag[vidx]), 1) == 0) 
@@ -383,6 +383,99 @@ int Bi_Graph_Match::leftLookingDFSAugPath(int startnode, std::vector<int>& dfs_f
     }
     return topindex + 1;
 }
+
+int Bi_Graph_Match::facetLeftDFSAugPath(int facetindex, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<int>& aug_path_tid)
+{
+    int topindex = -1;
+    aug_path_tid[++topindex] = facetindex;
+    while (topindex >= 0)
+    {
+        int vidx = aug_path_tid[topindex];
+        int endflag = 0;
+        //if augmented, try look ahead to the left
+        if (topindex != 0)
+        {
+            int vidx = aug_path_tid[topindex];
+            for (const auto& uidx: adj_list[vidx])
+            {
+                if (uidx < aug_path_tid[topindex - 1] && __sync_fetch_and_add(&(look_ahead_flag[uidx]), 1) == 0)
+                {
+                    if (match_list[uidx] < 0)
+                    {
+                        __sync_fetch_and_add(&(dfs_flag[uidx]), 1);
+                        aug_path_tid[++topindex] = uidx;
+                        return topindex + 1;    //aug path length
+                    }
+                }
+            }
+        }
+        //try left aug
+        for (const auto& uidx: adj_list[vidx])
+        {
+            if (match_list[uidx] >= 0 && match_list[uidx] < vidx)
+            {
+                if (__sync_fetch_and_add(&(dfs_flag[uidx]), 1) == 0)
+                {
+                    aug_path_tid[++topindex] = uidx;
+                    aug_path_tid[++topindex] = match_list[uidx];
+                    endflag = 1;
+                    break;
+                }
+            }
+        }
+        //cannot left augment, pop
+        if (!endflag) topindex -= 2;
+    }
+    return topindex + 1;
+}
+
+int Bi_Graph_Match::facetRightDFSAugPath(int facetindex, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<int>& aug_path_tid)
+{
+    int topindex = -1;
+    aug_path_tid[++topindex] = facetindex;
+    while (topindex >= 0)
+    {
+        int vidx = aug_path_tid[topindex];
+        int endflag = 0;
+        //if augmented, try look ahead to the right
+        if (topindex != 0)
+        {
+            int vidx = aug_path_tid[topindex];
+            for (const auto& uidx: adj_list[vidx])
+            {
+                if (__sync_fetch_and_add(&(look_ahead_flag[uidx]), 1) == 0)
+                // if (uidx > aug_path_tid[topindex - 1] && __sync_fetch_and_add(&(look_ahead_flag[uidx]), 1) == 0)
+                {
+                    if (match_list[uidx] < 0)
+                    {
+                        __sync_fetch_and_add(&(dfs_flag[uidx]), 1);
+                        aug_path_tid[++topindex] = uidx;
+                        return topindex + 1;    //aug path length
+                    }
+                }
+            }
+        }
+        //try right aug
+        for (const auto& uidx: adj_list[vidx])
+        {
+            // if (match_list[uidx] > vidx)
+            if (match_list[uidx] >= 0)
+            {
+                if (__sync_fetch_and_add(&(dfs_flag[uidx]), 1) == 0)
+                {
+                    aug_path_tid[++topindex] = uidx;
+                    aug_path_tid[++topindex] = match_list[uidx];
+                    endflag = 1;
+                    break;
+                }
+            }
+        }
+        //cannot right augment, pop
+        if (!endflag) topindex -= 2;
+    }
+    return topindex + 1;
+}
+
 
 
 int Bi_Graph_Match::findRoot() {
@@ -664,6 +757,111 @@ void Bi_Graph_Match::parallelDFSMatch() {
     //non-isolated unmatched
     return;   
 }
+
+void Bi_Graph_Match::parallelFacetDFSMatch()
+{
+    std::vector<int> unmatched_v_init(v, -1);
+    std::vector<int> unmatched_v_final(v, 0);
+    std::vector<int> dfs_flag(u + v, 0);
+
+    //size?????
+    std::vector<int> look_ahead_flag(u + v, 0);  
+
+    omp_set_num_threads(maxthreadnum);
+
+    int initialunmatched = 0;
+    int finalunmatched = 0;
+    //find unmatched left nodes from initialized matching
+#pragma omp parallel
+    {
+        int ct = 0;
+        std::vector<int> thread_buff;    //overflow? limit its size?
+#pragma omp for
+        for (int i = u; i < u + v; i++) 
+        {
+            if (match_list[i] < 0 && adj_list[i].size() > 0) {
+                thread_buff.push_back(i);
+                ct += 1;
+            }
+        }
+        if (ct > 0) {
+            int offset = __sync_fetch_and_add(&initialunmatched, ct);
+            std::copy_n(thread_buff.begin(), ct, unmatched_v_init.begin() + offset);
+        }
+    }
+
+
+    //storing aug path one path per thread
+    std::vector<std::vector<int>> aug_path(maxthreadnum, std::vector<int>(u + v, 0));
+
+    while (true) {
+        //shared among threads
+        finalunmatched = 0;
+
+        std::fill(std::execution::par, dfs_flag.begin(), dfs_flag.end(), 0);
+        // try left dfs first
+#pragma omp parallel for schedule(dynamic)
+        for (int i = 0; i < initialunmatched; i++)
+        {
+            auto& aug_path_tid = aug_path[omp_get_thread_num()];
+
+            int vstart = unmatched_v_init[i];
+
+            int augpathlen = facetLeftDFSAugPath(vstart, dfs_flag, look_ahead_flag, aug_path_tid);
+
+            //augmentation
+            for (int j = 0; j < augpathlen; j += 2) {
+                match_list[aug_path_tid[j]] = aug_path_tid[j + 1];
+                match_list[aug_path_tid[j + 1]] = aug_path_tid[j];
+            }
+            //store the unmatched node, need atomic op on the shared count var
+            if (augpathlen <= 0)
+                unmatched_v_final[__sync_fetch_and_add(&finalunmatched, 1)] = vstart;
+        }
+
+        //if all unmatched v are augmented
+        if (finalunmatched == 0) break;
+
+        //try right aug paths, let final_unmatched be the init_unmatched
+        std::swap(unmatched_v_init, unmatched_v_final);
+        initialunmatched = finalunmatched;
+        finalunmatched = 0;
+        std::swap(unmatched_v_init, unmatched_v_final);
+        //reset dfs flag
+        std::fill(std::execution::par, dfs_flag.begin(), dfs_flag.end(), 0);
+
+ 
+#pragma omp parallel for schedule(dynamic)
+        for (int i = 0; i < initialunmatched; i++)
+        {
+            auto& aug_path_tid = aug_path[omp_get_thread_num()];
+
+            int vstart = unmatched_v_init[i];
+
+            int augpathlen = facetRightDFSAugPath(vstart, dfs_flag, look_ahead_flag, aug_path_tid);
+
+            //augmentation
+            for (int j = 0; j < augpathlen; j += 2) {
+                match_list[aug_path_tid[j]] = aug_path_tid[j + 1];
+                match_list[aug_path_tid[j + 1]] = aug_path_tid[j];
+            }
+            //store the unmatched node, need atomic op on the shared count var
+            if (augpathlen <= 0)
+                unmatched_v_final[__sync_fetch_and_add(&finalunmatched, 1)] = vstart;
+        }
+        
+        if ((finalunmatched == 0) || (initialunmatched == finalunmatched)) {
+            break;
+        }
+        //try aug again, let final_unmatched be the init_unmatched
+        std::swap(unmatched_v_init, unmatched_v_final);
+        initialunmatched = finalunmatched;
+    }
+
+    //non-isolated unmatched
+    return;  
+}
+
 
 int Bi_Graph_Match::serialCycleRemoval() {
     //assume u is the d simplex of d interface

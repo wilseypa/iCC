@@ -26,6 +26,10 @@ private:
 
     int leftLookingDFSAugPath(int startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<int>& aug_path_tid);
 
+    int facetLeftDFSAugPath(int facetindex, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<int>& aug_path_tid);
+
+    int facetRightDFSAugPath(int facetindex, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<int>& aug_path_tid);
+
     //cycle removal helper function
     int findRoot();
     int getParent(std::vector<int>& parent_workspace, int uidx);
@@ -42,7 +46,7 @@ public:
 
     void parallelDFSMatch();
 
-
+    void parallelFacetDFSMatch();
 
     int serialCycleRemoval();
 
