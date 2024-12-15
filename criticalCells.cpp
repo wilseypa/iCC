@@ -123,30 +123,50 @@ double CritCells<ComplexType, DistMatType>::getSimplexWeight(const std::vector<i
 }
 
 template <typename ComplexType, typename DistMatType>
-void CritCells<ComplexType, DistMatType>::sortSimplex(std::vector<std::vector<int>> &simplex_bin)
+void CritCells<ComplexType, DistMatType>::sortEdge(std::vector<std::vector<int>> &edge_bin)
 {
-    std::sort(simplex_bin.begin(), simplex_bin.end(), [this](const auto &lhs, const auto &rhs)
+    std::sort(edge_bin.begin(), edge_bin.end(), [this](const auto &lhs, const auto &rhs)
               { return getSimplexWeight(lhs) < getSimplexWeight(rhs); });
 }
 
 template <typename ComplexType, typename DistMatType>
-std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::getCofacetBin(std::vector<std::vector<int>> &simplexe_bin, double maxweight, int threadnum)
+int CritCells<ComplexType, DistMatType>::getMaxFacetIndex(const std::vector<int>& cofacet, const std::vector<std::vector<int>>& facet_bin)
+{
+    auto find_lamda = [&](const std::vector<int>& facet)
+    { return std::includes(cofacet.begin(), cofacet.end(), facet.begin(), facet.end()); };
+
+    auto riter = std::find_if(facet_bin.rbegin(), facet_bin.rend(), find_lamda);
+    int index = std::distance(riter, facet_bin.rend());
+
+    return index;
+}
+
+template <typename ComplexType, typename DistMatType>
+void CritCells<ComplexType, DistMatType>::sortSimplex(std::vector<std::vector<int>>& cofacet_bin, const std::vector<std::vector<int>>& facet_bin)
+{
+    std::sort(cofacet_bin.begin(), cofacet_bin.end(), [this, &facet_bin](const auto& lhs, const auto& rhs)
+    { return this->getMaxFacetIndex(lhs, facet_bin) < this->getMaxFacetIndex(rhs, facet_bin); });
+}
+
+
+template <typename ComplexType, typename DistMatType>
+std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::getCofacetBin(std::vector<std::vector<int>> &facet_bin, double maxweight, int threadnum)
 {
     std::vector<std::vector<int>> cofacet_bin;
     size_t npts = this->distMatrix.size();
 
     omp_set_num_threads(1);
-    std::vector<std::vector<int>> thread_workspace(simplexe_bin.size(), std::vector<int>());
+    std::vector<std::vector<int>> thread_workspace(facet_bin.size(), std::vector<int>());
 
 #pragma omp parallel for
-    for (size_t i = 0; i < simplexe_bin.size(); i++)
+    for (size_t i = 0; i < facet_bin.size(); i++)
     {
-        double simpweight = getSimplexWeight(simplexe_bin[i]);
+        double simpweight = getSimplexWeight(facet_bin[i]);
 
-        int last_idx = *std::min_element(simplexe_bin[i].begin(), simplexe_bin[i].end());
+        int last_idx = *std::min_element(facet_bin[i].begin(), facet_bin[i].end());
         for (int j = 0; j < last_idx; j++)
         {
-            auto maxidx = *std::max_element(simplexe_bin[i].begin(), simplexe_bin[i].end(), [this, j](auto first, auto second)
+            auto maxidx = *std::max_element(facet_bin[i].begin(), facet_bin[i].end(), [this, j](auto first, auto second)
                                             { return this->distMatrix[j][first] < this->distMatrix[j][second]; });
 
             double weight = this->distMatrix[j][maxidx];
@@ -155,17 +175,17 @@ std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::getCofacetBin
                 thread_workspace[i].push_back(j);
         }
     }
-    for (size_t i = 0; i < simplexe_bin.size(); i++)
+    for (size_t i = 0; i < facet_bin.size(); i++)
     {
         for (auto &pt : thread_workspace[i])
         {
             // add pt first, keep the vertices in sorted order
             cofacet_bin.push_back(std::vector<int>{pt});
-            std::copy(simplexe_bin[i].begin(), simplexe_bin[i].end(), std::back_inserter(cofacet_bin.back()));
+            std::copy(facet_bin[i].begin(), facet_bin[i].end(), std::back_inserter(cofacet_bin.back()));
         }
     }
 
-    sortSimplex(cofacet_bin);
+    sortSimplex(cofacet_bin, facet_bin);
 
     return cofacet_bin;
 }
@@ -218,10 +238,10 @@ std::vector<int> CritCells<ComplexType, DistMatType>::getMSTEdgeIndices(std::vec
 template <typename ComplexType, typename DistMatType>
 std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseMatch(int maxdimension, double mineps, double maxeps)
 {
-    int threadnum = 1;
+    int threadnum = 4;
 
     std::vector<std::vector<int>> simplex_bin = getEdges(maxeps);
-    sortSimplex(simplex_bin);
+    sortEdge(simplex_bin);
     // std::vector<std::vector<int>> simplex_bin = getEdgesByWeightRange(sorted_edges, mineps, maxeps);
 
     std::vector<int> mst_edge_index = getMSTEdgeIndices(simplex_bin);
@@ -413,7 +433,7 @@ std::vector< std::vector< std::pair<double, double> > > CritCells<ComplexType, D
     int threadnum = 1;
 
     std::vector<std::vector<int>> simplex_bin = getEdges(maxeps);
-    sortSimplex(simplex_bin);
+    sortEdge(simplex_bin);
 
     std::vector<int> mst_edge_index = getMSTEdgeIndices(simplex_bin);
 

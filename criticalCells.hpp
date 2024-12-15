@@ -95,8 +95,13 @@ public:
     std::vector<std::vector<int>> getEdges(double maxweight);
     std::vector<std::vector<int>> getEdgesByWeightRange(std::vector<std::vector<int>>& sorted_edges, double minweight, double maxweight);
     double getSimplexWeight(const std::vector<int>& simplex);
-    inline void sortSimplex(std::vector<std::vector<int>>& simplex_bin);
-    std::vector<std::vector<int>> getCofacetBin(std::vector<std::vector<int>>& simplex_bin, double maxweight, int threadnum);
+    void sortEdge(std::vector<std::vector<int>>& edge_bin);
+
+    int getMaxFacetIndex(const std::vector<int>& cofacet, const std::vector<std::vector<int>>& facet_bin);
+    void sortSimplex(std::vector<std::vector<int>>& cofacet_bin, const std::vector<std::vector<int>>& facet_bin); 
+
+    std::vector<std::vector<int>> getCofacetBin(std::vector<std::vector<int>>& facet_bin, double maxweight, int threadnum);
+
     int findRoot(std::vector<int>& parent_idx, int x);
     void setUnion(std::vector<int>& parent_idx, int x, int y);
     std::vector<int> getMSTEdgeIndices(std::vector<std::vector<int>>& sorted_edges);

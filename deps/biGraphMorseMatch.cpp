@@ -209,7 +209,7 @@ void Bi_Graph_Match::parallelMaxFacetInit(int cofacet_index_min, int cofacet_ind
 #pragma omp parallel for schedule(static)
     for (int i = vmin; i < vmax; i++)
     {
-        if (node_deg[i - vmin] == 1) elementaryCollapse(i, umin, vmin, visit_flag_u, visit_flag_v, node_deg);
+        //if (node_deg[i - vmin] == 1) elementaryCollapse(i, umin, vmin, visit_flag_u, visit_flag_v, node_deg);
     }
 
 
@@ -259,19 +259,19 @@ void Bi_Graph_Match::parallelMaxFacetInit(int cofacet_index_min, int cofacet_ind
     //     }
     // }
 
-    // //non para min cofacet
-    // for (int i = vmin; i < vmax; i++)
-    // {
-    //     if ((visit_flag_v[i - vmin] == 0) && !(adj_list[i].empty()))
-    //     {
-    //         if (visit_flag_u[adj_list[i][0] - umin] == 0)
-    //         {
-    //             visit_flag_u[adj_list[i][0] - umin] += 1;
-    //             match_list[adj_list[i][0]] = i;
-    //             match_list[i] = adj_list[i][0];
-    //         }
-    //     }
-    // }
+    //non para min cofacet
+    for (int i = vmin; i < vmax; i++)
+    {
+        if ((visit_flag_v[i - vmin] == 0) && !(adj_list[i].empty()))
+        {
+            if (visit_flag_u[adj_list[i][0] - umin] == 0)
+            {
+                visit_flag_u[adj_list[i][0] - umin] += 1;
+                match_list[adj_list[i][0]] = i;
+                match_list[i] = adj_list[i][0];
+            }
+        }
+    }
 
     // //non para unmatched v
     // for (int i = vmin; i < vmax; i++)
