@@ -12,7 +12,7 @@ private:
 
     // std::vector<std::vector<int>> adj_list;
     // std::vector<int> match_list;
-    std::vector<int> root_flag;
+    std::vector<int> state_flag;
 
     //parallel init for bipartite matching
     
@@ -49,6 +49,8 @@ public:
     void parallelFacetDFSMatch();
 
     int serialCycleRemoval();
+
+    int dfsCycleRemoval();
 
     void addEdge(int u, int v);
 

@@ -479,7 +479,7 @@ int Bi_Graph_Match::facetRightDFSAugPath(int facetindex, std::vector<int>& dfs_f
 
 
 int Bi_Graph_Match::findRoot() {
-    auto root_lambda = [&](const auto i) {return (root_flag[i] == 0);};
+    auto root_lambda = [&](const auto i) {return (state_flag[i] == 0);};
     std::vector<int> range(u);
     std::iota(range.begin(), range.end(), 0);
     auto it = std::find_if(range.begin(), range.end(), root_lambda);
@@ -523,12 +523,12 @@ void Bi_Graph_Match::getAncestor(std::vector<int>& ancestor_workspace, int rootn
     parent_workspace.reserve(udegree);
 
     //temp change uidx's rootflag to avoid cycle infi loop
-    int rootflag = root_flag[uidx];
-    root_flag[uidx] = -1;
+    int rootflag = state_flag[uidx];
+    state_flag[uidx] = -1;
     
     getParent(parent_workspace, uidx);
     for (auto& i: parent_workspace) {
-        if(root_flag[i] == rootnum) bfs_queue.push_back(i);
+        if(state_flag[i] == rootnum) bfs_queue.push_back(i);
     }
 
     //cycle can be found during this process but need ancestors for look up
@@ -540,14 +540,14 @@ void Bi_Graph_Match::getAncestor(std::vector<int>& ancestor_workspace, int rootn
         //parent of queue front
         getParent(parent_workspace, front);
         for(auto& i: parent_workspace) {
-            if (root_flag[i] == rootnum && std::find(bfs_queue.begin(), bfs_queue.end(), i) == bfs_queue.end()) {
+            if (state_flag[i] == rootnum && std::find(bfs_queue.begin(), bfs_queue.end(), i) == bfs_queue.end()) {
                 bfs_queue.push_back(i);
             }
         }
     }
 
     //recover rootflag
-    root_flag[uidx] = rootflag;
+    state_flag[uidx] = rootflag;
 
     return;
 }
@@ -555,7 +555,7 @@ void Bi_Graph_Match::getAncestor(std::vector<int>& ancestor_workspace, int rootn
 bool Bi_Graph_Match::isBackwardAcyclic(std::vector<int>& ancestor_d_simp, std::vector<int>& u_child) {
     //par
     for (auto& i: u_child) {
-        if (root_flag[i] == 0) continue;
+        if (state_flag[i] == 0) continue;
         if (std::find(ancestor_d_simp.begin(), ancestor_d_simp.end(), i) != ancestor_d_simp.end()) {
             std::cout<<"found cycle at = "<<i<<"   ancestor simp = ";
             for(auto i: ancestor_d_simp) std::cout<<i<<"  ";
@@ -586,7 +586,7 @@ int Bi_Graph_Match::lookAheadDFS(std::deque<int>& graph_bfs_queue, std::vector<i
         //if uidx is the only parent of i (in the whole graph). use look ahead shortcut
         if (parentnum == 1) {
             lookahead_vec.push_back(i);
-        } else if (root_flag[i] == 0 && std::find(graph_bfs_queue.begin(), graph_bfs_queue.end(), i) == graph_bfs_queue.end()) {
+        } else if (state_flag[i] == 0 && std::find(graph_bfs_queue.begin(), graph_bfs_queue.end(), i) == graph_bfs_queue.end()) {
             //if i has more than 1 par and has not been searched yet (or not in current bfs component). push to global bfs queue
             graph_bfs_queue.push_back(i);
         }
@@ -604,14 +604,14 @@ int Bi_Graph_Match::lookAheadDFS(std::deque<int>& graph_bfs_queue, std::vector<i
 
         int top = std::move(lookahead_vec.back());
         lookahead_vec.pop_back();
-        root_flag[top] = rootnum;
+        state_flag[top] = rootnum;
 
         //child_workspace contains the children of top
         int childnum = getChild(child_workspace, top);
         if (childnum == 0) continue;
 
         //child in unsearched part of current bfs component
-        auto iter = std::remove_if(child_workspace.begin(), child_workspace.end(), [&](const auto& i) {return (root_flag[i] != 0 && root_flag[i] != rootnum);});
+        auto iter = std::remove_if(child_workspace.begin(), child_workspace.end(), [&](const auto& i) {return (state_flag[i] != 0 && state_flag[i] != rootnum);});
         child_workspace.erase(iter, child_workspace.end());
 
         //if top is not acyclic. the lookahead of top is over
@@ -632,7 +632,7 @@ int Bi_Graph_Match::lookAheadDFS(std::deque<int>& graph_bfs_queue, std::vector<i
                     lookahead_vec.push_back(i);
                     //raise flag for adding top to ancestor
                     flag = true;
-                }else if (root_flag[i] == 0 && std::find(graph_bfs_queue.begin(), graph_bfs_queue.end(), i) == graph_bfs_queue.end()) {
+                }else if (state_flag[i] == 0 && std::find(graph_bfs_queue.begin(), graph_bfs_queue.end(), i) == graph_bfs_queue.end()) {
                     graph_bfs_queue.push_back(i);
                 } 
             }
@@ -657,13 +657,13 @@ int Bi_Graph_Match::lookAheadDFS(std::deque<int>& graph_bfs_queue, std::vector<i
     while (!bfs_queue.empty()) {
         int front = std::move(bfs_queue.front());
         bfs_queue.pop_front();
-        root_flag[front] = rootnum;
+        state_flag[front] = rootnum;
         
         int childnum = getChild(front_child, front);
         if (childnum == 0) continue;
 
         //child in unsearched part of current bfs component
-        auto iter = std::remove_if(front_child.begin(), front_child.end(), [&](const auto& i) {return (root_flag[i] != 0 && root_flag[i] != rootnum);});
+        auto iter = std::remove_if(front_child.begin(), front_child.end(), [&](const auto& i) {return (state_flag[i] != 0 && state_flag[i] != rootnum);});
         front_child.erase(iter, front_child.end());
 
         getAncestor(ancestor_d_simp, rootnum, front);
@@ -865,7 +865,7 @@ void Bi_Graph_Match::parallelFacetDFSMatch()
 
 int Bi_Graph_Match::serialCycleRemoval() {
     //assume u is the d simplex of d interface
-    root_flag.resize(u, 0);
+    state_flag.resize(u, 0);
 
     int reverted = 0;
 
@@ -889,15 +889,58 @@ int Bi_Graph_Match::serialCycleRemoval() {
     return reverted;
 }
 
-// std::vector<int> Bi_Graph_Match::getTopDimCriticalIndex() 
-// {
-//     std::vector<int> critical_index;
-//     for(int i = 0; i < u; i++) 
-//     {
-//         if (match_list[i] < 0) critical_index.push_back(i);
-//     }
-//     return critical_index;
-// }
+int Bi_Graph_Match::dfsCycleRemoval()
+{
+    int reverted = 0;
+
+    //0: not visited, 1: visiting, 2: visited
+    state_flag.resize(u, 0);
+
+    std::vector<int> dfs_stack;
+    dfs_stack.reserve(v);
+
+    std::vector<int> child_workspace;
+    child_workspace.reserve(udegree);
+
+    for (int i = 0; i < u; i++)
+    {
+        if (state_flag[i] != 0) continue;
+
+        dfs_stack.push_back(i);
+
+        while (!dfs_stack.empty())
+        {
+            int top = std::move(dfs_stack.back());
+            dfs_stack.pop_back();
+
+            if (state_flag[top] == 0)
+            {
+                state_flag[top] = 1;
+                dfs_stack.push_back(top);
+
+                getChild(child_workspace, top);
+
+                for (int child: child_workspace)
+                {
+                    if (state_flag[child] == 0) 
+                    {
+                        dfs_stack.push_back(child);
+                    } else if (state_flag[child] == 1)
+                    {
+                        //found back edge
+                        int temp = match_list[top];
+                        match_list[top] = -1;
+                        match_list[temp] = -1;
+                        reverted += 1;
+                    }
+                }
+            } else if (state_flag[top] == 1) state_flag[top] = 2;
+        }
+        
+    }
+
+    return reverted;
+}
 
 
 void Bi_Graph_Match::addEdge(int leftnode, int rightnode) {
