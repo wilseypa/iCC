@@ -177,13 +177,13 @@ void Bi_Graph_Match::parallelMaxFacetInit(int cofacet_index_min, int cofacet_ind
     std::vector<int> visit_flag_u(umax - umin, 0);
     std::vector<int> visit_flag_v(vmax - vmin, 0);
 
-    std::vector<int> node_deg(vmax - vmin, 0);
-    std::transform(std::execution::par, adj_list.begin() + vmin, adj_list.begin() + vmax, node_deg.begin(), [](const auto& u_adj) { return u_adj.size(); });
+    // std::vector<int> node_deg(vmax - vmin, 0);
+    // std::transform(std::execution::par, adj_list.begin() + vmin, adj_list.begin() + vmax, node_deg.begin(), [](const auto& u_adj) { return u_adj.size(); });
 
     omp_set_num_threads(maxthreadnum);
 
 //match max facet
-#pragma omp parallel for schedule(static)
+#pragma omp parallel for schedule(dynamic)
     for (int i = vmin; i < vmax; i++)
     {
         for (const auto& uidx: adj_list[i])    //uidx in v adj is in ascending order
@@ -198,19 +198,19 @@ void Bi_Graph_Match::parallelMaxFacetInit(int cofacet_index_min, int cofacet_ind
                 match_list[i] = uidx;
 
                 //update node deg
-                for (const auto& vidx: adj_list[uidx]) __sync_fetch_and_sub(&(node_deg[vidx - vmin]), 1);
+                // for (const auto& vidx: adj_list[uidx]) __sync_fetch_and_sub(&(node_deg[vidx - vmin]), 1);
 
                 break;
             }
         }
     }
 
-// elementary collapse
-#pragma omp parallel for schedule(static)
-    for (int i = vmin; i < vmax; i++)
-    {
-        //if (node_deg[i - vmin] == 1) elementaryCollapse(i, umin, vmin, visit_flag_u, visit_flag_v, node_deg);
-    }
+// // elementary collapse
+// #pragma omp parallel for schedule(static)
+//     for (int i = vmin; i < vmax; i++)
+//     {
+//         //if (node_deg[i - vmin] == 1) elementaryCollapse(i, umin, vmin, visit_flag_u, visit_flag_v, node_deg);
+//     }
 
 
 // //match max available facet
@@ -259,36 +259,36 @@ void Bi_Graph_Match::parallelMaxFacetInit(int cofacet_index_min, int cofacet_ind
     //     }
     // }
 
-    //non para min cofacet
+    // //non para min cofacet
+    // for (int i = vmin; i < vmax; i++)
+    // {
+    //     if ((visit_flag_v[i - vmin] == 0) && !(adj_list[i].empty()))
+    //     {
+    //         if (visit_flag_u[adj_list[i][0] - umin] == 0)
+    //         {
+    //             visit_flag_u[adj_list[i][0] - umin] += 1;
+    //             match_list[adj_list[i][0]] = i;
+    //             match_list[i] = adj_list[i][0];
+    //         }
+    //     }
+    // }
+
+    //para min cofacet
+#pragma omp parallel for schedule(static)
     for (int i = vmin; i < vmax; i++)
     {
-        if ((visit_flag_v[i - vmin] == 0) && !(adj_list[i].empty()))
+        if ((__sync_fetch_and_add(&(visit_flag_v[i - vmin]), 1) == 0) && !(adj_list[i].empty()))
         {
-            if (visit_flag_u[adj_list[i][0] - umin] == 0)
+            if (__sync_fetch_and_add(&(visit_flag_u[adj_list[i][0] - umin]), 1) == 0)
             {
-                visit_flag_u[adj_list[i][0] - umin] += 1;
                 match_list[adj_list[i][0]] = i;
                 match_list[i] = adj_list[i][0];
             }
         }
     }
 
-    // //non para unmatched v
-    // for (int i = vmin; i < vmax; i++)
-    // {
-    //     if (visit_flag_v[i - vmin] == 0)
-    //     {
-    //         for (auto uidx: adj_list[i])
-    //         {
-    //             if (visit_flag_u[uidx - umin] == 0)
-    //             {
-    //                 visit_flag_u[uidx - umin] += 1;
-    //                 match_list[uidx] = i;
-    //                 match_list[i] = uidx;
-    //             }
-    //         }
-    //     }
-    // }
+
+    
 
     auto unmatched = std::count_if(std::execution::par, match_list.begin() + u, match_list.end(), [](int value) { return value < 0; });
     std::cout<<"unmatched dim - 1 after init = "<<unmatched<<'\n';
@@ -725,15 +725,15 @@ void Bi_Graph_Match::parallelDFSMatch() {
         std::fill(std::execution::par, dfs_flag.begin(), dfs_flag.end(), 0);
 
 #pragma omp parallel for schedule(dynamic)
-        // for (int i = 0; i < initialunmatched; i++)
-        for (int i = initialunmatched - 1; i >= 0; i--)
+        for (int i = 0; i < initialunmatched; i++)
+        // for (int i = initialunmatched - 1; i >= 0; i--)
         {
             auto& aug_path_tid = aug_path[omp_get_thread_num()];
 
             int ustart = unmatched_u_init[i];
-            // int augpathlen = dfsAugPath(ustart, dfs_flag, look_ahead_flag, aug_path_tid);
+            int augpathlen = dfsAugPath(ustart, dfs_flag, look_ahead_flag, aug_path_tid);
 
-            int augpathlen = leftLookingDFSAugPath(ustart, dfs_flag, look_ahead_flag, aug_path_tid);
+            // int augpathlen = leftLookingDFSAugPath(ustart, dfs_flag, look_ahead_flag, aug_path_tid);
 
             //augmentation
             for (int j = 0; j < augpathlen; j += 2) {

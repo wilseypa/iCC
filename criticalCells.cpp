@@ -238,7 +238,7 @@ std::vector<int> CritCells<ComplexType, DistMatType>::getMSTEdgeIndices(std::vec
 template <typename ComplexType, typename DistMatType>
 std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseMatch(int maxdimension, double mineps, double maxeps)
 {
-    int threadnum = 1;
+    int threadnum = 4;
 
     std::vector<std::vector<int>> simplex_bin = getEdges(maxeps);
     sortEdge(simplex_bin);

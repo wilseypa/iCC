@@ -33,7 +33,9 @@ private:
     //cycle removal helper function
     int findRoot();
     int getParent(std::vector<int>& parent_workspace, int uidx);
+
     int getChild(std::vector<int>& child_workspace, int uidx);
+
     void getAncestor(std::vector<int>& ancestor_workspace, int rootnum, int uidx);
     bool isBackwardAcyclic(std::vector<int>& ancestor_simp, std::vector<int>& u_child);
     int lookAheadDFS(std::deque<int>& graph_bfs_queue, std::vector<int>& ancestor_simp, std::vector<int>& child_simp, int rootnum, int uidx);
