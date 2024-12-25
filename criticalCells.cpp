@@ -271,9 +271,9 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
         std::cout <<"dim = " <<dim<< "  simp bin active idx size = " << dim_active_index.size() << "  simp bin size = " << simplex_bin.size();
         std::cout <<"  cofacet size = " << cofacet_bin.size() << '\n';
 
-        // bi_graph.parallelKarpSipserInit();
+        bi_graph.parallelKarpSipserInit();
 
-        bi_graph.parallelMaxFacetInit(0, cofacet_bin.size(), 0, simplex_bin.size());
+        // bi_graph.parallelMaxFacetInit(0, cofacet_bin.size(), 0, simplex_bin.size());
 
         if (dim)
         {
@@ -297,10 +297,10 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
             // std::cout<<'\n';
         }
 
-        // if (dim == 3)
+        // if (dim == 2)
         // {   
         //     std::cout<<"before match/rm  ";
-        //     std::vector<int> target_idx{330, 331, 360, 361, 362};
+        //     std::vector<int> target_idx{2, 6, 8, 9, 15, 16};
         //     std::cout<<"dim = "<<dim<<'\n';
         //     bi_graph.checkCofacetByIndex(cofacet_bin, simplex_bin, target_idx);
         //     std::cout<<'\n';
@@ -309,7 +309,16 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
         // if (dim == 3)
         // {   
         //     std::cout<<"before match/rm  ";
-        //     std::vector<int> target_idx{266, 265, 251, 250, 249};
+        //     std::vector<int> target_idx{0, 1, 2, 3, 4};
+        //     std::cout<<"dim = "<<dim<<'\n';
+        //     bi_graph.checkCofacetByIndex(cofacet_bin, simplex_bin, target_idx);
+        //     std::cout<<'\n';
+        // }
+
+        // if (dim == 3)
+        // {   
+        //     std::cout<<"before match/rm  ";
+        //     std::vector<int> target_idx{2, 6, 8, 9, 15, 16};
         //     std::cout<<"dim = "<<dim<<'\n';
         //     bi_graph.checkSimplexByIndex(cofacet_bin, simplex_bin, target_idx);
         //     std::cout<<'\n';
@@ -319,16 +328,34 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
 
         bi_graph.parallelFacetDFSMatch();
 
+        for (int i = 0; i < cofacet_bin.size(); i++)
+        {
+            int imate = bi_graph.match_list[i];
+            if (imate != - 1 && bi_graph.match_list[imate] != i)
+            {
+                std::cout<<"graph error at dim = "<<dim<<"  error uidx = "<<i<<'\n';
+            }
+        }
+
+        for (int i = cofacet_bin.size(); i < cofacet_bin.size() + simplex_bin.size(); i++)
+        {
+            int imate = bi_graph.match_list[i];
+            if (imate != - 1 && bi_graph.match_list[imate] != i)
+            {
+                std::cout<<"graph error at dim = "<<dim<<"  error vidx = "<<i<<'\n';
+            }
+        }
+
         // int reverted = bi_graph.serialCycleRemoval();
         
         int reverted = bi_graph.dfsCycleRemoval();
 
         std::cout << "dim = " << dim << "  reverted = " << reverted << '\n';
 
-        // if (dim == 2)
+        // if (dim == 3)
         // {   
         //     std::cout<<"after match/rm  ";
-        //     std::vector<int> target_idx{28, 29, 119, 120};
+        //     std::vector<int> target_idx{206, 207, 208, 209};
         //     std::cout<<"dim = "<<dim<<'\n';
         //     bi_graph.checkCofacetByIndex(cofacet_bin, simplex_bin, target_idx);
         //     std::cout<<'\n';
@@ -343,10 +370,10 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
         //     std::cout<<'\n';
         // }
 
-        // if (dim == 2)
+        // if (dim == 3)
         // {   
         //     std::cout<<"after match/rm  ";
-        //     std::vector<int> target_idx{17, 33, 37, 52, 61};
+        //     std::vector<int> target_idx{313, 314, 315};
         //     std::cout<<"dim = "<<dim<<'\n';
         //     bi_graph.checkSimplexByIndex(cofacet_bin, simplex_bin, target_idx);
         //     std::cout<<'\n';
@@ -499,7 +526,7 @@ std::vector< std::vector< std::pair<double, double> > > CritCells<ComplexType, D
             bi_graph.buildInterface(cofacet_bin, cofacet_index[m - 1], cofacet_index[m], simplex_bin, simplex_index[m], dim_active_index);
 
             bi_graph.parallelKarpSipserInit();
-            bi_graph.parallelDFSMatch();
+            // bi_graph.parallelDFSMatch();
             int reverted = bi_graph.serialCycleRemoval();
             
             std::cout<<"dim = "<<dim<<"  step = "<<m<<" reverted = "<<reverted<<'\n';

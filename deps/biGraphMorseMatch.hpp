@@ -24,7 +24,7 @@ private:
     bool isRightSinglePath(int cofacetindex);
 
     //parallel bipartite matching helper function
-    int dfsAugPath(int startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<int>& aug_path_tid);
+    int facetDfsAugPath(int startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<int>& aug_path_tid);
 
     int facetRightSinglePathDFSAugPath(int facetindex, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<int>& aug_path_tid);
 
@@ -50,9 +50,9 @@ public:
 
     void parallelMaxFacetInit(int cofacet_index_min, int cofacet_index_max, int facet_index_min, int facet_index_max);
 
-    void parallelDFSMatch();
-
     void parallelFacetDFSMatch();
+
+    void parallelDirectionalFacetDFSMatch();
 
     int serialCycleRemoval();
 

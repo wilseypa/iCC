@@ -22,15 +22,20 @@ void Bi_Graph_Match::parallelKarpSipserInit() {
 
     std::transform(std::execution::par, adj_list.begin(), adj_list.begin() + u, node_deg.begin(), [](const auto& u_adj) { return u_adj.size(); });
 
+    // for (int i = 0; i < 10; i++) std::cout<<adj_list[i].size()<<"  ";
+    // std::cout<<'\n';
+
 #pragma omp parallel for schedule(dynamic)
     for (int i = 0; i < u; i++)
     // for (int i = u -1; i >= 0; i--)
     {
 
-        // if (i == 251) std::cout<<'\n'<<node_deg[i]<<"  "<<adj_list[i].size()<<'\n';
-
         if (node_deg[i] == 1)
+        {
+            // std::cout<<"init non recur/iter start = "<<i<<'\n';
             pairDegreeOne(i, visit_flag, node_deg);
+        }
+            
     }
 
 // #pragma omp parallel for schedule(dynamic)
@@ -50,11 +55,45 @@ void Bi_Graph_Match::parallelKarpSipserInit() {
 }
 
 void Bi_Graph_Match::pairDegreeOne(int uidx, std::vector<int>& visit_flag, std::vector<int>& node_deg) {
+    // if (__sync_fetch_and_add(&(visit_flag[uidx]), 1) != 0) {
+    //     return;
+    // }
+
+    // std::vector<int> dfs_stack;
+
+    // for (const auto& vidx : adj_list[uidx]) {
+    //     if (__sync_fetch_and_add(&(visit_flag[vidx]), 1) == 0) {
+    //         // std::cout<<"pair "<<uidx<<"  "<<vidx<<'\n';
+    //         match_list[uidx] = vidx;
+    //         match_list[vidx] = uidx;
+    //         //update degree of the neighbor of v
+    //         for (const auto& index : adj_list[vidx]) {
+    //             //found new node with degree == 1
+    //             if (__sync_fetch_and_sub(&(node_deg[index]), 1) == 2) dfs_stack.push_back(index);
+    //         }
+    //     }
+    // }
+    // while(!dfs_stack.empty()) {
+    //     int top = std::move(dfs_stack.back());
+    //     dfs_stack.pop_back();
+
+    //     if (__sync_fetch_and_add(&(visit_flag[top]), 1) != 0) continue;
+
+    //     for (const auto& vidx : adj_list[top]) {
+    //         if (__sync_fetch_and_add(&(visit_flag[vidx]), 1) == 0) {
+    //             // std::cout<<"subsequent uidx = "<<top<<"  match v = "<<vidx<<'\n';
+    //             match_list[top] = vidx;
+    //             match_list[vidx] = top;
+    //             for (const auto& index : adj_list[vidx]) {
+    //                 if (__sync_fetch_and_sub(&(node_deg[index]), 1) == 2) dfs_stack.push_back(index);
+    //             }
+    //         }
+    //     }
+    // }
+    // return;
     if (__sync_fetch_and_add(&(visit_flag[uidx]), 1) != 0) {
         return;
     }
-
-    std::vector<int> dfs_stack;
 
     for (const auto& vidx : adj_list[uidx]) {
         if (__sync_fetch_and_add(&(visit_flag[vidx]), 1) == 0) {
@@ -64,27 +103,13 @@ void Bi_Graph_Match::pairDegreeOne(int uidx, std::vector<int>& visit_flag, std::
             //update degree of the neighbor of v
             for (const auto& index : adj_list[vidx]) {
                 //found new node with degree == 1
-                if (__sync_fetch_and_sub(&(node_deg[index]), 1) == 2) dfs_stack.push_back(index);
-            }
-        }
-    }
-    while(!dfs_stack.empty()) {
-        int top = std::move(dfs_stack.back());
-        dfs_stack.pop_back();
-
-        if (__sync_fetch_and_add(&(visit_flag[top]), 1) != 0) continue;
-
-        for (const auto& vidx : adj_list[top]) {
-            if (__sync_fetch_and_add(&(visit_flag[vidx]), 1) == 0) {
-                match_list[top] = vidx;
-                match_list[vidx] = top;
-                for (const auto& index : adj_list[vidx]) {
-                    if (__sync_fetch_and_sub(&(node_deg[index]), 1) == 2) dfs_stack.push_back(index);
+                if (__sync_fetch_and_sub(&(node_deg[index]), 1) == 2) {
+                    pairDegreeOne(index, visit_flag, node_deg);
                 }
             }
+            break;
         }
     }
-    return;
 }
 
 void Bi_Graph_Match::pairUnmatched(int uidx, std::vector<int>& visit_flag) {
@@ -124,46 +149,46 @@ void Bi_Graph_Match::pairUnmatched(int uidx, std::vector<int>& visit_flag) {
 
 void Bi_Graph_Match::elementaryCollapse(int vidx, int umin, int vmin, std::vector<int>& visit_flag_u, std::vector<int>& visit_flag_v, std::vector<int>& node_deg)
 {
-    if (__sync_fetch_and_add(&(visit_flag_v[vidx - vmin]), 1) != 0) return;
+    // if (__sync_fetch_and_add(&(visit_flag_v[vidx - vmin]), 1) != 0) return;
 
-    std::vector<int> dfs_stack;
+    // std::vector<int> dfs_stack;
 
-    for (const auto& uidx: adj_list[vidx])
-    {
-        if (__sync_fetch_and_add(&(visit_flag_u[uidx - umin]), 1) == 0)
-        {
-            match_list[uidx] = vidx;
-            match_list[vidx] = uidx;
-            //update uidx neighbor deg
-            for (const auto& vindex: adj_list[uidx])
-            {
-                if (__sync_fetch_and_sub(&(node_deg[vindex - vmin]), 1) == 2) dfs_stack.push_back(vindex); 
-            }
-        }
-    }
+    // for (const auto& uidx: adj_list[vidx])
+    // {
+    //     if (__sync_fetch_and_add(&(visit_flag_u[uidx - umin]), 1) == 0)
+    //     {
+    //         match_list[uidx] = vidx;
+    //         match_list[vidx] = uidx;
+    //         //update uidx neighbor deg
+    //         for (const auto& vindex: adj_list[uidx])
+    //         {
+    //             if (__sync_fetch_and_sub(&(node_deg[vindex - vmin]), 1) == 2) dfs_stack.push_back(vindex); 
+    //         }
+    //     }
+    // }
 
-    while(!dfs_stack.empty())
-    {
-        int vtop = std::move(dfs_stack.back());
-        dfs_stack.pop_back();
+    // while(!dfs_stack.empty())
+    // {
+    //     int vtop = std::move(dfs_stack.back());
+    //     dfs_stack.pop_back();
 
-        if (__sync_fetch_and_add(&(visit_flag_v[vtop - vmin]), 1) != 0) continue;
+    //     if (__sync_fetch_and_add(&(visit_flag_v[vtop - vmin]), 1) != 0) continue;
         
-        for (const auto& uidx: adj_list[vtop])
-        {
-            if (__sync_fetch_and_add(&(visit_flag_u[uidx - umin]), 1) == 0)
-            {
-                match_list[uidx] = vtop;
-                match_list[vtop] = uidx;
-                for(const auto& vindex: adj_list[uidx])
-                {
-                    if (__sync_fetch_and_sub(&(node_deg[vindex - vmin]), 1) == 2) dfs_stack.push_back(vindex);
-                }
-            }
-        }
-    }
+    //     for (const auto& uidx: adj_list[vtop])
+    //     {
+    //         if (__sync_fetch_and_add(&(visit_flag_u[uidx - umin]), 1) == 0)
+    //         {
+    //             match_list[uidx] = vtop;
+    //             match_list[vtop] = uidx;
+    //             for(const auto& vindex: adj_list[uidx])
+    //             {
+    //                 if (__sync_fetch_and_sub(&(node_deg[vindex - vmin]), 1) == 2) dfs_stack.push_back(vindex);
+    //             }
+    //         }
+    //     }
+    // }
 
-    return;
+    // return;
 }
 
 void Bi_Graph_Match::parallelMaxFacetInit(int cofacet_index_min, int cofacet_index_max, int facet_index_min, int facet_index_max)
@@ -302,29 +327,36 @@ void Bi_Graph_Match::parallelMaxFacetInit(int cofacet_index_min, int cofacet_ind
 }
 
 
-int Bi_Graph_Match::dfsAugPath(int startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<int>& aug_path_tid) {
+int Bi_Graph_Match::facetDfsAugPath(int startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<int>& aug_path_tid) 
+{
     int topindex = -1;
     aug_path_tid[++topindex] = startnode;
 
     while (topindex >= 0) {
-        int uidx = aug_path_tid[topindex];
+        int vidx = aug_path_tid[topindex];
         int endflag = 0;
-        //look ahead, look for u's unmatched neighbor
-        for (const auto& vidx : adj_list[uidx]) {
-            if (__sync_fetch_and_add(&(look_ahead_flag[vidx]), 1) == 0) {
-                if (match_list[vidx] < 0) {
-                    __sync_fetch_and_add(&(dfs_flag[vidx]), 1);
-                    aug_path_tid[++topindex] = vidx;
+        //look ahead, look for v's unmatched neighbor
+        for (const auto& uidx : adj_list[vidx]) 
+        {
+            if (__sync_fetch_and_add(&(look_ahead_flag[uidx]), 1) == 0) 
+            {
+                if (match_list[uidx] < 0) 
+                {
+                    __sync_fetch_and_add(&(dfs_flag[uidx]), 1);
+                    aug_path_tid[++topindex] = uidx;
                     return topindex + 1;    //path length
                 }
             }
         }
         //dfs
-        for (const auto& vidx : adj_list[uidx]) {
-            if (__sync_fetch_and_add(&(dfs_flag[vidx]), 1) == 0) {
-                if (!(match_list[vidx] < 0)) {
-                    aug_path_tid[++topindex] = vidx;
-                    aug_path_tid[++topindex] = match_list[vidx];
+        for (const auto& uidx : adj_list[vidx]) 
+        {
+            if (__sync_fetch_and_add(&(dfs_flag[uidx]), 1) == 0) 
+            {
+                if (match_list[vidx] >= 0) 
+                {
+                    aug_path_tid[++topindex] = uidx;
+                    aug_path_tid[++topindex] = match_list[uidx];
                     endflag = 1;
                     break;
                 }
@@ -799,12 +831,12 @@ int Bi_Graph_Match::lookAheadDFS(std::deque<int>& graph_bfs_queue, std::vector<i
 }
 
 
-void Bi_Graph_Match::parallelDFSMatch() {
-
-    std::vector<int> unmatched_u_init(u, -1);
-    std::vector<int> unmatched_u_final(u, 0);
+void Bi_Graph_Match::parallelFacetDFSMatch() 
+{
+    std::vector<int> unmatched_v_init(v, -1);
+    std::vector<int> unmatched_v_final(v, 0);
     std::vector<int> dfs_flag(u + v, 0);
-    std::vector<int> look_ahead_flag(u + v, 0);
+    std::vector<int> look_ahead_flag(u, 0);
 
     omp_set_num_threads(maxthreadnum);
 
@@ -816,7 +848,7 @@ void Bi_Graph_Match::parallelDFSMatch() {
         int ct = 0;
         std::vector<int> thread_buff;    //overflow? limit its size?
 #pragma omp for
-        for (int i = 0; i < u; i++) 
+        for (int i = u; i < u + v; i++) 
         {
             if (match_list[i] < 0 && adj_list[i].size() > 0) {
                 thread_buff.push_back(i);
@@ -825,10 +857,9 @@ void Bi_Graph_Match::parallelDFSMatch() {
         }
         if (ct > 0) {
             int offset = __sync_fetch_and_add(&initialunmatched, ct);
-            std::copy_n(thread_buff.begin(), ct, unmatched_u_init.begin() + offset);
+            std::copy_n(thread_buff.begin(), ct, unmatched_v_init.begin() + offset);
         }
     }
-
 
     //storing aug path one path per thread
     std::vector<std::vector<int>> aug_path(maxthreadnum, std::vector<int>(u + v, 0));
@@ -845,10 +876,8 @@ void Bi_Graph_Match::parallelDFSMatch() {
         {
             auto& aug_path_tid = aug_path[omp_get_thread_num()];
 
-            int ustart = unmatched_u_init[i];
-            int augpathlen = dfsAugPath(ustart, dfs_flag, look_ahead_flag, aug_path_tid);
-
-            // int augpathlen = leftLookingDFSAugPath(ustart, dfs_flag, look_ahead_flag, aug_path_tid);
+            int vstart = unmatched_v_init[i];
+            int augpathlen = facetDfsAugPath(vstart, dfs_flag, look_ahead_flag, aug_path_tid);
 
             //augmentation
             for (int j = 0; j < augpathlen; j += 2) {
@@ -857,14 +886,14 @@ void Bi_Graph_Match::parallelDFSMatch() {
             }
             //store the unmatched node, need atomic op on the shared count var
             if (augpathlen <= 0)
-                unmatched_u_final[__sync_fetch_and_add(&finalunmatched, 1)] = ustart;
+                unmatched_v_final[__sync_fetch_and_add(&finalunmatched, 1)] = vstart;
         }
 
         if ((finalunmatched == 0) || (initialunmatched == finalunmatched)) {
             break;
         }
         //try more aug paths, let final_unmatched be the init_unmatched
-        std::swap(unmatched_u_init, unmatched_u_final);
+        std::swap(unmatched_v_init, unmatched_v_final);
 
         initialunmatched = finalunmatched;
     }
@@ -873,7 +902,7 @@ void Bi_Graph_Match::parallelDFSMatch() {
     return;   
 }
 
-void Bi_Graph_Match::parallelFacetDFSMatch()
+void Bi_Graph_Match::parallelDirectionalFacetDFSMatch()
 {
     std::vector<int> unmatched_v_init(v, -1);
     std::vector<int> unmatched_v_final(v, 0);
