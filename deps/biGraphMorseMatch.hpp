@@ -34,6 +34,9 @@ private:
 
     int facetRightDFSAugPath(int facetindex, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<int>& aug_path_tid);
 
+    bool add2SingleOrRemove(int index, std::set<int>& single_index, std::set<int>& removed_index);
+    int serialCofacetLeftDFSAugPath(int cofacetindex, std::vector<int>& cofacet_dfs_flag, std::vector<int>& aug_path);
+
     //cycle removal helper function
     int findRoot();
     int getParent(std::vector<int>& parent_workspace, int uidx);
@@ -53,6 +56,8 @@ public:
     void parallelFacetDFSMatch();
 
     void parallelDirectionalFacetDFSMatch();
+
+    void serialCofacetDFSMatch();
 
     int serialCycleRemoval();
 
