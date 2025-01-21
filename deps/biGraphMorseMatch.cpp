@@ -228,20 +228,20 @@ void Bi_Graph_Match::parallelMaxFacetInit(int cofacet_index_min, int cofacet_ind
     }
 
 
-//     //para min cofacet
-// #pragma omp parallel for schedule(static)
-//     for (int i = vmin; i < vmax; i++)
-//     {
-//         if ((match_list[i] < 0) && !(adj_list[i].empty()))
-//         {
-//             //if i's first cofacet is available
-//             if (__sync_fetch_and_add(&(visit_flag_u[adj_list[i][0] - umin]), 1) == 0)
-//             {
-//                 match_list[adj_list[i][0]] = i;
-//                 match_list[i] = adj_list[i][0];
-//             }
-//         }
-//     }
+    //para min cofacet
+#pragma omp parallel for schedule(static)
+    for (int i = vmin; i < vmax; i++)
+    {
+        if ((match_list[i] < 0) && !(adj_list[i].empty()))
+        {
+            //if i's first cofacet is available
+            if (__sync_fetch_and_add(&(visit_flag_u[adj_list[i][0] - umin]), 1) == 0)
+            {
+                match_list[adj_list[i][0]] = i;
+                match_list[i] = adj_list[i][0];
+            }
+        }
+    }
 
 
     // auto unmatched = std::count_if(std::execution::par, match_list.begin() + u, match_list.end(), [](int value) { return value < 0; });

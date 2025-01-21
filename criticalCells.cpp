@@ -278,51 +278,58 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
         if (dim)
         {
             std::vector<int> unmatched_facet;
+            std::vector<double> facet_weight;
             for (int i: dim_active_index)
             {
                 int vidx = i + cofacet_bin.size();
-                if (bi_graph.match_list[vidx] < 0) unmatched_facet.push_back(i);
+                if (bi_graph.match_list[vidx] < 0) 
+                {
+                    unmatched_facet.push_back(i);
+                    facet_weight.push_back(getSimplexWeight(simplex_bin[i]));
+                }
             }
             std::cout<<"dim = "<<dim<<" unmatched facet index after init = ";
             for(int j: unmatched_facet) std::cout<<j<<"  ";
             std::cout<<'\n';
-
-            // std::vector<int> unmatched_cofacet;
-            // for (int i = 0; i < cofacet_bin.size(); i++)
-            // {
-            //     if (bi_graph.match_list[i] < 0) unmatched_cofacet.push_back(i);
-            // }
-            // std::cout<<"dim = "<<dim<<" unmatched cofacet index after init = ";
-            // for(int j: unmatched_cofacet) std::cout<<j<<"  ";
-            // std::cout<<'\n';
+            for(double w: facet_weight) std::cout<<w<<"  ";
+            std::cout<<'\n';
         }
 
-        // if (dim == 2)
-        // {   
-        //     std::cout<<"before match/rm  ";
-        //     std::vector<int> target_idx{2, 6, 8, 9, 15, 16};
-        //     std::cout<<"dim = "<<dim<<'\n';
-        //     bi_graph.checkCofacetByIndex(cofacet_bin, simplex_bin, target_idx);
-        //     std::cout<<'\n';
-        // }
+        if (dim == 2)
+        {   
+            std::cout<<"before match/rm  ";
+            std::vector<int> target_idx{21, 25, 72, 120, 141, 166, 207, 241, 248, 249, 250};
+            std::cout<<"dim = "<<dim<<'\n';
+            bi_graph.checkCofacetByIndex(cofacet_bin, simplex_bin, target_idx);
+            std::cout<<'\n';
+        }
 
-        // if (dim == 3)
-        // {   
-        //     std::cout<<"before match/rm  ";
-        //     std::vector<int> target_idx{0, 1, 2, 3, 4};
-        //     std::cout<<"dim = "<<dim<<'\n';
-        //     bi_graph.checkCofacetByIndex(cofacet_bin, simplex_bin, target_idx);
-        //     std::cout<<'\n';
-        // }
+        if (dim == 2)
+        {   
+            std::cout<<"before match/rm  ";
+            std::vector<int> target_idx{33, 35, 37, 40, 58, 82, 88, 97, 104, 106};
+            std::cout<<"dim = "<<dim<<'\n';
+            bi_graph.checkSimplexByIndex(cofacet_bin, simplex_bin, target_idx);
+            std::cout<<'\n';
+        }
 
-        // if (dim == 3)
-        // {   
-        //     std::cout<<"before match/rm  ";
-        //     std::vector<int> target_idx{2, 6, 8, 9, 15, 16};
-        //     std::cout<<"dim = "<<dim<<'\n';
-        //     bi_graph.checkSimplexByIndex(cofacet_bin, simplex_bin, target_idx);
-        //     std::cout<<'\n';
-        // }
+        if (dim == 3)
+        {   
+            std::cout<<"before match/rm  ";
+            std::vector<int> target_idx{330, 331, 332};
+            std::cout<<"dim = "<<dim<<'\n';
+            bi_graph.checkCofacetByIndex(cofacet_bin, simplex_bin, target_idx);
+            std::cout<<'\n';
+        }
+
+        if (dim == 3)
+        {   
+            std::cout<<"before match/rm  ";
+            std::vector<int> target_idx{249, 250};
+            std::cout<<"dim = "<<dim<<'\n';
+            bi_graph.checkSimplexByIndex(cofacet_bin, simplex_bin, target_idx);
+            std::cout<<'\n';
+        }
 
         // bi_graph.parallelDFSMatch();
 
@@ -363,23 +370,23 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
         //     std::cout<<'\n';
         // }
 
-        // if (dim == 2)
-        // {   
-        //     std::cout<<"after match/rm  ";
-        //     std::vector<int> target_idx{24, 25, 26, 27, 28, 29, 30};
-        //     std::cout<<"dim = "<<dim<<'\n';
-        //     bi_graph.checkCofacetByIndex(cofacet_bin, simplex_bin, target_idx);
-        //     std::cout<<'\n';
-        // }
+        if (dim == 2)
+        {   
+            std::cout<<"after match/rm  ";
+            std::vector<int> target_idx{21, 25, 72, 120, 141, 166, 207, 241, 248, 249, 250};
+            std::cout<<"dim = "<<dim<<'\n';
+            bi_graph.checkCofacetByIndex(cofacet_bin, simplex_bin, target_idx);
+            std::cout<<'\n';
+        }
 
-        // if (dim == 3)
-        // {   
-        //     std::cout<<"after match/rm  ";
-        //     std::vector<int> target_idx{313, 314, 315};
-        //     std::cout<<"dim = "<<dim<<'\n';
-        //     bi_graph.checkSimplexByIndex(cofacet_bin, simplex_bin, target_idx);
-        //     std::cout<<'\n';
-        // }
+        if (dim == 2)
+        {   
+            std::cout<<"after match/rm  ";
+            std::vector<int> target_idx{33, 35, 37, 40, 58, 82, 88, 97, 104, 106};
+            std::cout<<"dim = "<<dim<<'\n';
+            bi_graph.checkSimplexByIndex(cofacet_bin, simplex_bin, target_idx);
+            std::cout<<'\n';
+        }
 
 
         std::vector<int> dim_critical_index = bi_graph.getCriticalIndex(dim_active_index, simplex_bin.size());
