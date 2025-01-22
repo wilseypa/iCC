@@ -611,7 +611,15 @@ int Bi_Graph_Match::serialCofacetLeftDFSAugPath(int cofacetindex, std::vector<in
         }
     }
 
-    // std::cout<<"cofacet dfs done ="<<cofacetindex<<'\n';
+    // if (cofacetindex == 249 && u == 328)
+    // {
+    //     std::cout<<'\n';
+    //     std::cout<<"single path cofacet = ";
+    //     for (auto i: single_cofacet) std::cout<<i<<"  ";
+    //     std::cout<<"\n"<<"single facet = ";
+    //     for (auto i: single_facet) std::cout<<i - u<<"  ";
+    //     std::cout<<'\n';
+    // }
 
     int endflag = 0;
     //pick the largest availble facet. do backward dfs to find the aug path
@@ -636,7 +644,8 @@ int Bi_Graph_Match::serialCofacetLeftDFSAugPath(int cofacetindex, std::vector<in
                 }
 
                 //found eligible backward path
-                if (single_cofacet.contains(uidx) && cofacet_dfs_flag[uidx] < 1)
+                // if (single_cofacet.contains(uidx) && cofacet_dfs_flag[uidx] < 1)
+                if (single_cofacet.contains(uidx))
                 {   
                     // if (uidx == 145)
                     // {

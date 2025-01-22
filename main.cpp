@@ -4,12 +4,12 @@
 #include <fstream>
 
 int main()
-{   std::string filename = "testdata3d_2.csv";
+{   std::string filename = "testdata3d_5.csv";
     CritCells<VR, NormallDistMat> cc(filename);
 
     //auto critical_weight = cc.run_MorseMatchStepwise(3, 17, 1.0);
 
-    auto critical_weight = cc.run_MorseMatch(3, 0, 17);
+    auto critical_weight = cc.run_MorseMatch(3, 0, 1.2);
 
     for(auto& dim_cw: critical_weight)
     {
