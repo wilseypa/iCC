@@ -277,7 +277,7 @@ int Bi_Graph_Match::facetDfsAugPath(int startnode, std::vector<int>& dfs_flag, s
         {
             if (__sync_fetch_and_add(&(dfs_flag[uidx]), 1) == 0) 
             {
-                if (match_list[vidx] >= 0) 
+                if (match_list[uidx] >= 0) 
                 {
                     aug_path_tid[++topindex] = uidx;
                     aug_path_tid[++topindex] = match_list[uidx];
@@ -589,12 +589,6 @@ int Bi_Graph_Match::serialCofacetLeftDFSAugPath(int cofacetindex, std::vector<in
 
         for (auto& vidx: adj_list[topindex])
         {
-            // if (vidx == 664)
-            // {
-            //     std::cout<<"vidx = 664 match = "<<match_list[vidx]<<'\n';
-            //     std::cout<<"vidx = 665 match = "<<match_list[665]<<'\n';
-            //     std::cout<<"uidx = 145 match = "<<match_list[145]<<"  dfs flag = "<<cofacet_dfs_flag[145]<<'\n';
-            // }
 
             if (match_list[vidx] < 0) 
             {
@@ -611,15 +605,17 @@ int Bi_Graph_Match::serialCofacetLeftDFSAugPath(int cofacetindex, std::vector<in
         }
     }
 
-    // if (cofacetindex == 249 && u == 328)
-    // {
-    //     std::cout<<'\n';
-    //     std::cout<<"single path cofacet = ";
-    //     for (auto i: single_cofacet) std::cout<<i<<"  ";
-    //     std::cout<<"\n"<<"single facet = ";
-    //     for (auto i: single_facet) std::cout<<i - u<<"  ";
-    //     std::cout<<'\n';
-    // }
+    if (cofacetindex == 185 && u == 296)
+    {
+        std::cout<<'\n';
+        std::cout<<"single path cofacet = ";
+        for (auto i: single_cofacet) std::cout<<i<<"  ";
+        std::cout<<"\n"<<"single facet = ";
+        for (auto i: single_facet) std::cout<<i - u<<"  ";
+        std::cout<<'\n'<<"removed idx = ";
+        for (auto i: removed_index) std::cout<<i<<"  ";
+        std::cout<<'\n';
+    }
 
     int endflag = 0;
     //pick the largest availble facet. do backward dfs to find the aug path
@@ -975,7 +971,7 @@ void Bi_Graph_Match::parallelFacetDFSMatch()
 
     while (true) {
 
-        // std::cout<<"aug match round "<<'\n';
+        std::cout<<"aug match round "<<'\n';
 
         //shared among threads
         finalunmatched = 0;
@@ -1121,6 +1117,7 @@ int Bi_Graph_Match::dfsCycleRemoval()
     int reverted = 0;
 
     //0: not visited, 1: visiting, 2: visited
+    state_flag.clear();
     state_flag.resize(u, 0);
 
     std::vector<int> dfs_stack;
@@ -1129,9 +1126,19 @@ int Bi_Graph_Match::dfsCycleRemoval()
     std::vector<int> child_workspace;
     child_workspace.reserve(udegree);
 
+
+    if (u == 382) std::cout<<'\n'<<state_flag[241]<<'\n';
+
     for (int i = 0; i < u; i++)
     {
+        if (i == 241 && u == 382)
+        {
+            std::cout<<"in dfs for loop"<<'\n';;
+            std::cout<<state_flag[241]<<"  "<<state_flag[362]<<'\n';
+        }
+
         if (state_flag[i] != 0) continue;
+
 
         dfs_stack.push_back(i);
 
@@ -1139,6 +1146,12 @@ int Bi_Graph_Match::dfsCycleRemoval()
         {
             int top = std::move(dfs_stack.back());
             dfs_stack.pop_back();
+            
+            if (top == 241 && u == 382)
+            {
+                std::cout<<"in dfs while loop"<<'\n';
+                std::cout<<"state flag 241 362 = "<<state_flag[241]<<"  "<<state_flag[362]<<'\n';
+            }
 
             if (state_flag[top] == 0)
             {
@@ -1147,8 +1160,16 @@ int Bi_Graph_Match::dfsCycleRemoval()
 
                 getChild(child_workspace, top);
 
+                
+
                 for (int child: child_workspace)
                 {
+                    if (child == 241 && u == 382)
+                    {
+                        std::cout<<"in dfs child workspace for loop "<<'\n';
+                        std::cout<<"top = "<<top<<'\n';
+                        std::cout<<state_flag[241]<<"  "<<state_flag[362]<<'\n';
+                    }
                     if (state_flag[child] == 0) 
                     {
                         dfs_stack.push_back(child);
