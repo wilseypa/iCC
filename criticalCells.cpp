@@ -144,8 +144,31 @@ int CritCells<ComplexType, DistMatType>::getMaxFacetIndex(const std::vector<int>
 template <typename ComplexType, typename DistMatType>
 void CritCells<ComplexType, DistMatType>::sortSimplex(std::vector<std::vector<int>>& cofacet_bin, const std::vector<std::vector<int>>& facet_bin)
 {
-    std::sort(cofacet_bin.begin(), cofacet_bin.end(), [this, &facet_bin](const auto& lhs, const auto& rhs)
-    { return this->getMaxFacetIndex(lhs, facet_bin) < this->getMaxFacetIndex(rhs, facet_bin); });
+    auto sort_lambda = [this, &cofacet_bin](const auto& lhs, const auto& rhs)
+    {
+        double lhsweight = getSimplexWeight(lhs);
+        double rhsweight = getSimplexWeight(rhs);
+
+        if (lhsweight == rhsweight)    //reverse lexicographic order
+        {
+            auto lhsit = lhs.rbegin();
+            auto rhsit = rhs.rbegin();
+            while (lhsit != lhs.rend())
+            {
+                if (*lhsit != *rhsit) return *lhsit > *rhsit;
+                ++lhsit;
+                ++rhsit;
+            }
+            //duplicate simp. should never be here.
+            return false;
+        } 
+        else
+        {
+            return lhsweight < rhsweight;
+        }
+    };
+
+    std::sort(cofacet_bin.begin(), cofacet_bin.end(), sort_lambda);
 }
 
 
@@ -189,6 +212,7 @@ std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::getCofacetBin
 
     return cofacet_bin;
 }
+
 
 template <typename ComplexType, typename DistMatType>
 int CritCells<ComplexType, DistMatType>::findRoot(std::vector<int> &parent_idx, int x)
