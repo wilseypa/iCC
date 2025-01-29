@@ -499,7 +499,6 @@ int Bi_Graph_Match::facetLeftDFSAugPath(int facetindex, std::vector<int>& dfs_fl
 }
 
 
-
 int Bi_Graph_Match::facetRightDFSAugPath(int facetindex, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<int>& aug_path_tid)
 {
     int topindex = -1;
@@ -605,18 +604,6 @@ int Bi_Graph_Match::serialCofacetLeftDFSAugPath(int cofacetindex, std::vector<in
         }
     }
 
-    if (cofacetindex == 185 && u == 296)
-    {
-        std::cout<<'\n';
-        std::cout<<"single path cofacet = ";
-        for (auto i: single_cofacet) std::cout<<i<<"  ";
-        std::cout<<"\n"<<"single facet = ";
-        for (auto i: single_facet) std::cout<<i - u<<"  ";
-        std::cout<<'\n'<<"removed idx = ";
-        for (auto i: removed_index) std::cout<<i<<"  ";
-        std::cout<<'\n';
-    }
-
     int endflag = 0;
     //pick the largest availble facet. do backward dfs to find the aug path
     for (auto rit = single_facet.rbegin(); rit != single_facet.rend(); rit++)
@@ -672,6 +659,17 @@ int Bi_Graph_Match::serialCofacetLeftDFSAugPath(int cofacetindex, std::vector<in
     }
     
     return -1;
+}
+
+std::vector<int> Bi_Graph_Match::getBackwardSingleFacet(int facetindex)
+{
+    std::vector<int> dfs_stack;
+
+    std::set<int> single_facet;
+    std::set<int> removed_index;
+
+    
+
 }
 
 void Bi_Graph_Match::serialCofacetDFSMatch()
@@ -1289,18 +1287,6 @@ std::vector<int> Bi_Graph_Match::getCriticalIndex(const std::vector<int>& dim_ac
         {
             if (std::find(dim_active_index.begin(), dim_active_index.end(), (i - u)) != dim_active_index.end()) 
             {
-                // int ct = 0;
-                // for(auto j: adj_list[i])
-                // {
-                //     if (match_list[j] < 0) ct += 1;
-                // }
-                // std::cout<<"crit index = "<<i - u<<"  unmatched neighbor = "<<ct<<'\n';
-                //std::cout<<"crit index = "<<i - u<<" neighbor size = "<<adj_list[i].size()<<'\n';
-                // if (adj_list[i].size() == 0)
-                // {
-                //     std::cout<<"crit index = "<<*(std::find(dim_active_index.begin(), dim_active_index.end(), (i - u)))<<'\n';
-                // }
-
                 critical_index.push_back(i - u);
             }
         }            

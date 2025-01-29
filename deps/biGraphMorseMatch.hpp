@@ -37,6 +37,8 @@ private:
     bool add2SingleOrRemove(int index, std::set<int>& single_index, std::set<int>& removed_index);
     int serialCofacetLeftDFSAugPath(int cofacetindex, std::vector<int>& cofacet_dfs_flag, std::vector<int>& aug_path);
 
+    std::vector<int> getBackwardSingleFacet(int facetindex);
+
     //cycle removal helper function
     int findRoot();
     int getParent(std::vector<int>& parent_workspace, int uidx);
@@ -68,8 +70,6 @@ public:
     Bi_Graph_Match(int leftnum, int rightnum, int leftdim, int threadnum);
 
     void updateDimension(int newleftnum, int newrightnum);
-
-    // bool isFacet(std::vector<int>& cofacet, std::vector<int>& facet);
 
     void buildInterface(const std::vector<std::vector<int>>& cofacet_bin, int cofacet_index_min, int cofacet_index_max, const std::vector<std::vector<int>>& simplex_bin, int simplex_index_max, const std::vector<int>& active_index);
 

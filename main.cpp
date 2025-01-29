@@ -9,7 +9,7 @@ int main()
 
     //auto critical_weight = cc.run_MorseMatchStepwise(3, 17, 1.0);
 
-    auto critical_weight = cc.run_MorseMatch(3, 0, 17);
+    auto critical_weight = cc.run_MorseMatch(3, 0, 12);
 
     for(auto& dim_cw: critical_weight)
     {

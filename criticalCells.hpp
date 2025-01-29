@@ -107,6 +107,7 @@ public:
     std::vector<int> getMSTEdgeIndices(std::vector<std::vector<int>>& sorted_edges);
     std::vector<std::vector<double>> run_MorseMatch(int maxdimension, double mineps, double maxeps);
 
+    std::vector< std::vector< std::pair<double, double> > > run_MorseMatchPersistence(int maxdimension, double mineps, double maxeps);
 
     double getMinimumEpsilon(std::vector<int>& mst_edge_index, std::vector<std::vector<int>>& sorted_edges, double stepsize);
     std::vector<int> getStepwiseIndex(std::vector<std::vector<int>>& simplex_bin, double mineps, double maxeps, double stepsize);
