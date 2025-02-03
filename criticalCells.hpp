@@ -105,7 +105,10 @@ public:
     int findRoot(std::vector<int>& parent_idx, int x);
     void setUnion(std::vector<int>& parent_idx, int x, int y);
     std::vector<int> getMSTEdgeIndices(std::vector<std::vector<int>>& sorted_edges);
-    std::vector<std::vector<double>> run_MorseMatch(int maxdimension, double mineps, double maxeps);
+    
+    std::vector<std::vector<double>> run_MorseMatch(int maxdimension, double mineps, double maxeps, int threadnumber);
+
+    std::vector<double> getApproxDeathWeight(std::vector<std::vector<int>>& facet_bin, std::vector<std::set<int>>& backward_facet_index, double maxeps);
 
     std::vector< std::vector< std::pair<double, double> > > run_MorseMatchPersistence(int maxdimension, double mineps, double maxeps);
 

@@ -661,16 +661,67 @@ int Bi_Graph_Match::serialCofacetLeftDFSAugPath(int cofacetindex, std::vector<in
     return -1;
 }
 
-std::vector<int> Bi_Graph_Match::getBackwardSingleFacet(int facetindex)
+std::set<int> Bi_Graph_Match::criticalFacetBackwardSearch(int facetindex)
 {
+    //facet index is the index in simplex/facet bin
+    //facetindex + u = index in bi graph
     std::vector<int> dfs_stack;
+    dfs_stack.push_back(facetindex + u);
 
     std::set<int> single_facet;
     std::set<int> removed_index;
 
-    
+    single_facet.insert(facetindex);
 
+    while(!dfs_stack.empty())
+    {
+        int top = dfs_stack.back();
+        dfs_stack.pop_back();
+
+        for (auto uidx: adj_list[top])
+        { 
+            if (match_list[uidx] < 0) continue;
+
+            int vidx = match_list[uidx];
+
+            if (vidx != top)
+            {
+                dfs_stack.push_back(vidx);
+                add2SingleOrRemove(vidx - u, single_facet, removed_index);
+            }
+        }
+    }
+
+    return single_facet;
 }
+
+
+std::vector<std::set<int>> Bi_Graph_Match::getBackwardSingleFacetIndex(std::vector<int> critical_facet_index)
+{
+    std::vector<std::set<int>> backward_single_facet_index;
+
+    for (auto ci : critical_facet_index)
+    {
+        std::set<int> ci_backward_index = criticalFacetBackwardSearch(ci);
+
+        //remove duplicates with previous ci's
+        for (auto& facet_index_set: backward_single_facet_index)
+        {
+            for (auto i: facet_index_set)
+            {
+                auto it = ci_backward_index.find(i);
+                if (it != ci_backward_index.end()) ci_backward_index.erase(it);
+            }
+        }
+
+        backward_single_facet_index.push_back(ci_backward_index);
+
+        
+    }
+
+    return backward_single_facet_index;
+}
+
 
 void Bi_Graph_Match::serialCofacetDFSMatch()
 {
@@ -694,7 +745,7 @@ void Bi_Graph_Match::serialCofacetDFSMatch()
     {
         //do not reset dfs flag
 
-        std::cout<<"dfs round "<<'\n';
+        // std::cout<<"dfs round "<<'\n';
 
         for (int i = 0; i < initialunmatched; i++)
         {
@@ -969,7 +1020,7 @@ void Bi_Graph_Match::parallelFacetDFSMatch()
 
     while (true) {
 
-        std::cout<<"aug match round "<<'\n';
+        // std::cout<<"aug match round "<<'\n';
 
         //shared among threads
         finalunmatched = 0;

@@ -178,7 +178,7 @@ std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::getCofacetBin
     std::vector<std::vector<int>> cofacet_bin;
     size_t npts = this->distMatrix.size();
 
-    omp_set_num_threads(1);
+    omp_set_num_threads(threadnum);
     std::vector<std::vector<int>> thread_workspace(facet_bin.size(), std::vector<int>());
 
 #pragma omp parallel for
@@ -260,13 +260,12 @@ std::vector<int> CritCells<ComplexType, DistMatType>::getMSTEdgeIndices(std::vec
 }
 
 template <typename ComplexType, typename DistMatType>
-std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseMatch(int maxdimension, double mineps, double maxeps)
+std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseMatch(int maxdimension, double mineps, double maxeps, int threadnumber)
 {
-    int threadnum = 1;
+    int threadnum = threadnumber;
 
     std::vector<std::vector<int>> simplex_bin = getEdges(maxeps);
     sortEdge(simplex_bin);
-    // std::vector<std::vector<int>> simplex_bin = getEdgesByWeightRange(sorted_edges, mineps, maxeps);
 
     std::vector<int> mst_edge_index = getMSTEdgeIndices(simplex_bin);
 
@@ -299,25 +298,25 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
 
         bi_graph.parallelMaxFacetInit(0, cofacet_bin.size(), 0, simplex_bin.size());
 
-        if (dim)
-        {
-            std::vector<int> unmatched_facet;
-            std::vector<double> facet_weight;
-            for (int i: dim_active_index)
-            {
-                int vidx = i + cofacet_bin.size();
-                if (bi_graph.match_list[vidx] < 0) 
-                {
-                    unmatched_facet.push_back(i);
-                    facet_weight.push_back(getSimplexWeight(simplex_bin[i]));
-                }
-            }
-            std::cout<<"dim = "<<dim<<" unmatched facet index after init = ";
-            for(int j: unmatched_facet) std::cout<<j<<"  ";
-            std::cout<<'\n';
-            for(double w: facet_weight) std::cout<<w<<"  ";
-            std::cout<<'\n';
-        }
+        // if (dim)
+        // {
+        //     std::vector<int> unmatched_facet;
+        //     std::vector<double> facet_weight;
+        //     for (int i: dim_active_index)
+        //     {
+        //         int vidx = i + cofacet_bin.size();
+        //         if (bi_graph.match_list[vidx] < 0) 
+        //         {
+        //             unmatched_facet.push_back(i);
+        //             facet_weight.push_back(getSimplexWeight(simplex_bin[i]));
+        //         }
+        //     }
+        //     std::cout<<"dim = "<<dim<<" unmatched facet index after init = ";
+        //     for(int j: unmatched_facet) std::cout<<j<<"  ";
+        //     std::cout<<'\n';
+        //     for(double w: facet_weight) std::cout<<w<<"  ";
+        //     std::cout<<'\n';
+        // }
 
         // if (dim == 2)
         // {   
@@ -365,44 +364,31 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
         //     std::cout<<'\n';
         // }
 
-        // bi_graph.parallelDFSMatch();
-
         // bi_graph.parallelFacetDFSMatch();
 
         bi_graph.serialCofacetDFSMatch();
         
-        // if (dim == 2)
+        // for (int i = 0; i < cofacet_bin.size(); i++)
         // {
-        //     int temp = bi_graph.match_list[185];
-        //     bi_graph.match_list[185] = -1;
-        //     bi_graph.match_list[temp] = -1;
+        //     int imate = bi_graph.match_list[i];
+        //     if (imate != - 1 && bi_graph.match_list[imate] != i)
+        //     {
+        //         std::cout<<"graph error at dim = "<<dim<<"  error uidx = "<<i<<'\n';
+        //     }
         // }
 
-        for (int i = 0; i < cofacet_bin.size(); i++)
-        {
-            int imate = bi_graph.match_list[i];
-            if (imate != - 1 && bi_graph.match_list[imate] != i)
-            {
-                std::cout<<"graph error at dim = "<<dim<<"  error uidx = "<<i<<'\n';
-            }
-        }
+        // for (int i = cofacet_bin.size(); i < cofacet_bin.size() + simplex_bin.size(); i++)
+        // {
+        //     int imate = bi_graph.match_list[i];
+        //     if (imate != - 1 && bi_graph.match_list[imate] != i)
+        //     {
+        //         std::cout<<"graph error at dim = "<<dim<<"  error vidx = "<<i<<'\n';
+        //     }
+        // }
 
-        for (int i = cofacet_bin.size(); i < cofacet_bin.size() + simplex_bin.size(); i++)
-        {
-            int imate = bi_graph.match_list[i];
-            if (imate != - 1 && bi_graph.match_list[imate] != i)
-            {
-                std::cout<<"graph error at dim = "<<dim<<"  error vidx = "<<i<<'\n';
-            }
-        }
+        // int reverted = bi_graph.dfsCycleRemoval();
 
-        // int reverted = bi_graph.serialCycleRemoval();
-
-        
-        
-        int reverted = bi_graph.dfsCycleRemoval();
-
-        std::cout << "dim = " << dim << "  reverted = " << reverted << '\n';
+        // std::cout << "dim = " << dim << "  reverted = " << reverted << '\n';
 
         // if (dim == 2)
         // {   
@@ -455,21 +441,9 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
 
 
         dim_active_index = bi_graph.getActiveIndex();
-        // if (dim == 2)
-        // {
-        //     dim_active_index.resize(cofacet_bin.size(), 0);
-        //     std::iota(dim_active_index.begin(), dim_active_index.end(), 0);
-        // }
+
         std::cout << "cofact active idx size = " << dim_active_index.size() << "  cofacet size = " << cofacet_bin.size() << '\n';
         
-        // if (dim == 3)
-        // {   
-        //     std::cout<<"after cycle rm  ";
-        //     std::vector<std::vector<int>> target_simp{{6, 11, 16}, {9, 11, 16}, {11, 12, 16}, {11, 16, 19}};
-        //     std::cout<<"dim = "<<dim<<'\n';
-        //     bi_graph.checkSimplex(cofacet_bin, simplex_bin, target_simp);
-        //     std::cout<<'\n';
-        // }
 
         // std for each
         std::vector<double> dim_critical_weight;
@@ -488,21 +462,58 @@ std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseM
         }
 
         
-        
-
-        // else
-        // {
-        //     for (auto i : dim_active_index)
-        //     {
-        //         double weight = getSimplexWeight(cofacet_bin[i]);
-        //         dim_critical_weight.push_back(weight);
-        //     }
-        //     critical_weight.push_back(std::move(dim_critical_weight));
-        // }
     }
 
     return critical_weight;
 }
+
+template <typename ComplexType, typename DistMatType>
+std::vector<double> CritCells<ComplexType, DistMatType>::getApproxDeathWeight(std::vector<std::vector<int>>& facet_bin, std::vector<std::set<int>>& backward_facet_index, double maxeps)
+{
+    std::vector<double> death_weight;
+
+    size_t npts = this->distMatrix.size();
+
+    omp_set_num_threads(1);
+
+    std::vector<std::vector<int>> thread_workspace(facet_bin.size(), std::vector<int>());
+
+    for (auto& facet_index_set: backward_facet_index)
+    {
+        std::vector<double> thread_workspace(facet_index_set.size(), maxeps);
+
+        //***********************fix later***********************************//
+        double minweight = 9999;
+
+#pragma omp parallel for
+        for (size_t i = 0; i < facet_index_set.size(); i++)
+        {
+            auto idx = *std::next(facet_index_set.begin(), i);
+
+            for (size_t j = 0; j < npts; j++)
+            {
+                if (std::find(facet_bin[idx].begin(), facet_bin[idx].end(), j) != facet_bin[idx].end()) continue;
+                
+                auto weight_lambda = [this, j](auto first, auto second)
+                                    { double firstweight = (first < j) ? this->distMatrix[first][j] : this->distMatrix[j][first];
+                                      double secondweight = (second < j) ? this->distMatrix[second][j] : this->distMatrix[j][second];
+                                      return firstweight < secondweight; };
+
+                auto maxidx = *std::max_element(facet_bin[idx].begin(), facet_bin[idx].end(), weight_lambda);
+
+                double cofacetweight = (maxidx < j) ? this->distMatrix[maxidx][j] : this->distMatrix[j][maxidx];
+
+                if (cofacetweight > maxeps && cofacetweight < minweight) minweight = cofacetweight;
+            }
+            thread_workspace[i] = minweight;
+        }
+
+        double dweight = *std::min_element(thread_workspace.begin(), thread_workspace.end());
+        death_weight.push_back(dweight);
+    }
+    return death_weight;
+}
+
 
 template <typename ComplexType, typename DistMatType>
 std::vector< std::vector< std::pair<double, double> > > CritCells<ComplexType, DistMatType>::run_MorseMatchPersistence(int maxdimension, double mineps, double maxeps)
@@ -521,12 +532,12 @@ std::vector< std::vector< std::pair<double, double> > > CritCells<ComplexType, D
             dim_active_index.push_back(i);
     }
 
-    std::vector<std::vector<double>> critical_weight;
-    critical_weight.push_back(std::vector<double>{0});
+    // std::vector<std::vector<double>> critical_weight;
+    // critical_weight.push_back(std::vector<double>{0});
 
     std::vector< std::vector< std::pair<double, double> > > persistent_pairs;
     //H0.
-    persistent_pairs.push_back(std::vector< std::pair<double, double> >{std::make_pair(0, maxeps)});
+    persistent_pairs.push_back(std::vector< std::pair<double, double> >{std::make_pair(0, -1)});
 
     int initleftdeg = 3; // cofacet of edge, tri
 
@@ -546,18 +557,13 @@ std::vector< std::vector< std::pair<double, double> > > CritCells<ComplexType, D
 
         // bi_graph.parallelFacetDFSMatch();
 
-        bi_graph.serialCofacetDFSMatch();
-         
-        // int reverted = bi_graph.dfsCycleRemoval();
-
-        // std::cout << "dim = " << dim << "  reverted = " << reverted << '\n';
-
-        // if (dim == 3)
+        // if (dim == 2)
         // {   
-        //     std::cout<<"after match/rm  ";
-        //     std::vector<int> target_idx{184, 185, 227, 265, 266, 267, 268};
+        //     std::cout<<"before match/rm  ";
+        //     std::vector<int> target_idx{37, 52, 77};
         //     std::cout<<"dim = "<<dim<<'\n';
         //     bi_graph.checkSimplexByIndex(cofacet_bin, simplex_bin, target_idx);
+
         //     for(auto i: target_idx)
         //     {
         //         std::cout<<getSimplexWeight(simplex_bin[i])<<"  ";
@@ -565,22 +571,31 @@ std::vector< std::vector< std::pair<double, double> > > CritCells<ComplexType, D
         //     std::cout<<'\n';
         // }
 
+        bi_graph.serialCofacetDFSMatch();
+         
+        // int reverted = bi_graph.dfsCycleRemoval();
+
+        // std::cout << "dim = " << dim << "  reverted = " << reverted << '\n';
 
         std::vector<int> dim_critical_index = bi_graph.getCriticalIndex(dim_active_index, simplex_bin.size());
 
-        
+        std::vector<std::set<int>> backward_facet = bi_graph.getBackwardSingleFacetIndex(dim_critical_index);
 
-        dim_active_index = bi_graph.getActiveIndex();
+        std::vector<double> approx_death_weight = getApproxDeathWeight(simplex_bin, backward_facet, maxeps);
 
+        for (auto w: approx_death_weight) std::cout<<w<<"   ";
+        std::cout<<'\n';
 
-        // std for each
-        std::vector<double> dim_critical_weight;
-        for (auto i : dim_critical_index)
+        std::vector< std::pair<double, double> > dim_persis_pair;
+        for (size_t i = 0; i < dim_critical_index.size(); i++)
         {
-            double weight = getSimplexWeight(simplex_bin[i]);
-            dim_critical_weight.push_back(weight);
+            int idx = dim_critical_index[i];
+            double weight = getSimplexWeight(simplex_bin[idx]);
+            dim_persis_pair.push_back(std::make_pair(weight, approx_death_weight[i]));
         }
-        critical_weight.push_back(std::move(dim_critical_weight));
+        persistent_pairs.push_back(std::move(dim_persis_pair));
+        
+        dim_active_index = bi_graph.getActiveIndex();
 
         if (dim < maxdimension)
         {
@@ -588,11 +603,9 @@ std::vector< std::vector< std::pair<double, double> > > CritCells<ComplexType, D
             std::swap(simplex_bin, cofacet_bin);
             bi_graph.updateDimension(cofacet_bin.size(), simplex_bin.size());
         }
-
-        
-        // }
-    }
-
+    } 
+    
+    return persistent_pairs;
 }
 
 

@@ -37,7 +37,8 @@ private:
     bool add2SingleOrRemove(int index, std::set<int>& single_index, std::set<int>& removed_index);
     int serialCofacetLeftDFSAugPath(int cofacetindex, std::vector<int>& cofacet_dfs_flag, std::vector<int>& aug_path);
 
-    std::vector<int> getBackwardSingleFacet(int facetindex);
+    std::set<int> criticalFacetBackwardSearch(int facetindex);
+    
 
     //cycle removal helper function
     int findRoot();
@@ -76,6 +77,8 @@ public:
     std::vector<int> getActiveIndex(); 
     
     std::vector<int> getCriticalIndex(const std::vector<int>& dim_active_index, int simplex_index_max);
+
+    std::vector<std::set<int>> getBackwardSingleFacetIndex(std::vector<int> critical_facet_index);
 
     //move to private later
     std::vector<std::vector<int>> adj_list;
