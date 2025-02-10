@@ -3,6 +3,7 @@
 #include "hopcroft_karp.hpp"
 #include "criticalCells.hpp"
 #include "biGraphMorseMatch.hpp"
+
 #include "omp.h"
 
 #include <numeric>
@@ -829,3 +830,179 @@ std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::dimMatching(s
     }
     return critCells;
 }
+
+
+//rewrite
+template <typename ComplexType, typename DistMatType>
+std::vector<std::vector<int64_t>> CritCells<ComplexType, DistMatType>::getBinomialTable(const size_t vtnum, const size_t maxdim)
+{   
+    //binom table by rows. same as lhf
+    std::vector<std::vector<int64_t>> binom_table(vtnum + 1, std::vector<int64_t>(maxdim + 1 + 1, 0));
+
+    binom_table[0][0] = 1;
+    for(size_t i = 1; i <= n; i++)
+    {
+        binom_table[i][0] = 1;
+        for (size_t j = 1; j <= maxdim; j++)
+        {
+            binom_table[i][j] = binom_table[i - 1][j - 1] + binom_table[i - 1][j];
+            if (binom_table[i][j] < 0) throw std::overflow_error("Binomial Overflow Error!");
+        }
+    }
+
+    return binom_table;
+}
+
+template <typename ComplexType, typename DistMatType>
+int64_t CritCells<ComplexType, DistMatType>::getBinomialIndex(const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<size_t>& simplex_vt, const size_t shift = 0)    //shift is used for cofacet enum
+{
+    int64_t bindex = 0;
+    size_t k = simplex_vt.size();
+
+    //simplex_vt is sorted in descending order
+    for (auto it = simplex_vt.begin(); it != simplex_vt.end(); it++)
+    {
+        bindex += binomial_table[*it][k + shift];
+        if (bindex < 0) throw std::overflow_error("Binomial overflow in get simplex binomial index.");
+        k--;
+    }
+
+    return bindex;
+}
+
+template <typename ComplexType, typename DistMatType>
+int64_t CritCells<ComplexType, DistMatType>::getEdgeBinomialIndex(const std::vector<std::vector<int64_t>>& binomial_table, const size_t j, const size_t i)
+{
+    //assume j > i
+    if (j < i) std::swap(i, j);
+
+    return (binomial_table[j][2] + i);
+}
+
+
+template <typename ComplexType, typename DistMatType>
+size_t CritCells<ComplexType, DistMatType>::getSimplexMaxVertex(const std::vector<std::vector<int64_t>>& binomial_table, const int64_t bindex, size_t vtnum, const size_t dim)
+{   
+    //top = vtnum - 1, bottom = dim
+    if (binomial_table[vtnum - 1][dim + 1] > bindex)
+    {
+        size_t span = vtnum - dim;
+        while (span > 0)
+        {
+            size_t half = span >> 1;
+            size_t mid = vtnum - half;
+            if (binomial_table[mid][dim + 1] > bindex)
+            {
+                vtnum = mid - 1;
+                span -= (half + 1);
+            }
+            else span = half;
+        }
+    }
+    //return top
+    return vtnum;
+}
+
+template <typename ComplexType, typename DistMatType>
+std::vector<size_t> CritCells<ComplexType, DistMatType>::getSimplexVertices(const std::vector<std::vector<int64_t>>& binomial_table, int64_t bindex, size_t vtnum, size_t dim)
+{
+    //max vertex index = vtnum - 1
+    std::vector<size_t> simplex_vt;
+    simplex_vt.reserve(dim + 1);
+
+    for (size_t k = dim; k >= 0; k--)
+    {
+        vtnum = getSimplexMaxVertex(binomial_table, bindex, vtnum, k);
+        bindex -= binomial_table[vtnum][k + 1];
+        simplex_vt.push_back(vtnum);
+    }
+
+    return simplex_vt;
+}
+
+template <typename ComplexType, typename DistMatType>
+void CritCells<ComplexType, DistMatType>::sortSimplexByWeightThenIndex(std::vector<std::pair<int64_t, double>>& simplex_list)
+{
+    auto sort_lambda = [](const auto& lhs, const auto& rhs){ return (lhs.second < rhs.second) || ((lhs.second == rhs.second) && (lhs.first < rhs.first)); };
+
+    std::sort(simplex_list.begin(), simplex_list.end(), sort_lambda);
+
+    return;
+}
+
+template <typename ComplexType, typename DistMatType>
+std::vector<std::pair<int64_t, double>> CritCells<ComplexType, DistMatType>::getSortedEdge(const std::vector<std::vector<int64_t>>& binomial_table, const double maxeps)
+{
+    std::vector<std::pair<int64_t, double>> sorted_edge;
+
+    size_t npt = this->distMatrx.size();
+
+    for (size_t i = 0; i < npt - 1; i++)
+    {
+        for (size_t j = i + 1; j < npt; j++)
+        {
+            double weight = this->distMatrix[i][j];
+            if (weight < maxeps)
+            {
+                int64_t bindex = getEdgeBinomialIndex(binomial_table, j, i);
+                sorted_edge.push_back(std::make_pair(bindex, weight));
+            }
+        }
+    }
+
+    sortSimplexByWeightThenIndex(sorted_edge);
+
+    return sorted_edge;
+}
+
+template <typename ComplexType, typename DistMatType>
+size_t CritCells<ComplexType, DistMatType>::mstFindRoot(std::vector<size_t>& parent_idx, size_t x)
+{
+    while (parent_idx[x] != x)
+    {
+        parent_idx[x] = parent_idx[parent_idx[x]];
+        x = parent_idx[x];
+    }
+
+    return x;
+}
+
+template <typename ComplexType, typename DistMatType>
+void CritCells<ComplexType, DistMatType>::mstSetUnion(std::vector<size_t>& parent_idx, size_t x, size_t y)
+{
+    size_t p = mstFindRoot(parent_idx, x);
+    size_t q = mstFindRoot(parent_idx, y);
+    parent_idx[p] = parent_idx[q];
+    return;
+}
+
+template <typename ComplexType, typename DistMatType>
+robin_hood::unordered_map<int64_t, size_t> CritCells<ComplexType, DistMatType>::getActiveEdgeIndexHashTable(const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<std::pair<int64_t, double>>& sorted_edge)
+{
+    robin_hood::unordered_map<int64_t, size_t> active_edge_index;
+    
+    size_t npt = this->distMatrix.size();
+
+    std::vector<size_t> parent_idx(npt);
+    std::iota(parent_idx.begin(), parent_idx.end(), 0);
+
+    size_t x, y;
+    int64_t bindex;
+    size_t m = sorted_edge.size();
+    std::vector<size_t> edge_vt;
+    for (auto i = 0; i < m; i++)
+    {
+        bindex = sorted_edge[i].first;
+        edge_vt = getSimplexVertices(binomial_table, bindex, npt, 1);
+        x = edge_vt[0];
+        y = edge_vt[1];
+        if (mstFindRoot(parent_idx, x) != mstFindRoot(parent_idx, y))
+        {
+            mstSetUnion(parent_idx, x, y);
+            active_edge_index.insert(std::make_pair(bindex, i));
+        }
+    }
+
+    return active_edge_index;
+}
+

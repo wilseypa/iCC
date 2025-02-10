@@ -13,6 +13,7 @@ add_subdirectory(deps)
 
 # Create library for CriticalCells
 add_library(CriticalCells SHARED criticalCells.cpp criticalCells.hpp)
+target_include_directories(CriticalCells PUBLIC ${CMAKE_SOURCE_DIR}/deps)
 target_link_libraries(CriticalCells PUBLIC Eigen3::Eigen hopcroft_karp readInput distMat OpenMP::OpenMP_CXX biGraphMorseMatch) 
 
 if(MPI_FOUND)

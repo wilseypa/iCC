@@ -9,6 +9,11 @@
 
 #include <set>
 
+#include<cstdint>
+
+#include"robin_hood.h"
+
+
 std::ostream &operator<<(std::ostream &os, const std::map<double, std::vector<std::vector<int>>> &bins)
 {
     for (const auto &[weight, simplexes] : bins)
@@ -115,6 +120,29 @@ public:
     double getMinimumEpsilon(std::vector<int>& mst_edge_index, std::vector<std::vector<int>>& sorted_edges, double stepsize);
     std::vector<int> getStepwiseIndex(std::vector<std::vector<int>>& simplex_bin, double mineps, double maxeps, double stepsize);
     std::vector< std::vector< std::pair<double, double> > > run_MorseMatchStepwise(int maxdimension, double maxeps, double stepsize);
+
+    //rewrite
+    std::vector<std::vector<int64_t>> getBinomialTable(const size_t vtnum, const size_t maxdim);
+
+    int64_t getBinomialIndex(const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<size_t>& simplex_vt, const size_t shift = 0);
+
+    int64_t getEdgeBinomialIndex(const std::vector<std::vector<int64_t>>& binomial_table, const size_t j, const size_t i);
+
+    size_t getSimplexMaxVertex(const std::vector<std::vector<int64_t>>& binomial_table, const int64_t bindex, size_t vtnum, const size_t dim);
+
+    std::vector<size_t> getSimplexVertices(const std::vector<std::vector<int64_t>>& binomial_table, int64_t bindex, size_t vtnum, size_t dim);
+
+    void sortSimplexByWeightThenIndex(std::vector<std::pair<int64_t, double>>& simplex_list);
+    
+    std::vector<std::pair<int64_t, double>> getSortedEdge(const std::vector<std::vector<int64_t>>& binomial_table, const double maxeps);
+
+    size_t mstFindRoot(std::vector<size_t>& parent_idx, size_t x);
+
+    void mstSetUnion(std::vector<size_t>& parent_idx, size_t x, size_t y);
+
+    robin_hood::unordered_map<int64_t, size_t> getActiveEdgeIndexHashTable(const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<std::pair<int64_t, double>>& sorted_edge);
+
+    
 
 
 private:

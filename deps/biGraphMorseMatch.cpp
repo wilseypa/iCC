@@ -254,9 +254,11 @@ void Bi_Graph_Match::parallelMaxFacetInit(int cofacet_index_min, int cofacet_ind
 int Bi_Graph_Match::facetDfsAugPath(int startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<int>& aug_path_tid) 
 {
     int topindex = -1;
+    int firstlookahead = u + 1;
     aug_path_tid[++topindex] = startnode;
 
-    while (topindex >= 0) {
+    while (topindex >= 0) 
+    {
         int vidx = aug_path_tid[topindex];
         int endflag = 0;
         //look ahead, look for v's unmatched neighbor
@@ -265,16 +267,50 @@ int Bi_Graph_Match::facetDfsAugPath(int startnode, std::vector<int>& dfs_flag, s
             if (__sync_fetch_and_add(&(look_ahead_flag[uidx]), 1) == 0) 
             {
                 if (match_list[uidx] < 0) 
-                {
-                    __sync_fetch_and_add(&(dfs_flag[uidx]), 1);
-                    aug_path_tid[++topindex] = uidx;
-                    return topindex + 1;    //path length
+                {   
+
+                    //if uidx is the first lookahead. save it can continue
+                    // if (vidx == startnode)
+                    // {
+                    //     __sync_fetch_and_add(&(dfs_flag[uidx]), 1);
+                    //     firstlookahead = uidx;
+                    //     break;
+                    // }
+
+                    //for the later lookahead. compare with first lookahead
+                    if (uidx < firstlookahead)
+                    {
+                        __sync_fetch_and_add(&(dfs_flag[uidx]), 1);
+
+                        if (firstlookahead < u + 1)
+                        {
+                            __sync_fetch_and_sub(&(look_ahead_flag[firstlookahead]), 1);    //recover the status of firstlookahead
+                            __sync_fetch_and_sub(&(dfs_flag[firstlookahead]), 1);
+                        }
+                        aug_path_tid[++topindex] = uidx;
+                        return topindex + 1;    //path length
+                    }
+                    else
+                    {   
+                        //reset lookahead flag
+                        __sync_fetch_and_sub(&(look_ahead_flag[uidx]), 1);
+                        while (topindex > 0)
+                        {
+                            //recover path status
+                            __sync_fetch_and_sub(&(dfs_flag[aug_path_tid[topindex]]), 1);
+                            topindex -= 1;
+                        }
+                        aug_path_tid[++topindex] = firstlookahead;
+                        return topindex + 1;
+                    }
                 }
             }
         }
         //dfs
         for (const auto& uidx : adj_list[vidx]) 
         {
+            if (match_list[uidx] < vidx) continue;
+
             if (__sync_fetch_and_add(&(dfs_flag[uidx]), 1) == 0) 
             {
                 if (match_list[uidx] >= 0) 
