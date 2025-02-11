@@ -5,19 +5,21 @@
 
 int main()
 {   
-    // std::string filename = "testdata3d_2.csv";
-    std::string filename = "test_3dsphere_100.csv";
+    std::string filename = "testdata3d_2.csv";
+    // std::string filename = "test_3dsphere_100.csv";
     CritCells<VR, NormallDistMat> cc(filename);
 
     // auto critical_weight = cc.run_MorseMatchPersistence(3, 0, 17);
 
-    auto critical_weight = cc.run_MorseMatch(3, 0, 1.5, 4);
+    // auto critical_weight = cc.run_MorseMatch(3, 0, 1.5, 4);
 
-    for(auto& dim_cw: critical_weight)
-    {
-        for (auto& w: dim_cw) std::cout<<w<<"  ";
-        std::cout<<'\n';
-    }
+    // for(auto& dim_cw: critical_weight)
+    // {
+    //     for (auto& w: dim_cw) std::cout<<w<<"  ";
+    //     std::cout<<'\n';
+    // }
+
+    cc.runTest(3, 12);
 
     return 0;
 }

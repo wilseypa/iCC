@@ -840,10 +840,10 @@ std::vector<std::vector<int64_t>> CritCells<ComplexType, DistMatType>::getBinomi
     std::vector<std::vector<int64_t>> binom_table(vtnum + 1, std::vector<int64_t>(maxdim + 1 + 1, 0));
 
     binom_table[0][0] = 1;
-    for(size_t i = 1; i <= n; i++)
+    for(size_t i = 1; i <= vtnum; i++)
     {
         binom_table[i][0] = 1;
-        for (size_t j = 1; j <= maxdim; j++)
+        for (size_t j = 1; j < (maxdim + 2); j++)
         {
             binom_table[i][j] = binom_table[i - 1][j - 1] + binom_table[i - 1][j];
             if (binom_table[i][j] < 0) throw std::overflow_error("Binomial Overflow Error!");
@@ -854,7 +854,7 @@ std::vector<std::vector<int64_t>> CritCells<ComplexType, DistMatType>::getBinomi
 }
 
 template <typename ComplexType, typename DistMatType>
-int64_t CritCells<ComplexType, DistMatType>::getBinomialIndex(const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<size_t>& simplex_vt, const size_t shift = 0)    //shift is used for cofacet enum
+int64_t CritCells<ComplexType, DistMatType>::getBinomialIndex(const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<size_t>& simplex_vt, const size_t shift)    //shift is used for cofacet enum
 {
     int64_t bindex = 0;
     size_t k = simplex_vt.size();
@@ -871,7 +871,7 @@ int64_t CritCells<ComplexType, DistMatType>::getBinomialIndex(const std::vector<
 }
 
 template <typename ComplexType, typename DistMatType>
-int64_t CritCells<ComplexType, DistMatType>::getEdgeBinomialIndex(const std::vector<std::vector<int64_t>>& binomial_table, const size_t j, const size_t i)
+int64_t CritCells<ComplexType, DistMatType>::getEdgeBinomialIndex(const std::vector<std::vector<int64_t>>& binomial_table, size_t j, size_t i)
 {
     //assume j > i
     if (j < i) std::swap(i, j);
@@ -884,39 +884,40 @@ template <typename ComplexType, typename DistMatType>
 size_t CritCells<ComplexType, DistMatType>::getSimplexMaxVertex(const std::vector<std::vector<int64_t>>& binomial_table, const int64_t bindex, size_t vtnum, const size_t dim)
 {   
     //top = vtnum - 1, bottom = dim
-    if (binomial_table[vtnum - 1][dim + 1] > bindex)
+    size_t top = vtnum - 1;
+    if (binomial_table[top][dim + 1] > bindex)
     {
-        size_t span = vtnum - dim;
+        size_t span = top - dim;
         while (span > 0)
         {
-            size_t half = span >> 1;
-            size_t mid = vtnum - half;
+            size_t half = (span >> 1);
+            size_t mid = top - half;
             if (binomial_table[mid][dim + 1] > bindex)
             {
-                vtnum = mid - 1;
+                top = mid - 1;
                 span -= (half + 1);
             }
             else span = half;
         }
     }
-    //return top
-    return vtnum;
+    return top;
 }
 
 template <typename ComplexType, typename DistMatType>
-std::vector<size_t> CritCells<ComplexType, DistMatType>::getSimplexVertices(const std::vector<std::vector<int64_t>>& binomial_table, int64_t bindex, size_t vtnum, size_t dim)
+std::vector<size_t> CritCells<ComplexType, DistMatType>::getSimplexVertices(const std::vector<std::vector<int64_t>>& binomial_table, int64_t bindex, size_t vtnum, const size_t dim)
 {
     //max vertex index = vtnum - 1
     std::vector<size_t> simplex_vt;
     simplex_vt.reserve(dim + 1);
 
-    for (size_t k = dim; k >= 0; k--)
+    for (size_t k = dim + 1; k > 0; k--)  //size_t is unsigned. cannot use it to check against negative number
     {
-        vtnum = getSimplexMaxVertex(binomial_table, bindex, vtnum, k);
-        bindex -= binomial_table[vtnum][k + 1];
+        vtnum = getSimplexMaxVertex(binomial_table, bindex, vtnum, k - 1);
+
+        bindex -= binomial_table[vtnum][k];
+
         simplex_vt.push_back(vtnum);
     }
-
     return simplex_vt;
 }
 
@@ -935,7 +936,7 @@ std::vector<std::pair<int64_t, double>> CritCells<ComplexType, DistMatType>::get
 {
     std::vector<std::pair<int64_t, double>> sorted_edge;
 
-    size_t npt = this->distMatrx.size();
+    size_t npt = this->distMatrix.size();
 
     for (size_t i = 0; i < npt - 1; i++)
     {
@@ -980,6 +981,7 @@ template <typename ComplexType, typename DistMatType>
 robin_hood::unordered_map<int64_t, size_t> CritCells<ComplexType, DistMatType>::getActiveEdgeIndexHashTable(const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<std::pair<int64_t, double>>& sorted_edge)
 {
     robin_hood::unordered_map<int64_t, size_t> active_edge_index;
+    active_edge_index.reserve(sorted_edge.size());
     
     size_t npt = this->distMatrix.size();
 
@@ -999,10 +1001,84 @@ robin_hood::unordered_map<int64_t, size_t> CritCells<ComplexType, DistMatType>::
         if (mstFindRoot(parent_idx, x) != mstFindRoot(parent_idx, y))
         {
             mstSetUnion(parent_idx, x, y);
-            active_edge_index.insert(std::make_pair(bindex, i));
+            continue;
         }
+        active_edge_index.insert({bindex, i});    //need to use {} initializer list
     }
 
     return active_edge_index;
 }
 
+template <typename ComplexType, typename DistMatType>
+std::vector<std::pair<int64_t, double>> CritCells<ComplexType, DistMatType>::getSortedCofacetList(const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<std::pair<int64_t, double>>& sorted_simplex, const size_t dim, const double maxeps, const int threadnum)
+{
+    //dim == simplex dimension == cofacet dimension - 1
+    std::vector<std::pair<int64_t, double>> cofacet_list;
+
+    size_t npt = this->distMatrix.size();
+
+    std::vector< std::vector< std::pair<size_t, double> > > thread_workspace(sorted_simplex.size(), std::vector<std::pair<size_t, double>>());
+
+    omp_set_num_threads(threadnum);
+
+#pragma omp parallel for
+    for (size_t i = 0; i < sorted_simplex.size(); i++)
+    {
+        int64_t bindex = sorted_simplex[i].first;
+        std::vector<size_t> simplex_vt = getSimplexVertices(binomial_table, bindex, npt, dim);
+
+        //cofacet of {i, j} = {i, j, ...}. i > j
+        // auto minidx = *std::min_element(simplex_vt.begin(), simplex_vt.end());
+        auto minidx = simplex_vt.back();
+        for (size_t j = 0; j < minidx; j++)
+        {
+            auto idx = *std::max_element(simplex_vt.begin(), simplex_vt.end(), [this, j](auto first, auto second)
+                                                                                { return this->distMatrix[j][first] < this->distMatrix[j][second]; });
+            double weight = this->distMatrix[j][idx];    //cofacet weight
+
+            if (weight < maxeps) thread_workspace[i].push_back({j, weight});
+        }
+    }
+
+    for (size_t i = 0; i < sorted_simplex.size(); i++)
+    {
+        int64_t bindex = sorted_simplex[i].first;
+        std::vector<size_t> simplex_vt = getSimplexVertices(binomial_table, bindex, npt, dim);
+        //left shift bindex. left shift one position for each simplex vt
+        bindex = getBinomialIndex(binomial_table, simplex_vt, 1);
+        for (auto& idx_weight_pair: thread_workspace[i])
+        {
+            auto j = idx_weight_pair.first;
+            auto w = idx_weight_pair.second;
+            //push new bindex = shifted bin
+            cofacet_list.push_back({bindex + j, w});
+        }
+    }
+
+    sortSimplexByWeightThenIndex(cofacet_list);
+
+    return cofacet_list;
+}
+
+
+
+
+
+
+template <typename ComplexType, typename DistMatType>
+void CritCells<ComplexType, DistMatType>::runTest(size_t maxdim, double maxeps)
+{
+    size_t n = this->distMatrix.size();
+    auto binom_table = getBinomialTable(n, maxdim);
+    auto sorted_edge = getSortedEdge(binom_table, maxeps);
+
+    auto active_edge = getActiveEdgeIndexHashTable(binom_table, sorted_edge);
+
+    auto sorted_tri = getSortedCofacetList(binom_table, sorted_edge, 1, maxeps, 1);
+
+    // for (auto e: active_edge) std::cout<<e.first<<" "<<e.second<<'\n';\
+
+    std::cout<<sorted_tri.size()<<'\n';
+
+    return;
+}
