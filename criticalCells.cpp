@@ -2,7 +2,6 @@
 #include "readInput.hpp"
 #include "hopcroft_karp.hpp"
 #include "criticalCells.hpp"
-#include "biGraphMorseMatch.hpp"
 
 #include "omp.h"
 
@@ -980,8 +979,8 @@ void CritCells<ComplexType, DistMatType>::mstSetUnion(std::vector<size_t>& paren
 template <typename ComplexType, typename DistMatType>
 robin_hood::unordered_map<int64_t, size_t> CritCells<ComplexType, DistMatType>::getActiveEdgeIndexHashTable(const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<std::pair<int64_t, double>>& sorted_edge)
 {
-    robin_hood::unordered_map<int64_t, size_t> active_edge_index;
-    active_edge_index.reserve(sorted_edge.size());
+    robin_hood::unordered_map<int64_t, size_t> active_edge_index_hash;
+    active_edge_index_hash.reserve(sorted_edge.size());
     
     size_t npt = this->distMatrix.size();
 
@@ -1003,14 +1002,30 @@ robin_hood::unordered_map<int64_t, size_t> CritCells<ComplexType, DistMatType>::
             mstSetUnion(parent_idx, x, y);
             continue;
         }
-        active_edge_index.insert({bindex, i});    //need to use {} initializer list
+        active_edge_index_hash.insert({bindex, i});    //need to use {} initializer list
     }
 
-    return active_edge_index;
+    return active_edge_index_hash;
 }
 
 template <typename ComplexType, typename DistMatType>
-std::vector<std::pair<int64_t, double>> CritCells<ComplexType, DistMatType>::getSortedCofacetList(const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<std::pair<int64_t, double>>& sorted_simplex, const size_t dim, const double maxeps, const int threadnum)
+robin_hood::unordered_map<int64_t, size_t> CritCells<ComplexType, DistMatType>::getActiveFacetIndexHashTable(const std::vector<std::pair<int64_t, double>>& facet_list, const std::vector<size_t>& active_facet_index)
+{
+    robin_hood::unordered_map<int64_t, size_t> active_facet_index_hash;
+    active_facet_index_hash.reserve(facet_list.size());
+
+    for (auto i : active_facet_index)
+    {
+        int64_t bindex = facet_list[i].first;
+        active_facet_index_hash.insert({bindex, i});
+    }
+
+    return active_facet_index_hash;
+}
+
+template <typename ComplexType, typename DistMatType>
+std::vector<std::pair<int64_t, double>> CritCells<ComplexType, DistMatType>::getSortedCofacetList(const std::vector<std::vector<int64_t>>& binomial_table, 
+                                                                                                  const std::vector<std::pair<int64_t, double>>& sorted_simplex, const size_t dim, const double maxeps, const int threadnum)
 {
     //dim == simplex dimension == cofacet dimension - 1
     std::vector<std::pair<int64_t, double>> cofacet_list;
@@ -1060,8 +1075,66 @@ std::vector<std::pair<int64_t, double>> CritCells<ComplexType, DistMatType>::get
     return cofacet_list;
 }
 
+template <typename ComplexType, typename DistMatType>
+std::vector<int64_t> CritCells<ComplexType, DistMatType>::getFacetBinomialIndex(const std::vector<std::vector<int64_t>>& binomial_table, const int64_t binomindex, const size_t dim)
+{
+    //{i, j, k} -> {j, k}, {i, k}, {i, j}. i > j > k
+    std::vector<int64_t> facet_bindex;
+    facet_bindex.reserve(dim + 1);
 
+    size_t npt = this->distMatrix.size();
 
+    std::vector<size_t> simplex_vt = getSimplexVertices(binomial_table, binomindex, npt, dim);
+
+    int64_t above = 0;
+    int64_t below = binomindex;
+    size_t k = dim;
+
+    for (auto i = 0; i < simplex_vt.size(); i++)
+    {
+        size_t vt = simplex_vt[i];
+        below -= binomial_table[vt][k + 1];
+
+        facet_bindex.push_back(above + below);
+
+        above += binomial_table[vt][k];
+
+        k--;
+    }
+
+    return facet_bindex;
+}
+
+template <typename ComplexType, typename DistMatType>
+void CritCells<ComplexType, DistMatType>::buildInterface(Bi_Graph_Match& bi_graph, const std::vector<std::vector<int64_t>>& binomial_table, 
+                                                         const std::vector<std::pair<int64_t, double>>& cofacet_list, const size_t dim, const robin_hood::unordered_map<int64_t, size_t>& active_facet_index)
+{
+    size_t npt = this->distMatrix.size();
+    size_t u = bi_graph.u;
+    size_t v = bi_graph.v;
+
+    std::cout<<u<<"    "<<v<<'\n';
+
+    for (size_t i = 0; i < cofacet_list.size(); i++)
+    {
+        int64_t bindex = cofacet_list[i].first;
+        std::vector<int64_t> facet_bindex = getFacetBinomialIndex(binomial_table, bindex, dim);
+
+        for (auto fbidx: facet_bindex)
+        {
+            auto mapit = active_facet_index.find(fbidx);
+            if (mapit != active_facet_index.end())
+            {
+                size_t fidx = (*mapit).second;    //facet idx in facet bindex_weight_pair list
+                bi_graph.adj_list[i].push_back(u + fidx);
+                bi_graph.adj_list[u + fidx].push_back(i);
+            }
+        }
+        std::sort(bi_graph.adj_list[i].begin(), bi_graph.adj_list[i].end(), std::greater<size_t>());
+    }
+
+    return;
+}
 
 
 
@@ -1078,7 +1151,15 @@ void CritCells<ComplexType, DistMatType>::runTest(size_t maxdim, double maxeps)
 
     // for (auto e: active_edge) std::cout<<e.first<<" "<<e.second<<'\n';\
 
-    std::cout<<sorted_tri.size()<<'\n';
+    // std::cout<<sorted_tri.size()<<'\n';
+
+    Bi_Graph_Match bi_graph(sorted_edge.size(), sorted_tri.size(), 1, 1);
+    bi_graph.updateDimension(sorted_edge.size(), sorted_tri.size());
+
+    buildInterface(bi_graph, binom_table, sorted_tri, 2, active_edge);
+
+    // for (auto p : active_edge) std::cout<<p.first<<"  "<<p.second<<'\n';
+    // std::cout<<'\n';
 
     return;
 }

@@ -5,7 +5,7 @@
 
 class Bi_Graph_Match {
 private:
-    int u, v;
+    
     
     int udegree;
     int maxthreadnum;    //affect the memory consumption during bipartite matching
@@ -81,6 +81,8 @@ public:
     std::vector<std::set<int>> getBackwardSingleFacetIndex(std::vector<int> critical_facet_index);
 
     //move to private later
+    int u, v;
+
     std::vector<std::vector<int>> adj_list;
     std::vector<int> match_list;
 
