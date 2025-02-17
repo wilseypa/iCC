@@ -1047,6 +1047,7 @@ std::vector<std::pair<int64_t, double>> CritCells<ComplexType, DistMatType>::get
     for (size_t i = 0; i < sorted_simplex.size(); i++)
     {
         int64_t bindex = sorted_simplex[i].first;
+        double originalweight = sorted_simplex[i].second;
         std::vector<size_t> simplex_vt = getSimplexVertices(binomial_table, bindex, npt, dim);
 
         //cofacet of {i, j} = {i, j, ...}. i > j
@@ -1056,9 +1057,10 @@ std::vector<std::pair<int64_t, double>> CritCells<ComplexType, DistMatType>::get
         {
             auto idx = *std::max_element(simplex_vt.begin(), simplex_vt.end(), [this, j](auto first, auto second)
                                                                                 { return this->distMatrix[j][first] < this->distMatrix[j][second]; });
-            double weight = this->distMatrix[j][idx];    //cofacet weight
+            double weight = this->distMatrix[j][idx];    //new facet weight
+            double cofacetweight = (weight > originalweight) ? weight : originalweight; 
 
-            if (weight < maxeps) thread_workspace[i].push_back({j, weight});
+            if (cofacetweight < maxeps) thread_workspace[i].push_back({j, cofacetweight});
         }
     }
 
@@ -1162,31 +1164,58 @@ void CritCells<ComplexType, DistMatType>::runTest(size_t maxdim, double maxeps)
     std::vector<std::vector<double>> critical_weight;
     critical_weight.push_back(std::vector<double>{0});
     
-    Bi_Graph_Match bi_graph(1, 1, 1, 1);
+    Bi_Graph_Match bi_graph(1, 1, 1);
 
     for (size_t dim = 2; dim <= maxdim; dim++)
     {
         bi_graph.updateDimension(sorted_cofacet.size(), sorted_simplex.size());
-        buildInterface(bi_graph, binom_table, sorted_cofacet, 2, active_index_hash_table);
+        buildInterface(bi_graph, binom_table, sorted_cofacet, dim, active_index_hash_table);
 
         bi_graph.parallelMaxFacetInit(0, sorted_cofacet.size(), 0, sorted_simplex.size(), 1);
 
+        // bi_graph.parallelKarpSipserInit(1);
+
         bi_graph.parallelFacetDFSMatch(1);
+        // bi_graph.serialCofacetDFSMatch();
+
+        // std::cout<<"check graph dim = "<<dim<<"  cofacet size = "<<sorted_cofacet.size()<<"  facet size = "<<sorted_simplex.size()<<'\n';
+        // std::vector<size_t> cof_idx = {269, 270, 271, 272, 273, 274};
+        // std::vector<size_t> f_idx = {181, 182, 183, 184, 185, 279, 280, 281};
+
+        // if (dim == 3)
+        // {
+        //     for (auto j: cof_idx)
+        //     {
+        //         std::cout<<"idx = "<<j<<"  match = "<<bi_graph.match_list[j]<<" "<<bi_graph.match_list[j] - int64_t(sorted_cofacet.size())<<"  weight = "<<sorted_cofacet[j].second<<"    adj = ";
+        //         for (auto t : bi_graph.adj_list[j]) std::cout<<t<<"("<<t - sorted_cofacet.size()<<")"<<"  ";
+        //         std::cout<<'\n';
+        //     }
+
+        //     for (auto j: f_idx)
+        //     {
+        //         std::cout<<"facet idx = "<<j<<"  weight = "<<sorted_simplex[j].second<<"  adj = ";
+        //         for (auto t: bi_graph.adj_list[j + sorted_cofacet.size()])  std::cout<<t<<"  ";
+        //         std::cout<<'\n';
+        //     }
+        // }
+            
 
         std::cout<<bi_graph.dfsCycleRemoval()<<'\n';
 
         std::vector<size_t> crit_index = bi_graph.getCriticalIndex(dim_active_index, sorted_simplex.size());
-        for(auto t: crit_index) std::cout<<bi_graph.adj_list[sorted_cofacet.size()+t].size()<<"  ";
+        for(auto t: crit_index) std::cout<<"idx and weight = "<<t<<" "<<sorted_simplex[t].second<<"   ";
         std::cout<<'\n';
 
         dim_active_index = bi_graph.getActiveIndex();
         active_index_hash_table = getActiveFacetIndexHashTable(sorted_cofacet, dim_active_index);
 
-        sorted_simplex = getSortedCofacetList(binom_table, sorted_cofacet, dim, maxeps, 1);
-        std::swap(sorted_simplex, sorted_cofacet);
+        if (dim != maxdim)
+        {
+            sorted_simplex = getSortedCofacetList(binom_table, sorted_cofacet, dim, maxeps, 1);
+            std::swap(sorted_simplex, sorted_cofacet);
+        }
 
     }
-
 
     return;
 }

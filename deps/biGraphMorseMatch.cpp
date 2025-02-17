@@ -37,7 +37,7 @@ void Bi_Graph_Match::parallelKarpSipserInit(const int threadnum)
     }
 
 #pragma omp parallel for schedule(dynamic)
-    for (int i = 0; i < u; i++)
+    for (size_t i = 0; i < u; i++)
     //for (int i = u - 1; i >= 0; i--)
     // for (int i = u; i < (u + v); i++)
     {
@@ -58,7 +58,7 @@ void Bi_Graph_Match::pairDegreeOne(const size_t uidx, std::vector<int>& visit_fl
     //     return;
     // }
 
-    // std::vector<int> dfs_stack;
+    // std::vector<size_t> dfs_stack;
 
     // for (const auto& vidx : adj_list[uidx]) {
     //     if (__sync_fetch_and_add(&(visit_flag[vidx]), 1) == 0) {
@@ -70,22 +70,25 @@ void Bi_Graph_Match::pairDegreeOne(const size_t uidx, std::vector<int>& visit_fl
     //             //found new node with degree == 1
     //             if (__sync_fetch_and_sub(&(node_deg[index]), 1) == 2) dfs_stack.push_back(index);
     //         }
+    //         break;
     //     }
     // }
     // while(!dfs_stack.empty()) {
-    //     int top = std::move(dfs_stack.back());
+    //     size_t top = dfs_stack.back();
     //     dfs_stack.pop_back();
 
     //     if (__sync_fetch_and_add(&(visit_flag[top]), 1) != 0) continue;
 
     //     for (const auto& vidx : adj_list[top]) {
-    //         if (__sync_fetch_and_add(&(visit_flag[vidx]), 1) == 0) {
+    //         if (__sync_fetch_and_add(&(visit_flag[vidx]), 1) == 0) 
+    //         {
     //             // std::cout<<"subsequent uidx = "<<top<<"  match v = "<<vidx<<'\n';
     //             match_list[top] = vidx;
     //             match_list[vidx] = top;
     //             for (const auto& index : adj_list[vidx]) {
     //                 if (__sync_fetch_and_sub(&(node_deg[index]), 1) == 2) dfs_stack.push_back(index);
     //             }
+    //             break;
     //         }
     //     }
     // }
@@ -224,8 +227,8 @@ void Bi_Graph_Match::parallelMaxFacetInit(const size_t cofacet_index_min, const 
         }
     }
 
-    auto unmatched = std::count_if(std::execution::par, match_list.begin() + u, match_list.end(), [](int value) { return value < 0; });
-    std::cout<<"unmatched dim - 1 after init = "<<unmatched<<'\n';
+    // auto unmatched = std::count_if(std::execution::par, match_list.begin() + u, match_list.end(), [](int value) { return value < 0; });
+    // std::cout<<"unmatched dim - 1 after init = "<<unmatched<<'\n';
 
     return;
 }
@@ -979,7 +982,8 @@ void Bi_Graph_Match::parallelFacetDFSMatch(const int threadnum)
         size_t ct = 0;
         std::vector<size_t> thread_buff;    //overflow? limit its size?
 #pragma omp for
-        for (size_t i = u; i < u + v; i++) 
+        for (size_t i = u; i < u + v; i++)
+        // for (size_t i = u + v - 1; i >= u; i--)
         {
             if (match_list[i] < 0 && adj_list[i].size() > 0) {
                 thread_buff.push_back(i);
@@ -1005,8 +1009,8 @@ void Bi_Graph_Match::parallelFacetDFSMatch(const int threadnum)
         std::fill(std::execution::par, dfs_flag.begin(), dfs_flag.end(), 0);
 
 #pragma omp parallel for schedule(dynamic)
-        for (int i = 0; i < initialunmatched; i++)
-        // for (int i = initialunmatched - 1; i >= 0; i--)
+        // for (int i = 0; i < initialunmatched; i++)
+        for (int i = initialunmatched - 1; i >= 0; i--)
         {
             auto& aug_path_tid = aug_path[omp_get_thread_num()];
 
@@ -1209,7 +1213,7 @@ void Bi_Graph_Match::addEdge(int leftnode, int rightnode) {
     return;
 }
 
-Bi_Graph_Match::Bi_Graph_Match(int leftnum, int rightnum, int leftdim, int threadnum) : u(leftnum), v(rightnum), udegree(leftdim + 1) 
+Bi_Graph_Match::Bi_Graph_Match(int leftnum, int rightnum, int leftdimension) : u(leftnum), v(rightnum), udegree(leftdimension + 1) 
 {
     adj_list.resize(u + v);
     match_list.resize(u + v, -1);

@@ -5,8 +5,8 @@
 
 int main()
 {   
-    std::string filename = "testdata3d_2.csv";
-    // std::string filename = "test_3dsphere_100.csv";
+    // std::string filename = "testdata3d_2.csv";
+    std::string filename = "test_3dsphere_50.csv";
     CritCells<VR, NormallDistMat> cc(filename);
 
     // auto critical_weight = cc.run_MorseMatchPersistence(3, 0, 17);
@@ -19,7 +19,7 @@ int main()
     //     std::cout<<'\n';
     // }
 
-    cc.runTest(3, 17);
+    cc.runTest(3, 1.5);
 
     return 0;
 }
