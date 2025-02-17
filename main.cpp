@@ -11,7 +11,7 @@ int main()
 
     // auto critical_weight = cc.run_MorseMatchPersistence(3, 0, 17);
 
-    // auto critical_weight = cc.run_MorseMatch(3, 0, 1.5, 4);
+    // auto critical_weight = cc.run_MorseMatch(3, 0, 12, 1);
 
     // for(auto& dim_cw: critical_weight)
     // {
@@ -19,7 +19,7 @@ int main()
     //     std::cout<<'\n';
     // }
 
-    cc.runTest(3, 12);
+    cc.runTest(3, 17);
 
     return 0;
 }

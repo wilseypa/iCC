@@ -259,213 +259,220 @@ std::vector<int> CritCells<ComplexType, DistMatType>::getMSTEdgeIndices(std::vec
     return mst_edge_index;
 }
 
-template <typename ComplexType, typename DistMatType>
-std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseMatch(int maxdimension, double mineps, double maxeps, int threadnumber)
-{
-    int threadnum = threadnumber;
+// template <typename ComplexType, typename DistMatType>
+// std::vector<std::vector<double>> CritCells<ComplexType, DistMatType>::run_MorseMatch(int maxdimension, double mineps, double maxeps, int threadnumber)
+// {
+//     int threadnum = threadnumber;
 
-    std::vector<std::vector<int>> simplex_bin = getEdges(maxeps);
-    sortEdge(simplex_bin);
+//     std::vector<std::vector<int>> simplex_bin = getEdges(maxeps);
+//     sortEdge(simplex_bin);
 
-    std::vector<int> mst_edge_index = getMSTEdgeIndices(simplex_bin);
+//     std::vector<int> mst_edge_index = getMSTEdgeIndices(simplex_bin);
 
-    std::vector<int> dim_active_index;
-    for (int i = 0; i < simplex_bin.size(); i++)
-    {
-        if (std::find(mst_edge_index.begin(), mst_edge_index.end(), i) == mst_edge_index.end())
-            dim_active_index.push_back(i);
-    }
+//     std::vector<int> dim_active_index;
+//     for (int i = 0; i < simplex_bin.size(); i++)
+//     {
+//         if (std::find(mst_edge_index.begin(), mst_edge_index.end(), i) == mst_edge_index.end())
+//             dim_active_index.push_back(i);
+//     }
 
-    std::vector<std::vector<double>> critical_weight;
-    critical_weight.push_back(std::vector<double>{0});
+//     std::vector<std::vector<double>> critical_weight;
+//     critical_weight.push_back(std::vector<double>{0});
 
-    int initleftdeg = 3; // cofacet of edge, tri
+//     int initleftdeg = 3; // cofacet of edge, tri
 
-    std::vector<std::vector<int>> cofacet_bin = getCofacetBin(simplex_bin, maxeps, threadnum);
+//     std::vector<std::vector<int>> cofacet_bin = getCofacetBin(simplex_bin, maxeps, threadnum);
 
 
-    Bi_Graph_Match bi_graph(cofacet_bin.size(), simplex_bin.size(), initleftdeg, threadnum);
+//     Bi_Graph_Match bi_graph(cofacet_bin.size(), simplex_bin.size(), initleftdeg, threadnum);
 
-    for (int dim = 2; dim <= maxdimension; dim++)
-    {
-        // std::cout<<"dim active idx size = "<<dim_active_index.size()<<'\n';
-        bi_graph.buildInterface(cofacet_bin, 0, cofacet_bin.size(), simplex_bin, simplex_bin.size(), dim_active_index);
+//     for (int dim = 2; dim <= maxdimension; dim++)
+//     {
+//         // std::cout<<"dim active idx size = "<<dim_active_index.size()<<'\n';
+//         bi_graph.buildInterface(cofacet_bin, 0, cofacet_bin.size(), simplex_bin, simplex_bin.size(), dim_active_index);
 
-        std::cout <<"dim = " <<dim<< "  simp bin active idx size = " << dim_active_index.size() << "  simp bin size = " << simplex_bin.size();
-        std::cout <<"  cofacet size = " << cofacet_bin.size() << '\n';
+//         std::cout<<"cofacet size = "<<cofacet_bin.size()<<"  facet size = "<<simplex_bin.size()<<'\n';
+//         for (int i = 50; i < 65; i++)
+//         {
+//             for (auto j: bi_graph.adj_list[i]) std::cout<<j<<"  ";
+//             std::cout<<'\n';
+//         }
 
-        // bi_graph.parallelKarpSipserInit();
+//         std::cout <<"dim = " <<dim<< "  simp bin active idx size = " << dim_active_index.size() << "  simp bin size = " << simplex_bin.size();
+//         std::cout <<"  cofacet size = " << cofacet_bin.size() << '\n';
 
-        bi_graph.parallelMaxFacetInit(0, cofacet_bin.size(), 0, simplex_bin.size());
+//         // bi_graph.parallelKarpSipserInit();
 
-        // if (dim)
-        // {
-        //     std::vector<int> unmatched_facet;
-        //     std::vector<double> facet_weight;
-        //     for (int i: dim_active_index)
-        //     {
-        //         int vidx = i + cofacet_bin.size();
-        //         if (bi_graph.match_list[vidx] < 0) 
-        //         {
-        //             unmatched_facet.push_back(i);
-        //             facet_weight.push_back(getSimplexWeight(simplex_bin[i]));
-        //         }
-        //     }
-        //     std::cout<<"dim = "<<dim<<" unmatched facet index after init = ";
-        //     for(int j: unmatched_facet) std::cout<<j<<"  ";
-        //     std::cout<<'\n';
-        //     for(double w: facet_weight) std::cout<<w<<"  ";
-        //     std::cout<<'\n';
-        // }
+//         bi_graph.parallelMaxFacetInit(0, cofacet_bin.size(), 0, simplex_bin.size());
 
-        // if (dim == 2)
-        // {   
-        //     std::cout<<"before match/rm  ";
-        //     std::vector<int> target_idx{71, 72, 82, 184, 185};
-        //     std::cout<<"dim = "<<dim<<'\n';
-        //     bi_graph.checkCofacetByIndex(cofacet_bin, simplex_bin, target_idx);
-        //     std::cout<<'\n';
-        // }
+//         // if (dim)
+//         // {
+//         //     std::vector<int> unmatched_facet;
+//         //     std::vector<double> facet_weight;
+//         //     for (int i: dim_active_index)
+//         //     {
+//         //         int vidx = i + cofacet_bin.size();
+//         //         if (bi_graph.match_list[vidx] < 0) 
+//         //         {
+//         //             unmatched_facet.push_back(i);
+//         //             facet_weight.push_back(getSimplexWeight(simplex_bin[i]));
+//         //         }
+//         //     }
+//         //     std::cout<<"dim = "<<dim<<" unmatched facet index after init = ";
+//         //     for(int j: unmatched_facet) std::cout<<j<<"  ";
+//         //     std::cout<<'\n';
+//         //     for(double w: facet_weight) std::cout<<w<<"  ";
+//         //     std::cout<<'\n';
+//         // }
 
-        // if (dim == 2)
-        // {   
-        //     std::cout<<"before match/rm  ";
-        //     std::vector<int> target_idx{52, 57, 65};
-        //     std::cout<<"dim = "<<dim<<'\n';
-        //     bi_graph.checkSimplexByIndex(cofacet_bin, simplex_bin, target_idx);
+//         // if (dim == 2)
+//         // {   
+//         //     std::cout<<"before match/rm  ";
+//         //     std::vector<int> target_idx{71, 72, 82, 184, 185};
+//         //     std::cout<<"dim = "<<dim<<'\n';
+//         //     bi_graph.checkCofacetByIndex(cofacet_bin, simplex_bin, target_idx);
+//         //     std::cout<<'\n';
+//         // }
 
-        //     for(auto i: target_idx)
-        //     {
-        //         std::cout<<getSimplexWeight(simplex_bin[i])<<"  ";
-        //     }
-        //     std::cout<<'\n';
-        // }
+//         // if (dim == 2)
+//         // {   
+//         //     std::cout<<"before match/rm  ";
+//         //     std::vector<int> target_idx{52, 57, 65};
+//         //     std::cout<<"dim = "<<dim<<'\n';
+//         //     bi_graph.checkSimplexByIndex(cofacet_bin, simplex_bin, target_idx);
 
-        // if (dim == 3)
-        // {   
-        //     std::cout<<"before match/rm  ";
-        //     std::vector<int> target_idx{241, 362, 363};
-        //     std::cout<<"dim = "<<dim<<'\n';
-        //     bi_graph.checkCofacetByIndex(cofacet_bin, simplex_bin, target_idx);
-        //     std::cout<<'\n';
-        // }
+//         //     for(auto i: target_idx)
+//         //     {
+//         //         std::cout<<getSimplexWeight(simplex_bin[i])<<"  ";
+//         //     }
+//         //     std::cout<<'\n';
+//         // }
 
-        // if (dim == 3)
-        // {   
-        //     std::cout<<"before match/rm  ";
-        //     std::vector<int> target_idx{184, 185, 227};
-        //     std::cout<<"dim = "<<dim<<'\n';
-        //     bi_graph.checkSimplexByIndex(cofacet_bin, simplex_bin, target_idx);
+//         // if (dim == 3)
+//         // {   
+//         //     std::cout<<"before match/rm  ";
+//         //     std::vector<int> target_idx{241, 362, 363};
+//         //     std::cout<<"dim = "<<dim<<'\n';
+//         //     bi_graph.checkCofacetByIndex(cofacet_bin, simplex_bin, target_idx);
+//         //     std::cout<<'\n';
+//         // }
 
-        //     for(auto i: target_idx)
-        //     {
-        //         std::cout<<getSimplexWeight(simplex_bin[i])<<"  ";
-        //     }
-        //     std::cout<<'\n';
-        // }
+//         // if (dim == 3)
+//         // {   
+//         //     std::cout<<"before match/rm  ";
+//         //     std::vector<int> target_idx{184, 185, 227};
+//         //     std::cout<<"dim = "<<dim<<'\n';
+//         //     bi_graph.checkSimplexByIndex(cofacet_bin, simplex_bin, target_idx);
 
-        // bi_graph.parallelFacetDFSMatch();
+//         //     for(auto i: target_idx)
+//         //     {
+//         //         std::cout<<getSimplexWeight(simplex_bin[i])<<"  ";
+//         //     }
+//         //     std::cout<<'\n';
+//         // }
 
-        bi_graph.serialCofacetDFSMatch();
+//         // bi_graph.parallelFacetDFSMatch();
+
+//         bi_graph.serialCofacetDFSMatch();
         
-        // for (int i = 0; i < cofacet_bin.size(); i++)
-        // {
-        //     int imate = bi_graph.match_list[i];
-        //     if (imate != - 1 && bi_graph.match_list[imate] != i)
-        //     {
-        //         std::cout<<"graph error at dim = "<<dim<<"  error uidx = "<<i<<'\n';
-        //     }
-        // }
+//         // for (int i = 0; i < cofacet_bin.size(); i++)
+//         // {
+//         //     int imate = bi_graph.match_list[i];
+//         //     if (imate != - 1 && bi_graph.match_list[imate] != i)
+//         //     {
+//         //         std::cout<<"graph error at dim = "<<dim<<"  error uidx = "<<i<<'\n';
+//         //     }
+//         // }
 
-        // for (int i = cofacet_bin.size(); i < cofacet_bin.size() + simplex_bin.size(); i++)
-        // {
-        //     int imate = bi_graph.match_list[i];
-        //     if (imate != - 1 && bi_graph.match_list[imate] != i)
-        //     {
-        //         std::cout<<"graph error at dim = "<<dim<<"  error vidx = "<<i<<'\n';
-        //     }
-        // }
+//         // for (int i = cofacet_bin.size(); i < cofacet_bin.size() + simplex_bin.size(); i++)
+//         // {
+//         //     int imate = bi_graph.match_list[i];
+//         //     if (imate != - 1 && bi_graph.match_list[imate] != i)
+//         //     {
+//         //         std::cout<<"graph error at dim = "<<dim<<"  error vidx = "<<i<<'\n';
+//         //     }
+//         // }
 
-        // int reverted = bi_graph.dfsCycleRemoval();
+//         // int reverted = bi_graph.dfsCycleRemoval();
 
-        // std::cout << "dim = " << dim << "  reverted = " << reverted << '\n';
+//         // std::cout << "dim = " << dim << "  reverted = " << reverted << '\n';
 
-        // if (dim == 2)
-        // {   
-        //     std::cout<<"after match/rm  ";
-        //     std::vector<int> target_idx{71, 72, 82, 184, 185};
-        //     std::cout<<"dim = "<<dim<<'\n';
-        //     bi_graph.checkCofacetByIndex(cofacet_bin, simplex_bin, target_idx);
-        //     std::cout<<'\n';
-        // }
+//         // if (dim == 2)
+//         // {   
+//         //     std::cout<<"after match/rm  ";
+//         //     std::vector<int> target_idx{71, 72, 82, 184, 185};
+//         //     std::cout<<"dim = "<<dim<<'\n';
+//         //     bi_graph.checkCofacetByIndex(cofacet_bin, simplex_bin, target_idx);
+//         //     std::cout<<'\n';
+//         // }
 
-        // if (dim == 2)
-        // {   
-        //     std::cout<<"after match/rm  ";
-        //     std::vector<int> target_idx{52, 57, 65};
-        //     std::cout<<"dim = "<<dim<<'\n';
-        //     bi_graph.checkSimplexByIndex(cofacet_bin, simplex_bin, target_idx);
-        //     std::cout<<'\n';
-        // }
+//         // if (dim == 2)
+//         // {   
+//         //     std::cout<<"after match/rm  ";
+//         //     std::vector<int> target_idx{52, 57, 65};
+//         //     std::cout<<"dim = "<<dim<<'\n';
+//         //     bi_graph.checkSimplexByIndex(cofacet_bin, simplex_bin, target_idx);
+//         //     std::cout<<'\n';
+//         // }
 
-        // if (dim == 3)
-        // {   
-        //     std::cout<<"after match/rm  ";
-        //     std::vector<int> target_idx{241, 361, 362, 363, 364, 365, 366, 367};
-        //     std::cout<<"dim = "<<dim<<'\n';
-        //     bi_graph.checkCofacetByIndex(cofacet_bin, simplex_bin, target_idx);
+//         // if (dim == 3)
+//         // {   
+//         //     std::cout<<"after match/rm  ";
+//         //     std::vector<int> target_idx{241, 361, 362, 363, 364, 365, 366, 367};
+//         //     std::cout<<"dim = "<<dim<<'\n';
+//         //     bi_graph.checkCofacetByIndex(cofacet_bin, simplex_bin, target_idx);
 
-        //     for(auto i: target_idx)
-        //     {
-        //         std::cout<<getSimplexWeight(cofacet_bin[i])<<"  ";
-        //     }
-        //     std::cout<<'\n';
-        // }
+//         //     for(auto i: target_idx)
+//         //     {
+//         //         std::cout<<getSimplexWeight(cofacet_bin[i])<<"  ";
+//         //     }
+//         //     std::cout<<'\n';
+//         // }
 
-        // if (dim == 3)
-        // {   
-        //     std::cout<<"after match/rm  ";
-        //     std::vector<int> target_idx{184, 185, 227, 265, 266, 267, 268};
-        //     std::cout<<"dim = "<<dim<<'\n';
-        //     bi_graph.checkSimplexByIndex(cofacet_bin, simplex_bin, target_idx);
-        //     for(auto i: target_idx)
-        //     {
-        //         std::cout<<getSimplexWeight(simplex_bin[i])<<"  ";
-        //     }
-        //     std::cout<<'\n';
-        // }
-
-
-        std::vector<int> dim_critical_index = bi_graph.getCriticalIndex(dim_active_index, simplex_bin.size());
-        std::cout << "dim = " << dim << "  dim - 1 critical idx size = " << dim_critical_index.size() << '\n';
+//         // if (dim == 3)
+//         // {   
+//         //     std::cout<<"after match/rm  ";
+//         //     std::vector<int> target_idx{184, 185, 227, 265, 266, 267, 268};
+//         //     std::cout<<"dim = "<<dim<<'\n';
+//         //     bi_graph.checkSimplexByIndex(cofacet_bin, simplex_bin, target_idx);
+//         //     for(auto i: target_idx)
+//         //     {
+//         //         std::cout<<getSimplexWeight(simplex_bin[i])<<"  ";
+//         //     }
+//         //     std::cout<<'\n';
+//         // }
 
 
-        dim_active_index = bi_graph.getActiveIndex();
+//         std::vector<int> dim_critical_index = bi_graph.getCriticalIndex(dim_active_index, simplex_bin.size());
+//         std::cout << "dim = " << dim << "  dim - 1 critical idx size = " << dim_critical_index.size() << '\n';
 
-        std::cout << "cofact active idx size = " << dim_active_index.size() << "  cofacet size = " << cofacet_bin.size() << '\n';
+
+//         dim_active_index = bi_graph.getActiveIndex();
+
+//         std::cout << "cofact active idx size = " << dim_active_index.size() << "  cofacet size = " << cofacet_bin.size() << '\n';
         
 
-        // std for each
-        std::vector<double> dim_critical_weight;
-        for (auto i : dim_critical_index)
-        {
-            double weight = getSimplexWeight(simplex_bin[i]);
-            dim_critical_weight.push_back(weight);
-        }
-        critical_weight.push_back(std::move(dim_critical_weight));
+//         // std for each
+//         std::vector<double> dim_critical_weight;
+//         for (auto i : dim_critical_index)
+//         {
+//             double weight = getSimplexWeight(simplex_bin[i]);
+//             dim_critical_weight.push_back(weight);
+//         }
+//         critical_weight.push_back(std::move(dim_critical_weight));
 
-        if (dim < maxdimension)
-        {
-            simplex_bin = getCofacetBin(cofacet_bin, maxeps, threadnum);
-            std::swap(simplex_bin, cofacet_bin);
-            bi_graph.updateDimension(cofacet_bin.size(), simplex_bin.size());
-        }
+//         if (dim < maxdimension)
+//         {
+//             simplex_bin = getCofacetBin(cofacet_bin, maxeps, threadnum);
+//             std::swap(simplex_bin, cofacet_bin);
+//             bi_graph.updateDimension(cofacet_bin.size(), simplex_bin.size());
+//         }
 
         
-    }
+//     }
 
-    return critical_weight;
-}
+//     return critical_weight;
+// }
 
 template <typename ComplexType, typename DistMatType>
 std::vector<double> CritCells<ComplexType, DistMatType>::getApproxDeathWeight(std::vector<std::vector<int>>& facet_bin, std::vector<std::set<int>>& backward_facet_index, double maxeps)
@@ -515,98 +522,98 @@ std::vector<double> CritCells<ComplexType, DistMatType>::getApproxDeathWeight(st
 }
 
 
-template <typename ComplexType, typename DistMatType>
-std::vector< std::vector< std::pair<double, double> > > CritCells<ComplexType, DistMatType>::run_MorseMatchPersistence(int maxdimension, double mineps, double maxeps)
-{
-    int threadnum = 1;
+// template <typename ComplexType, typename DistMatType>
+// std::vector< std::vector< std::pair<double, double> > > CritCells<ComplexType, DistMatType>::run_MorseMatchPersistence(int maxdimension, double mineps, double maxeps)
+// {
+//     int threadnum = 1;
 
-    std::vector<std::vector<int>> simplex_bin = getEdges(maxeps);
-    sortEdge(simplex_bin);
+//     std::vector<std::vector<int>> simplex_bin = getEdges(maxeps);
+//     sortEdge(simplex_bin);
 
-    std::vector<int> mst_edge_index = getMSTEdgeIndices(simplex_bin);
+//     std::vector<int> mst_edge_index = getMSTEdgeIndices(simplex_bin);
 
-    std::vector<int> dim_active_index;
-    for (int i = 0; i < simplex_bin.size(); i++)
-    {
-        if (std::find(mst_edge_index.begin(), mst_edge_index.end(), i) == mst_edge_index.end())
-            dim_active_index.push_back(i);
-    }
+//     std::vector<int> dim_active_index;
+//     for (int i = 0; i < simplex_bin.size(); i++)
+//     {
+//         if (std::find(mst_edge_index.begin(), mst_edge_index.end(), i) == mst_edge_index.end())
+//             dim_active_index.push_back(i);
+//     }
 
-    // std::vector<std::vector<double>> critical_weight;
-    // critical_weight.push_back(std::vector<double>{0});
+//     // std::vector<std::vector<double>> critical_weight;
+//     // critical_weight.push_back(std::vector<double>{0});
 
-    std::vector< std::vector< std::pair<double, double> > > persistent_pairs;
-    //H0.
-    persistent_pairs.push_back(std::vector< std::pair<double, double> >{std::make_pair(0, -1)});
+//     std::vector< std::vector< std::pair<double, double> > > persistent_pairs;
+//     //H0.
+//     persistent_pairs.push_back(std::vector< std::pair<double, double> >{std::make_pair(0, -1)});
 
-    int initleftdeg = 3; // cofacet of edge, tri
+//     int initleftdeg = 3; // cofacet of edge, tri
 
-    std::vector<std::vector<int>> cofacet_bin = getCofacetBin(simplex_bin, maxeps, threadnum);
+//     std::vector<std::vector<int>> cofacet_bin = getCofacetBin(simplex_bin, maxeps, threadnum);
 
-    Bi_Graph_Match bi_graph(cofacet_bin.size(), simplex_bin.size(), initleftdeg, threadnum);
+//     Bi_Graph_Match bi_graph(cofacet_bin.size(), simplex_bin.size(), initleftdeg, threadnum);
 
-    for (int dim = 2; dim <= maxdimension; dim++)
-    {
-        // std::cout<<"dim active idx size = "<<dim_active_index.size()<<'\n';
-        bi_graph.buildInterface(cofacet_bin, 0, cofacet_bin.size(), simplex_bin, simplex_bin.size(), dim_active_index);
+//     for (int dim = 2; dim <= maxdimension; dim++)
+//     {
+//         // std::cout<<"dim active idx size = "<<dim_active_index.size()<<'\n';
+//         bi_graph.buildInterface(cofacet_bin, 0, cofacet_bin.size(), simplex_bin, simplex_bin.size(), dim_active_index);
 
-        std::cout <<"dim = " <<dim<< "  simp bin active idx size = " << dim_active_index.size() << "  simp bin size = " << simplex_bin.size();
-        std::cout <<"  cofacet size = " << cofacet_bin.size() << '\n';
+//         std::cout <<"dim = " <<dim<< "  simp bin active idx size = " << dim_active_index.size() << "  simp bin size = " << simplex_bin.size();
+//         std::cout <<"  cofacet size = " << cofacet_bin.size() << '\n';
 
-        bi_graph.parallelMaxFacetInit(0, cofacet_bin.size(), 0, simplex_bin.size());
+//         bi_graph.parallelMaxFacetInit(0, cofacet_bin.size(), 0, simplex_bin.size());
 
-        // bi_graph.parallelFacetDFSMatch();
+//         // bi_graph.parallelFacetDFSMatch();
 
-        // if (dim == 2)
-        // {   
-        //     std::cout<<"before match/rm  ";
-        //     std::vector<int> target_idx{37, 52, 77};
-        //     std::cout<<"dim = "<<dim<<'\n';
-        //     bi_graph.checkSimplexByIndex(cofacet_bin, simplex_bin, target_idx);
+//         // if (dim == 2)
+//         // {   
+//         //     std::cout<<"before match/rm  ";
+//         //     std::vector<int> target_idx{37, 52, 77};
+//         //     std::cout<<"dim = "<<dim<<'\n';
+//         //     bi_graph.checkSimplexByIndex(cofacet_bin, simplex_bin, target_idx);
 
-        //     for(auto i: target_idx)
-        //     {
-        //         std::cout<<getSimplexWeight(simplex_bin[i])<<"  ";
-        //     }
-        //     std::cout<<'\n';
-        // }
+//         //     for(auto i: target_idx)
+//         //     {
+//         //         std::cout<<getSimplexWeight(simplex_bin[i])<<"  ";
+//         //     }
+//         //     std::cout<<'\n';
+//         // }
 
-        bi_graph.serialCofacetDFSMatch();
+//         bi_graph.serialCofacetDFSMatch();
          
-        // int reverted = bi_graph.dfsCycleRemoval();
+//         // int reverted = bi_graph.dfsCycleRemoval();
 
-        // std::cout << "dim = " << dim << "  reverted = " << reverted << '\n';
+//         // std::cout << "dim = " << dim << "  reverted = " << reverted << '\n';
 
-        std::vector<int> dim_critical_index = bi_graph.getCriticalIndex(dim_active_index, simplex_bin.size());
+//         std::vector<int> dim_critical_index = bi_graph.getCriticalIndex(dim_active_index, simplex_bin.size());
 
-        std::vector<std::set<int>> backward_facet = bi_graph.getBackwardSingleFacetIndex(dim_critical_index);
+//         std::vector<std::set<int>> backward_facet = bi_graph.getBackwardSingleFacetIndex(dim_critical_index);
 
-        std::vector<double> approx_death_weight = getApproxDeathWeight(simplex_bin, backward_facet, maxeps);
+//         std::vector<double> approx_death_weight = getApproxDeathWeight(simplex_bin, backward_facet, maxeps);
 
-        for (auto w: approx_death_weight) std::cout<<w<<"   ";
-        std::cout<<'\n';
+//         for (auto w: approx_death_weight) std::cout<<w<<"   ";
+//         std::cout<<'\n';
 
-        std::vector< std::pair<double, double> > dim_persis_pair;
-        for (size_t i = 0; i < dim_critical_index.size(); i++)
-        {
-            int idx = dim_critical_index[i];
-            double weight = getSimplexWeight(simplex_bin[idx]);
-            dim_persis_pair.push_back(std::make_pair(weight, approx_death_weight[i]));
-        }
-        persistent_pairs.push_back(std::move(dim_persis_pair));
+//         std::vector< std::pair<double, double> > dim_persis_pair;
+//         for (size_t i = 0; i < dim_critical_index.size(); i++)
+//         {
+//             int idx = dim_critical_index[i];
+//             double weight = getSimplexWeight(simplex_bin[idx]);
+//             dim_persis_pair.push_back(std::make_pair(weight, approx_death_weight[i]));
+//         }
+//         persistent_pairs.push_back(std::move(dim_persis_pair));
         
-        dim_active_index = bi_graph.getActiveIndex();
+//         dim_active_index = bi_graph.getActiveIndex();
 
-        if (dim < maxdimension)
-        {
-            simplex_bin = getCofacetBin(cofacet_bin, maxeps, threadnum);
-            std::swap(simplex_bin, cofacet_bin);
-            bi_graph.updateDimension(cofacet_bin.size(), simplex_bin.size());
-        }
-    } 
+//         if (dim < maxdimension)
+//         {
+//             simplex_bin = getCofacetBin(cofacet_bin, maxeps, threadnum);
+//             std::swap(simplex_bin, cofacet_bin);
+//             bi_graph.updateDimension(cofacet_bin.size(), simplex_bin.size());
+//         }
+//     } 
     
-    return persistent_pairs;
-}
+//     return persistent_pairs;
+// }
 
 
 template <typename ComplexType, typename DistMatType>
@@ -641,125 +648,125 @@ std::vector<int> CritCells<ComplexType, DistMatType>::getStepwiseIndex(std::vect
 }
 
 
-template <typename ComplexType, typename DistMatType>
-std::vector< std::vector< std::pair<double, double> > > CritCells<ComplexType, DistMatType>::run_MorseMatchStepwise(int maxdimension, double maxeps, double stepsize)
-{
-    int threadnum = 1;
+// template <typename ComplexType, typename DistMatType>
+// std::vector< std::vector< std::pair<double, double> > > CritCells<ComplexType, DistMatType>::run_MorseMatchStepwise(int maxdimension, double maxeps, double stepsize)
+// {
+//     int threadnum = 1;
 
-    std::vector<std::vector<int>> simplex_bin = getEdges(maxeps);
-    sortEdge(simplex_bin);
+//     std::vector<std::vector<int>> simplex_bin = getEdges(maxeps);
+//     sortEdge(simplex_bin);
 
-    std::vector<int> mst_edge_index = getMSTEdgeIndices(simplex_bin);
+//     std::vector<int> mst_edge_index = getMSTEdgeIndices(simplex_bin);
 
-    std::vector<int> dim_active_index;
-    for (int i = 0; i < simplex_bin.size(); i++)    //remove mst edges from active edges
-    {
-        if (std::find(mst_edge_index.begin(), mst_edge_index.end(), i) == mst_edge_index.end())
-            dim_active_index.push_back(i);
-    }
+//     std::vector<int> dim_active_index;
+//     for (int i = 0; i < simplex_bin.size(); i++)    //remove mst edges from active edges
+//     {
+//         if (std::find(mst_edge_index.begin(), mst_edge_index.end(), i) == mst_edge_index.end())
+//             dim_active_index.push_back(i);
+//     }
     
-    //mineps = mst_max + stepsize
-    double mineps = getMinimumEpsilon(mst_edge_index, simplex_bin, stepsize);
+//     //mineps = mst_max + stepsize
+//     double mineps = getMinimumEpsilon(mst_edge_index, simplex_bin, stepsize);
 
-    std::vector<std::vector<int>> cofacet_bin = getCofacetBin(simplex_bin, maxeps, threadnum);
+//     std::vector<std::vector<int>> cofacet_bin = getCofacetBin(simplex_bin, maxeps, threadnum);
 
-    int initleftdeg = 3; // cofacet of edge, tri
+//     int initleftdeg = 3; // cofacet of edge, tri
 
-    Bi_Graph_Match bi_graph(cofacet_bin.size(), simplex_bin.size(), initleftdeg, threadnum);    
+//     Bi_Graph_Match bi_graph(cofacet_bin.size(), simplex_bin.size(), initleftdeg, threadnum);    
     
-    std::vector< std::vector< std::pair<double, double> > > persistent_pairs;
-    //H0.
-    persistent_pairs.push_back(std::vector< std::pair<double, double> >{std::make_pair(0, maxeps)});
+//     std::vector< std::vector< std::pair<double, double> > > persistent_pairs;
+//     //H0.
+//     persistent_pairs.push_back(std::vector< std::pair<double, double> >{std::make_pair(0, maxeps)});
 
-    for (int dim = 2; dim <= maxdimension; dim++)
-    {
-        //simplex/cofacet index for each step
-        std::vector<int> simplex_index = getStepwiseIndex(simplex_bin, mineps, maxeps, stepsize);
-        std::vector<int> cofacet_index = getStepwiseIndex(cofacet_bin, mineps, maxeps, stepsize);
+//     for (int dim = 2; dim <= maxdimension; dim++)
+//     {
+//         //simplex/cofacet index for each step
+//         std::vector<int> simplex_index = getStepwiseIndex(simplex_bin, mineps, maxeps, stepsize);
+//         std::vector<int> cofacet_index = getStepwiseIndex(cofacet_bin, mineps, maxeps, stepsize);
  
         
-        for(auto s: simplex_index) std::cout<<s<<"  ";
-        std::cout<<'\n';
-        for(auto s: cofacet_index) std::cout<<s<<"  ";
-        std::cout<<"\n\n";
+//         for(auto s: simplex_index) std::cout<<s<<"  ";
+//         std::cout<<'\n';
+//         for(auto s: cofacet_index) std::cout<<s<<"  ";
+//         std::cout<<"\n\n";
         
-        if (true)
-        {
-            for(auto it = simplex_index.begin(); it != simplex_index.end() - 1; it++) std::cout<<getSimplexWeight(simplex_bin[*it])<<"  ";
-            std::cout<<'\n';
-            for(auto it = cofacet_index.begin(); it != cofacet_index.end() - 1; it++) std::cout<<getSimplexWeight(cofacet_bin[*it])<<"  ";
-            std::cout<<'\n';
-        }
+//         if (true)
+//         {
+//             for(auto it = simplex_index.begin(); it != simplex_index.end() - 1; it++) std::cout<<getSimplexWeight(simplex_bin[*it])<<"  ";
+//             std::cout<<'\n';
+//             for(auto it = cofacet_index.begin(); it != cofacet_index.end() - 1; it++) std::cout<<getSimplexWeight(cofacet_bin[*it])<<"  ";
+//             std::cout<<'\n';
+//         }
 
-        std::vector<int> critical_index_before, critical_index_after;
-        std::vector< std::pair<double, double> > dim_persistent_pairs;
+//         std::vector<int> critical_index_before, critical_index_after;
+//         std::vector< std::pair<double, double> > dim_persistent_pairs;
 
-        int stepnum = simplex_index.size() - 1;
+//         int stepnum = simplex_index.size() - 1;
 
-        for (int m = 1; m <= stepnum; m++)
-        {
-            bi_graph.buildInterface(cofacet_bin, cofacet_index[m - 1], cofacet_index[m], simplex_bin, simplex_index[m], dim_active_index);
+//         for (int m = 1; m <= stepnum; m++)
+//         {
+//             bi_graph.buildInterface(cofacet_bin, cofacet_index[m - 1], cofacet_index[m], simplex_bin, simplex_index[m], dim_active_index);
 
-            bi_graph.parallelKarpSipserInit();
-            // bi_graph.parallelDFSMatch();
-            int reverted = bi_graph.serialCycleRemoval();
+//             bi_graph.parallelKarpSipserInit();
+//             // bi_graph.parallelDFSMatch();
+//             int reverted = bi_graph.serialCycleRemoval();
             
-            std::cout<<"dim = "<<dim<<"  step = "<<m<<" reverted = "<<reverted<<'\n';
+//             std::cout<<"dim = "<<dim<<"  step = "<<m<<" reverted = "<<reverted<<'\n';
 
-            critical_index_after = bi_graph.getCriticalIndex(dim_active_index, simplex_index[m]);  //double check
+//             critical_index_after = bi_graph.getCriticalIndex(dim_active_index, simplex_index[m]);  //double check
 
-            for(auto& i: critical_index_before)
-            {
-                if (std::find(critical_index_after.begin(), critical_index_after.end(), i) == critical_index_after.end())
-                {
-                    double birth = getSimplexWeight(simplex_bin[i]);
+//             for(auto& i: critical_index_before)
+//             {
+//                 if (std::find(critical_index_after.begin(), critical_index_after.end(), i) == critical_index_after.end())
+//                 {
+//                     double birth = getSimplexWeight(simplex_bin[i]);
 
-                    double eps = mineps + (m - 1) * stepsize;    //eps of current step
-                    double death = (eps < maxeps) ? eps : maxeps;
+//                     double eps = mineps + (m - 1) * stepsize;    //eps of current step
+//                     double death = (eps < maxeps) ? eps : maxeps;
 
-                    std::cout<<"dim = "<<dim<<"  birth = "<<birth<<"  death = "<<death<<'\n';
+//                     std::cout<<"dim = "<<dim<<"  birth = "<<birth<<"  death = "<<death<<'\n';
 
-                    dim_persistent_pairs.push_back(std::make_pair(birth, death));
-                }
-            }
+//                     dim_persistent_pairs.push_back(std::make_pair(birth, death));
+//                 }
+//             }
 
-            std::swap(critical_index_before, critical_index_after);
+//             std::swap(critical_index_before, critical_index_after);
 
-            if (m == stepnum)
-            {
-                for(auto& i: critical_index_before)
-                {
-                    if (i >= simplex_index[m - 1])
-                    {
-                        double birth = getSimplexWeight(simplex_bin[i]);
+//             if (m == stepnum)
+//             {
+//                 for(auto& i: critical_index_before)
+//                 {
+//                     if (i >= simplex_index[m - 1])
+//                     {
+//                         double birth = getSimplexWeight(simplex_bin[i]);
 
-                        double eps = mineps + m * stepsize;    //eps of current step
-                        double death = (eps < maxeps) ? eps : maxeps;
+//                         double eps = mineps + m * stepsize;    //eps of current step
+//                         double death = (eps < maxeps) ? eps : maxeps;
 
-                        std::cout<<"dim = "<<dim<<"  birth = "<<birth<<"  death = "<<death<<'\n';
+//                         std::cout<<"dim = "<<dim<<"  birth = "<<birth<<"  death = "<<death<<'\n';
 
-                        dim_persistent_pairs.push_back(std::make_pair(birth, death));
-                    }
-                }
-            }
-        }
+//                         dim_persistent_pairs.push_back(std::make_pair(birth, death));
+//                     }
+//                 }
+//             }
+//         }
 
-        persistent_pairs.push_back(std::move(dim_persistent_pairs));
+//         persistent_pairs.push_back(std::move(dim_persistent_pairs));
 
-        dim_active_index = bi_graph.getActiveIndex();
+//         dim_active_index = bi_graph.getActiveIndex();
 
-        std::cout<<"dim = "<<dim<<"  cofacet size = "<<cofacet_bin.size()<<"  active cofacet = "<<dim_active_index.size()<<'\n';
+//         std::cout<<"dim = "<<dim<<"  cofacet size = "<<cofacet_bin.size()<<"  active cofacet = "<<dim_active_index.size()<<'\n';
 
-        if (dim < maxdimension)
-        {
-            simplex_bin = getCofacetBin(cofacet_bin, maxeps, threadnum);
-            std::swap(simplex_bin, cofacet_bin);
-            bi_graph.updateDimension(cofacet_bin.size(), simplex_bin.size());
-        }
-    }
+//         if (dim < maxdimension)
+//         {
+//             simplex_bin = getCofacetBin(cofacet_bin, maxeps, threadnum);
+//             std::swap(simplex_bin, cofacet_bin);
+//             bi_graph.updateDimension(cofacet_bin.size(), simplex_bin.size());
+//         }
+//     }
 
-    return persistent_pairs;
-}
+//     return persistent_pairs;
+// }
 
 
 
@@ -1113,7 +1120,7 @@ void CritCells<ComplexType, DistMatType>::buildInterface(Bi_Graph_Match& bi_grap
     size_t u = bi_graph.u;
     size_t v = bi_graph.v;
 
-    std::cout<<u<<"    "<<v<<'\n';
+    // std::cout<<u<<"    "<<v<<'\n';
 
     for (size_t i = 0; i < cofacet_list.size(); i++)
     {
@@ -1143,23 +1150,43 @@ void CritCells<ComplexType, DistMatType>::runTest(size_t maxdim, double maxeps)
 {
     size_t n = this->distMatrix.size();
     auto binom_table = getBinomialTable(n, maxdim);
-    auto sorted_edge = getSortedEdge(binom_table, maxeps);
 
-    auto active_edge = getActiveEdgeIndexHashTable(binom_table, sorted_edge);
+    auto sorted_simplex = getSortedEdge(binom_table, maxeps);
 
-    auto sorted_tri = getSortedCofacetList(binom_table, sorted_edge, 1, maxeps, 1);
+    auto active_index_hash_table = getActiveEdgeIndexHashTable(binom_table, sorted_simplex);
+    std::vector<size_t> dim_active_index;
+    for(auto& pair: active_index_hash_table) dim_active_index.push_back(pair.second);
 
-    // for (auto e: active_edge) std::cout<<e.first<<" "<<e.second<<'\n';\
+    auto sorted_cofacet = getSortedCofacetList(binom_table, sorted_simplex, 1, maxeps, 1);
 
-    // std::cout<<sorted_tri.size()<<'\n';
+    std::vector<std::vector<double>> critical_weight;
+    critical_weight.push_back(std::vector<double>{0});
+    
+    Bi_Graph_Match bi_graph(1, 1, 1, 1);
 
-    Bi_Graph_Match bi_graph(sorted_edge.size(), sorted_tri.size(), 1, 1);
-    bi_graph.updateDimension(sorted_edge.size(), sorted_tri.size());
+    for (size_t dim = 2; dim <= maxdim; dim++)
+    {
+        bi_graph.updateDimension(sorted_cofacet.size(), sorted_simplex.size());
+        buildInterface(bi_graph, binom_table, sorted_cofacet, 2, active_index_hash_table);
 
-    buildInterface(bi_graph, binom_table, sorted_tri, 2, active_edge);
+        bi_graph.parallelMaxFacetInit(0, sorted_cofacet.size(), 0, sorted_simplex.size(), 1);
 
-    // for (auto p : active_edge) std::cout<<p.first<<"  "<<p.second<<'\n';
-    // std::cout<<'\n';
+        bi_graph.parallelFacetDFSMatch(1);
+
+        std::cout<<bi_graph.dfsCycleRemoval()<<'\n';
+
+        std::vector<size_t> crit_index = bi_graph.getCriticalIndex(dim_active_index, sorted_simplex.size());
+        for(auto t: crit_index) std::cout<<bi_graph.adj_list[sorted_cofacet.size()+t].size()<<"  ";
+        std::cout<<'\n';
+
+        dim_active_index = bi_graph.getActiveIndex();
+        active_index_hash_table = getActiveFacetIndexHashTable(sorted_cofacet, dim_active_index);
+
+        sorted_simplex = getSortedCofacetList(binom_table, sorted_cofacet, dim, maxeps, 1);
+        std::swap(sorted_simplex, sorted_cofacet);
+
+    }
+
 
     return;
 }
