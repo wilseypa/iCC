@@ -2,10 +2,8 @@
 #include <vector>
 #include <ranges>
 #include <numeric>
-#include <deque>
-#include <queue>
-#include <set>
 #include <execution>
+#include <cstdlib>
 #include "omp.h"
 
 #include "biGraphMorseMatch.hpp"
@@ -534,31 +532,35 @@ int Bi_Graph_Match::facetDfsAugPath(const size_t startnode, std::vector<int>& df
 // }
 
 
-void Bi_Graph_Match::add2SingleOrRemove(const size_t index, std::vector<uint8_t>& removed_flag)
+void Bi_Graph_Match::add2SingleOrRemove(const size_t index, std::vector<uint64_t>& removed_flag, const size_t round)
 {
-    if (removed_flag[index] == 2) return;
+    int64_t flagabs = abs(removed_flag[index]);
 
-    if (removed_flag[index] == 1)
+    //if index is not visited in this round
+    if (flagabs < round)
     {
-        removed_flag[index] = 2;
+        removed_flag[index] = round;
         return;
     }
 
-    //removed_flag[index] == 0
-    removed_flag[index] = 1;
-    return;
+    //if index has been visited once in this round
+    if (removed_flag[index] == round)
+    {
+        removed_flag[index] = -round;
+        return;
+    }
+
+    //if index is removed in current round. removed_flag[index] == -round
+    if (flagabs == round) return;
 }
 
-int Bi_Graph_Match::serialCofacetLeftDFSAugPath(const size_t cofacetindex, std::vector<uint8_t>& cofacet_dfs_flag, std::vector<uint8_t>& removed_flag, std::vector<size_t>& aug_path)
+int Bi_Graph_Match::serialCofacetLeftDFSAugPath(const size_t cofacetindex, std::vector<uint8_t>& cofacet_dfs_flag, std::vector<size_t>& aug_path, std::vector<uint64_t>& removed_flag, const size_t round)
 {
     std::vector<size_t> dfs_stack;
     dfs_stack.reserve(u);
     dfs_stack.push_back(cofacetindex);
 
     size_t maxindex = u + v;
-    std::vector<bool> single_cofacet(maxindex, false);
-    std::vector<bool> single_facet(maxindex, false);
-    std::vector<bool> removed_index(maxindex, false);    //shared by cofacet and facet
 
     cofacet_dfs_flag[cofacetindex] += 1;
 
@@ -578,7 +580,7 @@ int Bi_Graph_Match::serialCofacetLeftDFSAugPath(const size_t cofacetindex, std::
 
             if (match_list[vidx] < 0) 
             {
-                add2SingleOrRemove(vidx, removed_flag);
+                add2SingleOrRemove(vidx, removed_flag, round);
                 continue;
             }
 
@@ -586,7 +588,7 @@ int Bi_Graph_Match::serialCofacetLeftDFSAugPath(const size_t cofacetindex, std::
             if (uidx != topindex)
             {
                 dfs_stack.push_back(uidx);
-                add2SingleOrRemove(uidx, removed_flag);
+                add2SingleOrRemove(uidx, removed_flag, round);
             }
         }
     }
@@ -594,13 +596,13 @@ int Bi_Graph_Match::serialCofacetLeftDFSAugPath(const size_t cofacetindex, std::
     int64_t maxfacetindex = -1;
     for (int64_t i = maxindex - 1; i >= u; i--)
     {
-        if (removed_flag[i] == 1)
+        if (removed_flag[i] == round)
         {
             maxfacetindex = i;
             break;
         }
     }
-    if (maxfacetindex < 0) return -1;
+    if (maxfacetindex < 0) return -1;    //if no avaiable facet
 
     int endflag = 0;
     //pick the largest availble facet. do backward dfs to find the aug path
@@ -625,7 +627,7 @@ int Bi_Graph_Match::serialCofacetLeftDFSAugPath(const size_t cofacetindex, std::
 
             //found eligible backward path
             // if (single_cofacet.contains(uidx) && cofacet_dfs_flag[uidx] < 1)
-            if (removed_flag[uidx] == 1)
+            if (removed_flag[uidx] == round)
             {   
                 cofacet_dfs_flag[uidx] += 1;
                 aug_path[++topindex] = uidx;
@@ -726,23 +728,26 @@ void Bi_Graph_Match::serialCofacetDFSMatch()
 
     std::vector<size_t> aug_path(u, 0);
 
-    std::vector<uint8_t> removed_flag(u + v, 0);
+    std::vector<uint64_t> removed_flag(u + v, 0);
+
+    size_t round = 0;
 
     while (true)
     {
         //do not reset dfs flag
 
-        // std::cout<<"dfs round "<<'\n';
+        std::cout<<"dfs round "<<'\n';
+        std::fill(std::execution::par, removed_flag.begin(), removed_flag.end(), 0);
 
         for (size_t i = 0; i < initialunmatched; i++)
         {
-            std::fill(std::execution::par, removed_flag.begin(), removed_flag.end(), 0);
+            round = i + 1;
 
             size_t ustart = unmatched_u_init[i];
 
             // std::cout<<"ustart = "<<ustart<<"  match = "<<match_list[ustart]<<'\n';
             
-            int augpathlen = serialCofacetLeftDFSAugPath(ustart, cofacet_dfs_flag, removed_flag, aug_path);
+            int augpathlen = serialCofacetLeftDFSAugPath(ustart, cofacet_dfs_flag, aug_path, removed_flag, round);
 
             // std::cout<<"returned from ith init unmatched = "<<i<<'\n';
 

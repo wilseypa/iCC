@@ -1,7 +1,6 @@
 #pragma once
 
 #include <vector>
-#include <deque>
 
 class Bi_Graph_Match 
 {
@@ -39,10 +38,10 @@ public:
 
     // int facetRightDFSAugPath(int facetindex, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<int>& aug_path_tid);
 
-    void add2SingleOrRemove(const size_t index, std::vector<uint8_t>& removed_flag);
-    int serialCofacetLeftDFSAugPath(const size_t cofacetindex, std::vector<uint8_t>& cofacet_dfs_flag, std::vector<uint8_t>& removed_flag, std::vector<size_t>& aug_path);
+    void add2SingleOrRemove(const size_t index, std::vector<uint64_t>& removed_flag, const size_t round);
+    int serialCofacetLeftDFSAugPath(const size_t cofacetindex, std::vector<uint8_t>& cofacet_dfs_flag, std::vector<size_t>& aug_path, std::vector<uint64_t>& removed_flag, const size_t round);
 
-    std::set<int> criticalFacetBackwardSearch(int facetindex);
+    // std::set<int> criticalFacetBackwardSearch(int facetindex);
     
 
     //cycle removal helper function
@@ -78,7 +77,7 @@ public:
     
     std::vector<size_t> getCriticalIndex(const std::vector<size_t>& dim_active_index, const size_t simplex_index_max);
 
-    std::vector<std::set<int>> getBackwardSingleFacetIndex(std::vector<int> critical_facet_index);
+    // std::vector<std::set<int>> getBackwardSingleFacetIndex(std::vector<int> critical_facet_index);
 
 
     void checkSimplex(std::vector<std::vector<int>>& cofacet_bin, std::vector<std::vector<int>>& simplex_bin, std::vector<std::vector<int>>& target_simplex);
