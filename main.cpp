@@ -19,7 +19,7 @@ int main()
     //     std::cout<<'\n';
     // }
 
-    cc.runTest(3, 1.5);
+    cc.runTest(3, 1.2);
 
     return 0;
 }

@@ -534,22 +534,22 @@ int Bi_Graph_Match::facetDfsAugPath(const size_t startnode, std::vector<int>& df
 // }
 
 
-bool Bi_Graph_Match::add2SingleOrRemove(const size_t index, std::vector<bool>& single_flag, std::vector<bool>& removed_flag)
+void Bi_Graph_Match::add2SingleOrRemove(const size_t index, std::vector<uint8_t>& removed_flag)
 {
-    if (removed_flag[index]) return false;
+    if (removed_flag[index] == 2) return;
 
-    if (single_flag[index])
+    if (removed_flag[index] == 1)
     {
-        single_flag[index] = false;
-        removed_flag[index] = true;
-        return false;
+        removed_flag[index] = 2;
+        return;
     }
 
-    single_flag[index] = true;
-    return true;
+    //removed_flag[index] == 0
+    removed_flag[index] = 1;
+    return;
 }
 
-int Bi_Graph_Match::serialCofacetLeftDFSAugPath(const size_t cofacetindex, std::vector<int>& cofacet_dfs_flag, std::vector<size_t>& aug_path)
+int Bi_Graph_Match::serialCofacetLeftDFSAugPath(const size_t cofacetindex, std::vector<uint8_t>& cofacet_dfs_flag, std::vector<uint8_t>& removed_flag, std::vector<size_t>& aug_path)
 {
     std::vector<size_t> dfs_stack;
     dfs_stack.reserve(u);
@@ -578,7 +578,7 @@ int Bi_Graph_Match::serialCofacetLeftDFSAugPath(const size_t cofacetindex, std::
 
             if (match_list[vidx] < 0) 
             {
-                add2SingleOrRemove(vidx, single_facet, removed_index);
+                add2SingleOrRemove(vidx, removed_flag);
                 continue;
             }
 
@@ -586,59 +586,64 @@ int Bi_Graph_Match::serialCofacetLeftDFSAugPath(const size_t cofacetindex, std::
             if (uidx != topindex)
             {
                 dfs_stack.push_back(uidx);
-                add2SingleOrRemove(uidx, single_cofacet, removed_index);
+                add2SingleOrRemove(uidx, removed_flag);
             }
         }
     }
 
-    int endflag = 0;
-    //pick the largest availble facet. do backward dfs to find the aug path
+    int64_t maxfacetindex = -1;
     for (int64_t i = maxindex - 1; i >= u; i--)
     {
-        if (!single_facet[i]) continue;
-
-        // endflag = 0;    //reset flag for each cycle
-        topindex = -1;
-        aug_path[++topindex] = i;
-        
-        while (!endflag)
+        if (removed_flag[i] == 1)
         {
-            endflag = 1;
-            size_t vidx = aug_path[topindex];
-            for (auto& uidx: adj_list[vidx])
-            {
-                if (uidx == match_list[vidx]) continue;
-
-                //end of backward dfs
-                if (uidx == cofacetindex)
-                {
-                    aug_path[++topindex] = uidx;
-                    return topindex + 1;
-                }
-
-                //found eligible backward path
-                // if (single_cofacet.contains(uidx) && cofacet_dfs_flag[uidx] < 1)
-                if (single_cofacet[uidx])
-                {   
-                    cofacet_dfs_flag[uidx] += 1;
-                    aug_path[++topindex] = uidx;
-                    aug_path[++topindex] = match_list[uidx];
-                    endflag = 0;
-                    break;
-                }
-            }
-
-            //cannot go backward to the cofacetindex with this topindex
-            if (endflag)
-            {
-                for (int j = topindex - 1; j > 0; j -= 2) 
-                {
-                    cofacet_dfs_flag[aug_path[j]] -= 1;
-                }
-            }
-        } 
-        
+            maxfacetindex = i;
+            break;
+        }
     }
+    if (maxfacetindex < 0) return -1;
+
+    int endflag = 0;
+    //pick the largest availble facet. do backward dfs to find the aug path
+
+    topindex = -1;
+    aug_path[++topindex] = maxfacetindex;
+        
+    while (!endflag)
+    {
+        endflag = 1;
+        size_t vidx = aug_path[topindex];
+        for (auto& uidx: adj_list[vidx])
+        {
+            if (uidx == match_list[vidx]) continue;
+
+            //end of backward dfs
+            if (uidx == cofacetindex)
+            {
+                aug_path[++topindex] = uidx;
+                return topindex + 1;
+            }
+
+            //found eligible backward path
+            // if (single_cofacet.contains(uidx) && cofacet_dfs_flag[uidx] < 1)
+            if (removed_flag[uidx] == 1)
+            {   
+                cofacet_dfs_flag[uidx] += 1;
+                aug_path[++topindex] = uidx;
+                aug_path[++topindex] = match_list[uidx];
+                endflag = 0;
+                break;
+            }
+        }
+
+        //cannot go backward to the cofacetindex with this topindex
+        if (endflag)
+        {
+            for (int64_t j = topindex - 1; j > 0; j -= 2) 
+            {
+                cofacet_dfs_flag[aug_path[j]] -= 1;
+            }
+        }
+    } 
     
     return -1;
 }
@@ -709,7 +714,7 @@ void Bi_Graph_Match::serialCofacetDFSMatch()
 {
     std::vector<size_t> unmatched_u_init(u, 0);
     std::vector<size_t> unmatched_u_final(u, 0);
-    std::vector<int> cofacet_dfs_flag(u, 0);
+    std::vector<uint8_t> cofacet_dfs_flag(u, 0);
 
     size_t initialunmatched = 0;
     size_t finalunmatched = 0;
@@ -721,7 +726,7 @@ void Bi_Graph_Match::serialCofacetDFSMatch()
 
     std::vector<size_t> aug_path(u, 0);
 
-    // std::cout<<"init unmatched u= "<<initialunmatched<<'\n';
+    std::vector<uint8_t> removed_flag(u + v, 0);
 
     while (true)
     {
@@ -731,11 +736,13 @@ void Bi_Graph_Match::serialCofacetDFSMatch()
 
         for (size_t i = 0; i < initialunmatched; i++)
         {
+            std::fill(std::execution::par, removed_flag.begin(), removed_flag.end(), 0);
+
             size_t ustart = unmatched_u_init[i];
 
             // std::cout<<"ustart = "<<ustart<<"  match = "<<match_list[ustart]<<'\n';
             
-            int augpathlen = serialCofacetLeftDFSAugPath(ustart, cofacet_dfs_flag, aug_path);
+            int augpathlen = serialCofacetLeftDFSAugPath(ustart, cofacet_dfs_flag, removed_flag, aug_path);
 
             // std::cout<<"returned from ith init unmatched = "<<i<<'\n';
 
