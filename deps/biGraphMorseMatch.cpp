@@ -534,19 +534,18 @@ int Bi_Graph_Match::facetDfsAugPath(const size_t startnode, std::vector<int>& df
 // }
 
 
-bool Bi_Graph_Match::add2SingleOrRemove(size_t index, std::set<size_t>& single_index, std::set<size_t>& removed_index)
+bool Bi_Graph_Match::add2SingleOrRemove(const size_t index, std::vector<bool>& single_flag, std::vector<bool>& removed_flag)
 {
-    //for c++20
-    if (removed_index.contains(index)) return false;
+    if (removed_flag[index]) return false;
 
-    if (single_index.contains(index))
+    if (single_flag[index])
     {
-        single_index.erase(index);
-        removed_index.insert(index);
+        single_flag[index] = false;
+        removed_flag[index] = true;
         return false;
-    } 
+    }
 
-    single_index.insert(index);
+    single_flag[index] = true;
     return true;
 }
 
@@ -556,9 +555,10 @@ int Bi_Graph_Match::serialCofacetLeftDFSAugPath(const size_t cofacetindex, std::
     dfs_stack.reserve(u);
     dfs_stack.push_back(cofacetindex);
 
-    std::set<size_t> single_cofacet;
-    std::set<size_t> single_facet;
-    std::set<size_t> removed_index;    //shared by cofacet and facet
+    size_t maxindex = u + v;
+    std::vector<bool> single_cofacet(maxindex, false);
+    std::vector<bool> single_facet(maxindex, false);
+    std::vector<bool> removed_index(maxindex, false);    //shared by cofacet and facet
 
     cofacet_dfs_flag[cofacetindex] += 1;
 
@@ -593,10 +593,13 @@ int Bi_Graph_Match::serialCofacetLeftDFSAugPath(const size_t cofacetindex, std::
 
     int endflag = 0;
     //pick the largest availble facet. do backward dfs to find the aug path
-    for (auto rit = single_facet.rbegin(); rit != single_facet.rend(); rit++)
+    for (int64_t i = maxindex - 1; i >= u; i--)
     {
+        if (!single_facet[i]) continue;
+
+        // endflag = 0;    //reset flag for each cycle
         topindex = -1;
-        aug_path[++topindex] = *rit;
+        aug_path[++topindex] = i;
         
         while (!endflag)
         {
@@ -615,7 +618,7 @@ int Bi_Graph_Match::serialCofacetLeftDFSAugPath(const size_t cofacetindex, std::
 
                 //found eligible backward path
                 // if (single_cofacet.contains(uidx) && cofacet_dfs_flag[uidx] < 1)
-                if (single_cofacet.contains(uidx))
+                if (single_cofacet[uidx])
                 {   
                     cofacet_dfs_flag[uidx] += 1;
                     aug_path[++topindex] = uidx;
@@ -628,9 +631,9 @@ int Bi_Graph_Match::serialCofacetLeftDFSAugPath(const size_t cofacetindex, std::
             //cannot go backward to the cofacetindex with this topindex
             if (endflag)
             {
-                for (int i = topindex - 1; i > 0; i -= 2) 
+                for (int j = topindex - 1; j > 0; j -= 2) 
                 {
-                    cofacet_dfs_flag[aug_path[i]] -= 1;
+                    cofacet_dfs_flag[aug_path[j]] -= 1;
                 }
             }
         } 

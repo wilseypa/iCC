@@ -1175,8 +1175,8 @@ void CritCells<ComplexType, DistMatType>::runTest(size_t maxdim, double maxeps)
 
         // bi_graph.parallelKarpSipserInit(1);
 
-        bi_graph.parallelFacetDFSMatch(1);
-        // bi_graph.serialCofacetDFSMatch();
+        // bi_graph.parallelFacetDFSMatch(1);
+        bi_graph.serialCofacetDFSMatch();
 
         // std::cout<<"check graph dim = "<<dim<<"  cofacet size = "<<sorted_cofacet.size()<<"  facet size = "<<sorted_simplex.size()<<'\n';
         // std::vector<size_t> cof_idx = {269, 270, 271, 272, 273, 274};
@@ -1200,7 +1200,7 @@ void CritCells<ComplexType, DistMatType>::runTest(size_t maxdim, double maxeps)
         // }
             
 
-        std::cout<<bi_graph.dfsCycleRemoval()<<'\n';
+        // std::cout<<bi_graph.dfsCycleRemoval()<<'\n';
 
         std::vector<size_t> crit_index = bi_graph.getCriticalIndex(dim_active_index, sorted_simplex.size());
         for(auto t: crit_index) std::cout<<"idx and weight = "<<t<<" "<<sorted_simplex[t].second<<"   ";

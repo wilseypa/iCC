@@ -39,7 +39,7 @@ public:
 
     // int facetRightDFSAugPath(int facetindex, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<int>& aug_path_tid);
 
-    bool add2SingleOrRemove(size_t index, std::set<size_t>& single_index, std::set<size_t>& removed_index);
+    bool add2SingleOrRemove(const size_t index, std::vector<bool>& single_flag, std::vector<bool>& removed_flag);
     int serialCofacetLeftDFSAugPath(const size_t cofacetindex, std::vector<int>& cofacet_dfs_flag, std::vector<size_t>& aug_path);
 
     std::set<int> criticalFacetBackwardSearch(int facetindex);
