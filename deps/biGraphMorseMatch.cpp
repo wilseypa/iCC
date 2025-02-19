@@ -736,7 +736,7 @@ void Bi_Graph_Match::serialCofacetDFSMatch()
     {
         //do not reset dfs flag
 
-        std::cout<<"dfs round "<<'\n';
+        // std::cout<<"dfs round "<<'\n';
         std::fill(std::execution::par, removed_flag.begin(), removed_flag.end(), 0);
 
         for (size_t i = 0; i < initialunmatched; i++)
@@ -798,12 +798,12 @@ void Bi_Graph_Match::serialCofacetDFSMatch()
 //     return parent_workspace.size();
 // }
 
-int Bi_Graph_Match::getChild(std::vector<size_t>& child_workspace, const size_t uidx) 
+size_t Bi_Graph_Match::getChild(std::vector<size_t>& child_workspace, const size_t uidx) 
 {
     child_workspace.clear();
     //i is d-1 simp
     for (auto& i: adj_list[uidx]) {
-        int imate = match_list[i];
+        int64_t imate = match_list[i];
         if (imate != -1 && imate != uidx) child_workspace.push_back(imate); 
     }
 
@@ -1016,7 +1016,7 @@ void Bi_Graph_Match::parallelFacetDFSMatch(const int threadnum)
 
     while (true) {
 
-        std::cout<<"aug match round "<<'\n';
+        // std::cout<<"aug match round "<<'\n';
 
         //shared among threads
         finalunmatched = 0;
@@ -1162,13 +1162,13 @@ int Bi_Graph_Match::dfsCycleRemoval()
     int reverted = 0;
 
     //0: not visited, 1: visiting, 2: visited
-    std::vector<int> state_flag(u, 0);
+    std::vector<uint8_t> state_flag(u, 0);
 
     std::vector<size_t> dfs_stack;
     dfs_stack.reserve(v);
 
     std::vector<size_t> child_workspace;
-    child_workspace.reserve(udegree);
+    child_workspace.reserve(udegree + 1);
 
 
     for (size_t i = 0; i < u; i++)
@@ -1181,9 +1181,8 @@ int Bi_Graph_Match::dfsCycleRemoval()
 
         while (!dfs_stack.empty())
         {
-            size_t top = std::move(dfs_stack.back());
+            size_t top = dfs_stack.back();
             dfs_stack.pop_back();
-
 
             if (state_flag[top] == 0)
             {
@@ -1192,9 +1191,7 @@ int Bi_Graph_Match::dfsCycleRemoval()
 
                 getChild(child_workspace, top);
 
-                
-
-                for (int child: child_workspace)
+                for (size_t child: child_workspace)
                 {
 
                     if (state_flag[child] == 0) 
@@ -1203,12 +1200,16 @@ int Bi_Graph_Match::dfsCycleRemoval()
                     } else if (state_flag[child] == 1)
                     {
                         //found back edge
-                        // std::cout<<"cyc rm found cycle at = "<<child<<"  match = "<<match_list[child] - u<<"  child adj list = ";
-                        // for(auto i : adj_list[child]) std::cout<<i - u<<" ";
-                        // std::cout<<'\n'<<"  current top = "<<top<<"  match = "<<match_list[top] - u<<"  top adj list = ";
-                        // for(auto i : adj_list[top]) std::cout<<i - u<<" ";
-                        int64_t temp = match_list[top];
-                        match_list[top] = -1;
+                        int64_t temp = match_list[child];
+
+                        // if (temp < 0)
+                        // {
+                        //     std::cout<<"found negative dfs child match. top = "<<top<<"    adj list = ";
+                        //     for (auto k : adj_list[top]) std::cout<<k<<"("<<k-u<<")"<<"  ";
+                        //     std::cout<<'\n';
+                        //     continue;
+                        // }
+                        match_list[child] = -1;
                         match_list[temp] = -1;
                         reverted += 1;
                     }
@@ -1228,13 +1229,13 @@ void Bi_Graph_Match::addEdge(int leftnode, int rightnode) {
     return;
 }
 
-Bi_Graph_Match::Bi_Graph_Match(int leftnum, int rightnum, int leftdimension) : u(leftnum), v(rightnum), udegree(leftdimension + 1) 
+Bi_Graph_Match::Bi_Graph_Match(size_t leftnum, size_t rightnum, size_t leftdimension) : u(leftnum), v(rightnum), udegree(leftdimension + 1) 
 {
     adj_list.resize(u + v);
     match_list.resize(u + v, -1);
 }
 
-void Bi_Graph_Match::updateDimension(int newleftnum, int newrightnum) {
+void Bi_Graph_Match::updateDimension(size_t newleftnum, size_t newrightnum) {
     u = newleftnum;
     v = newrightnum;
     udegree += 1;

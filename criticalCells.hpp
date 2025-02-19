@@ -151,7 +151,7 @@ public:
 
     void buildInterface(Bi_Graph_Match& bi_graph, const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<std::pair<int64_t, double>>& cofacet_list, const size_t dim, const robin_hood::unordered_map<int64_t, size_t>& active_facet_index);
     
-    void runTest(size_t maxdim, double maxeps);
+    void runTest(size_t maxdim, double maxeps, int threadnumber);
 
 
 private:

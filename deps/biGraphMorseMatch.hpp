@@ -48,7 +48,7 @@ public:
     // int findRoot();
     // int getParent(std::vector<int>& parent_workspace, int uidx);
 
-    int getChild(std::vector<size_t>& child_workspace, const size_t uidx);
+    size_t getChild(std::vector<size_t>& child_workspace, const size_t uidx);
 
     // void getAncestor(std::vector<int>& ancestor_workspace, int rootnum, int uidx);
     // bool isBackwardAcyclic(std::vector<int>& ancestor_simp, std::vector<int>& u_child);
@@ -67,9 +67,9 @@ public:
 
     void addEdge(int u, int v);
 
-    Bi_Graph_Match(int leftnum, int rightnum, int leftdimension);
+    Bi_Graph_Match(size_t leftnum, size_t rightnum, size_t leftdimension);
 
-    void updateDimension(int newleftnum, int newrightnum);
+    void updateDimension(size_t newleftnum, size_t newrightnum);
 
     void buildInterface(const std::vector<std::vector<int>>& cofacet_bin, int cofacet_index_min, int cofacet_index_max, const std::vector<std::vector<int>>& simplex_bin, int simplex_index_max, const std::vector<int>& active_index);
 

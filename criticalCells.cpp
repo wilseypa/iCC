@@ -474,52 +474,52 @@ std::vector<int> CritCells<ComplexType, DistMatType>::getMSTEdgeIndices(std::vec
 //     return critical_weight;
 // }
 
-template <typename ComplexType, typename DistMatType>
-std::vector<double> CritCells<ComplexType, DistMatType>::getApproxDeathWeight(std::vector<std::vector<int>>& facet_bin, std::vector<std::set<int>>& backward_facet_index, double maxeps)
-{
-    std::vector<double> death_weight;
+// template <typename ComplexType, typename DistMatType>
+// std::vector<double> CritCells<ComplexType, DistMatType>::getApproxDeathWeight(std::vector<std::vector<int>>& facet_bin, std::vector<std::set<int>>& backward_facet_index, double maxeps)
+// {
+//     std::vector<double> death_weight;
 
-    size_t npts = this->distMatrix.size();
+//     size_t npts = this->distMatrix.size();
 
-    omp_set_num_threads(1);
+//     omp_set_num_threads(1);
 
-    std::vector<std::vector<int>> thread_workspace(facet_bin.size(), std::vector<int>());
+//     std::vector<std::vector<int>> thread_workspace(facet_bin.size(), std::vector<int>());
 
-    for (auto& facet_index_set: backward_facet_index)
-    {
-        std::vector<double> thread_workspace(facet_index_set.size(), maxeps);
+//     for (auto& facet_index_set: backward_facet_index)
+//     {
+//         std::vector<double> thread_workspace(facet_index_set.size(), maxeps);
 
-        //***********************fix later***********************************//
-        double minweight = 9999;
+//         //***********************fix later***********************************//
+//         double minweight = 9999;
 
-#pragma omp parallel for
-        for (size_t i = 0; i < facet_index_set.size(); i++)
-        {
-            auto idx = *std::next(facet_index_set.begin(), i);
+// #pragma omp parallel for
+//         for (size_t i = 0; i < facet_index_set.size(); i++)
+//         {
+//             auto idx = *std::next(facet_index_set.begin(), i);
 
-            for (size_t j = 0; j < npts; j++)
-            {
-                if (std::find(facet_bin[idx].begin(), facet_bin[idx].end(), j) != facet_bin[idx].end()) continue;
+//             for (size_t j = 0; j < npts; j++)
+//             {
+//                 if (std::find(facet_bin[idx].begin(), facet_bin[idx].end(), j) != facet_bin[idx].end()) continue;
                 
-                auto weight_lambda = [this, j](auto first, auto second)
-                                    { double firstweight = (first < j) ? this->distMatrix[first][j] : this->distMatrix[j][first];
-                                      double secondweight = (second < j) ? this->distMatrix[second][j] : this->distMatrix[j][second];
-                                      return firstweight < secondweight; };
+//                 auto weight_lambda = [this, j](auto first, auto second)
+//                                     { double firstweight = (first < j) ? this->distMatrix[first][j] : this->distMatrix[j][first];
+//                                       double secondweight = (second < j) ? this->distMatrix[second][j] : this->distMatrix[j][second];
+//                                       return firstweight < secondweight; };
 
-                auto maxidx = *std::max_element(facet_bin[idx].begin(), facet_bin[idx].end(), weight_lambda);
+//                 auto maxidx = *std::max_element(facet_bin[idx].begin(), facet_bin[idx].end(), weight_lambda);
 
-                double cofacetweight = (maxidx < j) ? this->distMatrix[maxidx][j] : this->distMatrix[j][maxidx];
+//                 double cofacetweight = (maxidx < j) ? this->distMatrix[maxidx][j] : this->distMatrix[j][maxidx];
 
-                if (cofacetweight > maxeps && cofacetweight < minweight) minweight = cofacetweight;
-            }
-            thread_workspace[i] = minweight;
-        }
+//                 if (cofacetweight > maxeps && cofacetweight < minweight) minweight = cofacetweight;
+//             }
+//             thread_workspace[i] = minweight;
+//         }
 
-        double dweight = *std::min_element(thread_workspace.begin(), thread_workspace.end());
-        death_weight.push_back(dweight);
-    }
-    return death_weight;
-}
+//         double dweight = *std::min_element(thread_workspace.begin(), thread_workspace.end());
+//         death_weight.push_back(dweight);
+//     }
+//     return death_weight;
+// }
 
 
 // template <typename ComplexType, typename DistMatType>
@@ -1148,7 +1148,7 @@ void CritCells<ComplexType, DistMatType>::buildInterface(Bi_Graph_Match& bi_grap
 
 
 template <typename ComplexType, typename DistMatType>
-void CritCells<ComplexType, DistMatType>::runTest(size_t maxdim, double maxeps)
+void CritCells<ComplexType, DistMatType>::runTest(size_t maxdim, double maxeps, int threadnumber)
 {
     size_t n = this->distMatrix.size();
     auto binom_table = getBinomialTable(n, maxdim);
@@ -1161,8 +1161,8 @@ void CritCells<ComplexType, DistMatType>::runTest(size_t maxdim, double maxeps)
 
     auto sorted_cofacet = getSortedCofacetList(binom_table, sorted_simplex, 1, maxeps, 1);
 
-    std::vector<std::vector<double>> critical_weight;
-    critical_weight.push_back(std::vector<double>{0});
+    // std::vector<std::vector<double>> critical_weight;
+    // critical_weight.push_back(std::vector<double>{0});
     
     Bi_Graph_Match bi_graph(1, 1, 1);
 
@@ -1171,12 +1171,12 @@ void CritCells<ComplexType, DistMatType>::runTest(size_t maxdim, double maxeps)
         bi_graph.updateDimension(sorted_cofacet.size(), sorted_simplex.size());
         buildInterface(bi_graph, binom_table, sorted_cofacet, dim, active_index_hash_table);
 
-        bi_graph.parallelMaxFacetInit(0, sorted_cofacet.size(), 0, sorted_simplex.size(), 1);
+        bi_graph.parallelMaxFacetInit(0, sorted_cofacet.size(), 0, sorted_simplex.size(), threadnumber);
 
         // bi_graph.parallelKarpSipserInit(1);
 
-        // bi_graph.parallelFacetDFSMatch(1);
-        bi_graph.serialCofacetDFSMatch();
+        bi_graph.parallelFacetDFSMatch(threadnumber);
+        // bi_graph.serialCofacetDFSMatch();
 
         // std::cout<<"check graph dim = "<<dim<<"  cofacet size = "<<sorted_cofacet.size()<<"  facet size = "<<sorted_simplex.size()<<'\n';
         // std::vector<size_t> cof_idx = {269, 270, 271, 272, 273, 274};
@@ -1199,12 +1199,14 @@ void CritCells<ComplexType, DistMatType>::runTest(size_t maxdim, double maxeps)
         //     }
         // }
             
-
+        auto reverted = bi_graph.dfsCycleRemoval();
+        std::cout<<reverted<<'\n';
         // std::cout<<bi_graph.dfsCycleRemoval()<<'\n';
 
-        std::vector<size_t> crit_index = bi_graph.getCriticalIndex(dim_active_index, sorted_simplex.size());
-        for(auto t: crit_index) std::cout<<"idx and weight = "<<t<<" "<<sorted_simplex[t].second<<"   ";
-        std::cout<<'\n';
+        // std::vector<size_t> crit_index = bi_graph.getCriticalIndex(dim_active_index, sorted_simplex.size());
+        // // for(auto t: crit_index) std::cout<<"idx and weight = "<<t<<" "<<sorted_simplex[t].second<<"   ";
+        // // std::cout<<'\n';
+        // std::cout<<"dim = "<<dim<<"   "<<crit_index.size()<<'\n';
 
         dim_active_index = bi_graph.getActiveIndex();
         active_index_hash_table = getActiveFacetIndexHashTable(sorted_cofacet, dim_active_index);
