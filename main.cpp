@@ -7,10 +7,11 @@
 
 int main()
 {   
-    // std::string filename = "testdata3d_2.csv";
-    std::string filename = "test_3dsphere_200.csv";
+    std::string filename = "testdata3d_2.csv";
+    // std::string filename = "test_3dsphere_50.csv";
     CritCells<VR, NormallDistMat> cc(filename);
 
+    cc.runAlphaTest(filename);
     // auto critical_weight = cc.run_MorseMatchPersistence(3, 0, 17);
 
     // auto critical_weight = cc.run_MorseMatch(3, 0, 12, 1);
@@ -20,11 +21,11 @@ int main()
     //     for (auto& w: dim_cw) std::cout<<w<<"  ";
     //     std::cout<<'\n';
     // }
-    auto st0 = std::chrono::high_resolution_clock::now();
-    cc.runTest(3, 1.5, 4);
-    auto st1 = std::chrono::high_resolution_clock::now();
-    auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
-    std::cout<<"run time = "<<pt_ms.count() <<'\n';
+    // auto st0 = std::chrono::high_resolution_clock::now();
+    // cc.runMorseTest(3, 17, 4);
+    // auto st1 = std::chrono::high_resolution_clock::now();
+    // auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
+    // std::cout<<"run time = "<<pt_ms.count() <<'\n';
 
     return 0;
 }

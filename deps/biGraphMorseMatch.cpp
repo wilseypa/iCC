@@ -609,6 +609,10 @@ int Bi_Graph_Match::serialCofacetLeftDFSAugPath(const size_t cofacetindex, std::
 
     topindex = -1;
     aug_path[++topindex] = maxfacetindex;
+
+    std::cout<<"cofacet idx = "<<cofacetindex<<"  max facet = "<<maxfacetindex<<"  rel max facet = "<<maxfacetindex - u<<"  adj list = ";
+    for (auto t: adj_list[cofacetindex]) std::cout<<t<<"  ";
+    std::cout<<'\n';
         
     while (!endflag)
     {

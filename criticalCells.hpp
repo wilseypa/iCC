@@ -14,6 +14,10 @@
 #include"robin_hood.h"
 #include "biGraphMorseMatch.hpp"
 
+#include <CGAL/config.h>
+#include <CGAL/Epick_d.h>
+#include <CGAL/Delaunay_triangulation.h>
+
 
 std::ostream &operator<<(std::ostream &os, const std::map<double, std::vector<std::vector<int>>> &bins)
 {
@@ -45,6 +49,15 @@ struct NormallDistMat
     std::vector<std::vector<double>> distMatrix;
     inline double distance(size_t i, size_t j) const { return this->distMatrix[i][j]; };
 };
+
+/****************************************************** */
+//temp dummy struct for alpha complex
+//crit cell should inherit this
+struct Alpha
+{};
+
+/****************************************************** */
+
 
 struct VR // Creates a constructor for combinatorial simplexes n_pts = n, dim = r
 {
@@ -151,7 +164,14 @@ public:
 
     void buildInterface(Bi_Graph_Match& bi_graph, const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<std::pair<int64_t, double>>& cofacet_list, const size_t dim, const robin_hood::unordered_map<int64_t, size_t>& active_facet_index);
     
-    void runTest(size_t maxdim, double maxeps, int threadnumber);
+    void runMorseTest(size_t maxdim, double maxeps, int threadnumber);
+
+    std::vector<std::pair<int64_t, double>> getSortedDimCells(const std::vector<std::vector<int64_t>>& binomial_table, std::unordered_map<CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>::Vertex_handle, size_t>& vertex_handle_index, 
+                                                              CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>& delaunay_d, const size_t dim);
+
+    double getAlphaSimplexWeight(const std::vector<size_t>& alpha_simplex);
+
+    void runAlphaTest(const std::string &fileName);
 
 
 private:

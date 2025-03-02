@@ -6,6 +6,8 @@
 #include "omp.h"
 
 #include <numeric>
+#include <unordered_set>
+
 
 #ifdef MPI_ENABLED
 #include "mpi.h"
@@ -22,6 +24,8 @@ CritCells<ComplexType, DistMatType>::CritCells(const std::string &fileName)
 {
     auto inputData = readInput::readCSV(fileName);
     this->distMatrix = distMat(inputData);
+
+    //create dt obj here
 }
 
 template <typename ComplexType, typename DistMatType>
@@ -1075,7 +1079,7 @@ std::vector<std::pair<int64_t, double>> CritCells<ComplexType, DistMatType>::get
             auto j = idx_weight_pair.first;
             auto w = idx_weight_pair.second;
             //push new bindex = shifted bin
-            cofacet_list.push_back({bindex + j, w});
+            cofacet_list.emplace_back(bindex + j, w);
         }
     }
 
@@ -1148,7 +1152,7 @@ void CritCells<ComplexType, DistMatType>::buildInterface(Bi_Graph_Match& bi_grap
 
 
 template <typename ComplexType, typename DistMatType>
-void CritCells<ComplexType, DistMatType>::runTest(size_t maxdim, double maxeps, int threadnumber)
+void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double maxeps, int threadnumber)
 {
     size_t n = this->distMatrix.size();
     auto binom_table = getBinomialTable(n, maxdim);
@@ -1175,37 +1179,45 @@ void CritCells<ComplexType, DistMatType>::runTest(size_t maxdim, double maxeps, 
 
         // bi_graph.parallelKarpSipserInit(1);
 
-        bi_graph.parallelFacetDFSMatch(threadnumber);
-        // bi_graph.serialCofacetDFSMatch();
+        // bi_graph.parallelFacetDFSMatch(1);
+        bi_graph.serialCofacetDFSMatch();        
+        
+        // auto reverted = bi_graph.dfsCycleRemoval();
+        // std::cout<<reverted<<'\n';
 
         // std::cout<<"check graph dim = "<<dim<<"  cofacet size = "<<sorted_cofacet.size()<<"  facet size = "<<sorted_simplex.size()<<'\n';
-        // std::vector<size_t> cof_idx = {269, 270, 271, 272, 273, 274};
-        // std::vector<size_t> f_idx = {181, 182, 183, 184, 185, 279, 280, 281};
+        // // std::vector<size_t> cof_idx = {119, 120, 144, 146};
+        // std::vector<size_t> cof_idx = {301, 303, 304};
+        // std::vector<size_t> f_idx = {231, 234};
+        // // std::vector<size_t> f_idx = {28, 35, 37, 52, 77, 83};
 
         // if (dim == 3)
         // {
         //     for (auto j: cof_idx)
         //     {
-        //         std::cout<<"idx = "<<j<<"  match = "<<bi_graph.match_list[j]<<" "<<bi_graph.match_list[j] - int64_t(sorted_cofacet.size())<<"  weight = "<<sorted_cofacet[j].second<<"    adj = ";
+        //         std::cout<<"idx = "<<j<<"  match = "<<bi_graph.match_list[j]<<"("<<bi_graph.match_list[j] - int64_t(sorted_cofacet.size())<<")"<<"  weight = "<<sorted_cofacet[j].second<<"    adj = ";
         //         for (auto t : bi_graph.adj_list[j]) std::cout<<t<<"("<<t - sorted_cofacet.size()<<")"<<"  ";
         //         std::cout<<'\n';
         //     }
 
         //     for (auto j: f_idx)
         //     {
-        //         std::cout<<"facet idx = "<<j<<"  weight = "<<sorted_simplex[j].second<<"  adj = ";
+        //         std::cout<<"facet idx = "<<j<<"  weight = "<<sorted_simplex[j].second<<"  match = "<<bi_graph.match_list[j + sorted_cofacet.size()]<<"  adj = ";
         //         for (auto t: bi_graph.adj_list[j + sorted_cofacet.size()])  std::cout<<t<<"  ";
         //         std::cout<<'\n';
         //     }
-        // }
-            
-        auto reverted = bi_graph.dfsCycleRemoval();
-        std::cout<<reverted<<'\n';
-        // std::cout<<bi_graph.dfsCycleRemoval()<<'\n';
 
-        // std::vector<size_t> crit_index = bi_graph.getCriticalIndex(dim_active_index, sorted_simplex.size());
-        // // for(auto t: crit_index) std::cout<<"idx and weight = "<<t<<" "<<sorted_simplex[t].second<<"   ";
-        // // std::cout<<'\n';
+        //     // for (auto j = 0; j < sorted_cofacet.size(); j++)
+        //     // {
+        //     //     if (bi_graph.match_list[j] != -1 &&  bi_graph.match_list[j] !=  bi_graph.adj_list[j][0]) std::cout<<j<<'\n';
+        //     // }
+        // }
+
+
+
+        std::vector<size_t> crit_index = bi_graph.getCriticalIndex(dim_active_index, sorted_simplex.size());
+        for(auto t: crit_index) std::cout<<"  idx and weight = "<<t<<" "<<sorted_simplex[t].second<<"   ";
+        std::cout<<'\n'<<'\n';
         // std::cout<<"dim = "<<dim<<"   "<<crit_index.size()<<'\n';
 
         dim_active_index = bi_graph.getActiveIndex();
@@ -1220,4 +1232,174 @@ void CritCells<ComplexType, DistMatType>::runTest(size_t maxdim, double maxeps, 
     }
 
     return;
+}
+
+template <typename ComplexType, typename DistMatType>
+double CritCells<ComplexType, DistMatType>::getAlphaSimplexWeight(const std::vector<size_t>& alpha_simplex)
+{
+    double weight = 0;
+    //simplex pt is sorted in descending order
+    for (auto rfirst = alpha_simplex.rbegin(); rfirst != alpha_simplex.rend() - 1; rfirst++)
+    {
+        for (auto rsecond = rfirst + 1; rsecond != alpha_simplex.rend(); rsecond++)
+        {
+            weight = std::max(weight, this->distMatrix[*rfirst][*rsecond]);
+        }
+    }
+    return weight;
+}
+
+
+template <typename ComplexType, typename DistMatType>
+std::vector<std::pair<int64_t, double>> CritCells<ComplexType, DistMatType>::getSortedDimCells(const std::vector<std::vector<int64_t>>& binomial_table, std::unordered_map<CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>::Vertex_handle, size_t>& vertex_handle_index,
+                                                                                               CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>& delaunay_d, const size_t dim)
+{
+    std::vector<std::pair<int64_t, double>> sortd_d_cell;
+
+    if (dim == 0) return sortd_d_cell;
+
+    int maxdim = delaunay_d.maximal_dimension();
+
+    std::vector<size_t> simplex_pt;
+    simplex_pt.reserve(dim + 1);
+
+    if (dim == maxdim - 1)
+    {
+        for (auto facetit = delaunay_d.finite_facets_begin(); facetit != delaunay_d.finite_facets_end(); facetit++)
+        {
+            auto fullcellit = facetit->full_cell();
+            auto covt = facetit->index_of_covertex();
+
+            auto neighborit = fullcellit->neighbor(covt);
+            if (neighborit < fullcellit) continue;    //skip to avoid double counting the same facet
+
+            for (size_t i = 0; i <= maxdim; i++)
+            {
+                if (i == covt) continue;    //skip the co_vertex of the facet
+                auto vhandle = fullcellit->vertex(i);    //need to use the full cell iter. facet iter does not have vertex method
+                simplex_pt.push_back(vertex_handle_index[vhandle]);
+            }
+            std::sort(simplex_pt.begin(), simplex_pt.end(), std::greater<size_t>());
+            int64_t bindex = getBinomialIndex(binomial_table, simplex_pt, 0);
+            double weight = getAlphaSimplexWeight(simplex_pt);
+            sortd_d_cell.emplace_back(bindex, weight);
+            simplex_pt.clear();
+        }
+        sortSimplexByWeightThenIndex(sortd_d_cell);
+        return sortd_d_cell;
+    }
+
+    if (dim == maxdim)
+    {
+        for (auto fullcellit = delaunay_d.finite_full_cells_begin(); fullcellit != delaunay_d.finite_full_cells_end(); fullcellit++)
+        {
+            for (size_t i = 0; i <= dim; i++)
+            {
+                auto vhandle = fullcellit->vertex(i);
+                simplex_pt.push_back(vertex_handle_index[vhandle]);
+            }
+            std::sort(simplex_pt.begin(), simplex_pt.end(), std::greater<size_t>());
+            int64_t bindex = getBinomialIndex(binomial_table, simplex_pt, 0);
+            double weight = getAlphaSimplexWeight(simplex_pt);
+            sortd_d_cell.emplace_back(bindex, weight);
+            simplex_pt.clear();
+        }
+        sortSimplexByWeightThenIndex(sortd_d_cell);
+        return sortd_d_cell;
+    }
+
+    //for the rest of the dim
+    std::vector<size_t> cell_pt;
+    cell_pt.reserve(dim + 1);
+    std::unordered_set<int64_t> cell_bindex_lookup;
+    for (auto fullcellit = delaunay_d.finite_full_cells_begin(); fullcellit != delaunay_d.finite_full_cells_end(); fullcellit++)
+    {
+        for (size_t i = 0; i <= maxdim; i++)
+        {
+            auto vhandle = fullcellit->vertex(i);
+            simplex_pt.push_back(vertex_handle_index[vhandle]);
+        }
+        std::sort(simplex_pt.begin(), simplex_pt.end(), std::greater<size_t>());
+        
+        //subroutine from lhf getDimEdges(int dim)
+        size_t powsize = pow(2, maxdim + 1);
+        for (size_t counter = 1; counter < powsize; counter++)
+        {
+            //count the number of 1 in binary form of counter
+            if (__builtin_popcount(counter) != dim + 1) continue;
+
+            //collect the corresponding pt(subset) of full cell
+            for (size_t i = 0; i < maxdim + 1; i++)
+            {
+                if (counter & (1 << i)) cell_pt.push_back(simplex_pt[i]);
+            }
+
+            std::sort(cell_pt.begin(), cell_pt.end(), std::greater<size_t>());
+
+            int64_t bindex = getBinomialIndex(binomial_table, cell_pt, 0);
+
+            // if (bindex == 0)
+            // {
+            //     std::cout<<"zero bindex edge = "<<cell_pt[0]<<"  "<<cell_pt[1]<<'\n';
+            // }
+
+            //already found
+            if (cell_bindex_lookup.find(bindex) != cell_bindex_lookup.end()) 
+            {
+                cell_pt.clear();
+                continue;
+            }
+
+            cell_bindex_lookup.insert(bindex);
+            double weight = getAlphaSimplexWeight(cell_pt);
+            sortd_d_cell.emplace_back(bindex, weight);
+            cell_pt.clear();    //clean up the pt array for d cell
+        }
+        simplex_pt.clear();    //clean up the pt array for full cell
+    }
+
+    sortSimplexByWeightThenIndex(sortd_d_cell);
+    return sortd_d_cell;
+}
+
+
+template <typename ComplexType, typename DistMatType>
+void CritCells<ComplexType, DistMatType>::runAlphaTest(const std::string &fileName)
+{
+    //read input and create delaunay. should move it to the template later
+    std::vector<std::vector<double>> input_pt = readInput::readCSV(fileName);
+
+    size_t maxdim = input_pt[0].size();
+
+    typedef CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>> DT;
+    typedef DT::Vertex_handle VT;
+
+    DT delaunay_d(maxdim);
+
+    std::vector<DT::Point> dt_points;
+    std::unordered_map<VT, size_t> vertex_handle_index;
+    vertex_handle_index.reserve(input_pt.size());
+
+    for (size_t i = 0; i < input_pt.size(); i++)
+    {
+        dt_points.emplace_back(input_pt[i].begin(), input_pt[i].end());
+        auto vhandle = delaunay_d.insert(dt_points[i]);
+        vertex_handle_index[vhandle] = i;
+    }
+
+    dt_points.clear();
+
+    //morse part
+    size_t n = this->distMatrix.size();
+    auto binom_table = getBinomialTable(n, maxdim);
+
+    auto sorted_simplex = getSortedDimCells(binom_table, vertex_handle_index, delaunay_d, 3);
+
+    for (auto pair: sorted_simplex)
+    {
+        std::cout<<pair.first<<"  "<<pair.second<<'\n';
+    }
+
+    return;
+    
 }

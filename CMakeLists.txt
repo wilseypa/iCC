@@ -7,6 +7,7 @@ set (CMAKE_CXX_STANDARD 23)
 find_package(OpenMP REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(MPI)
+find_package(CGAL REQUIRED)
 
 #Add Subdirectory
 add_subdirectory(deps)
@@ -14,7 +15,7 @@ add_subdirectory(deps)
 # Create library for CriticalCells
 add_library(CriticalCells SHARED criticalCells.cpp criticalCells.hpp)
 target_include_directories(CriticalCells PUBLIC ${CMAKE_SOURCE_DIR}/deps)
-target_link_libraries(CriticalCells PUBLIC Eigen3::Eigen hopcroft_karp readInput distMat OpenMP::OpenMP_CXX biGraphMorseMatch) 
+target_link_libraries(CriticalCells PUBLIC Eigen3::Eigen hopcroft_karp readInput distMat OpenMP::OpenMP_CXX biGraphMorseMatch CGAL::CGAL) 
 
 if(MPI_FOUND)
     target_link_libraries(CriticalCells PUBLIC MPI::MPI_CXX)
