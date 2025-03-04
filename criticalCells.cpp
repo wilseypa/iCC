@@ -1020,12 +1020,12 @@ robin_hood::unordered_map<int64_t, size_t> CritCells<ComplexType, DistMatType>::
 }
 
 template <typename ComplexType, typename DistMatType>
-robin_hood::unordered_map<int64_t, size_t> CritCells<ComplexType, DistMatType>::getActiveFacetIndexHashTable(const std::vector<std::pair<int64_t, double>>& facet_list, const std::vector<size_t>& active_facet_index)
+robin_hood::unordered_map<int64_t, size_t> CritCells<ComplexType, DistMatType>::getActiveFacetIndexHashTable(const std::vector<std::pair<int64_t, double>>& facet_list, const std::unordered_set<size_t>& active_facet_index_set)
 {
     robin_hood::unordered_map<int64_t, size_t> active_facet_index_hash;
     active_facet_index_hash.reserve(facet_list.size());
 
-    for (auto i : active_facet_index)
+    for (auto i : active_facet_index_set)
     {
         int64_t bindex = facet_list[i].first;
         active_facet_index_hash.insert({bindex, i});
@@ -1160,8 +1160,8 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
     auto sorted_simplex = getSortedEdge(binom_table, maxeps);
 
     auto active_index_hash_table = getActiveEdgeIndexHashTable(binom_table, sorted_simplex);
-    std::vector<size_t> dim_active_index;
-    for(auto& pair: active_index_hash_table) dim_active_index.push_back(pair.second);
+    std::unordered_set<size_t> dim_active_index_set;
+    for(auto& pair: active_index_hash_table) dim_active_index_set.insert(pair.second);
 
     auto sorted_cofacet = getSortedCofacetList(binom_table, sorted_simplex, 1, maxeps, 1);
 
@@ -1179,17 +1179,20 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
 
         // bi_graph.parallelKarpSipserInit(1);
 
-        // bi_graph.parallelFacetDFSMatch(1);
-        bi_graph.serialCofacetDFSMatch();        
+        bi_graph.parallelFacetDFSMatch(1);
         
-        // auto reverted = bi_graph.dfsCycleRemoval();
-        // std::cout<<reverted<<'\n';
+        // bi_graph.parallelDirectionalFacetDFSMatch(1);
 
-        // std::cout<<"check graph dim = "<<dim<<"  cofacet size = "<<sorted_cofacet.size()<<"  facet size = "<<sorted_simplex.size()<<'\n';
+        // bi_graph.serialCofacetDFSMatch();        
+        
+        auto reverted = bi_graph.dfsCycleRemoval();
+        std::cout<<reverted<<'\n';
+
+        std::cout<<"check graph dim = "<<dim<<"  cofacet size = "<<sorted_cofacet.size()<<"  facet size = "<<sorted_simplex.size()<<'\n';
         // // std::vector<size_t> cof_idx = {119, 120, 144, 146};
         // std::vector<size_t> cof_idx = {301, 303, 304};
         // std::vector<size_t> f_idx = {231, 234};
-        // // std::vector<size_t> f_idx = {28, 35, 37, 52, 77, 83};
+        // // // std::vector<size_t> f_idx = {28, 35, 37, 52, 77, 83};
 
         // if (dim == 3)
         // {
@@ -1215,13 +1218,13 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
 
 
 
-        std::vector<size_t> crit_index = bi_graph.getCriticalIndex(dim_active_index, sorted_simplex.size());
-        for(auto t: crit_index) std::cout<<"  idx and weight = "<<t<<" "<<sorted_simplex[t].second<<"   ";
-        std::cout<<'\n'<<'\n';
-        // std::cout<<"dim = "<<dim<<"   "<<crit_index.size()<<'\n';
+        std::vector<size_t> crit_index = bi_graph.getCriticalIndex(dim_active_index_set, sorted_simplex.size());
+        // for(auto t: crit_index) std::cout<<"  idx and weight = "<<t<<" "<<sorted_simplex[t].second<<"   ";
+        // std::cout<<'\n'<<'\n';
+        std::cout<<"dim = "<<dim<<"   "<<crit_index.size()<<'\n';
 
-        dim_active_index = bi_graph.getActiveIndex();
-        active_index_hash_table = getActiveFacetIndexHashTable(sorted_cofacet, dim_active_index);
+        dim_active_index_set = bi_graph.getActiveIndexSet();
+        active_index_hash_table = getActiveFacetIndexHashTable(sorted_cofacet, dim_active_index_set);
 
         if (dim != maxdim)
         {
@@ -1366,6 +1369,8 @@ std::vector<std::pair<int64_t, double>> CritCells<ComplexType, DistMatType>::get
 template <typename ComplexType, typename DistMatType>
 void CritCells<ComplexType, DistMatType>::runAlphaTest(const std::string &fileName)
 {
+    int threadnumber = 1;
+
     //read input and create delaunay. should move it to the template later
     std::vector<std::vector<double>> input_pt = readInput::readCSV(fileName);
 
@@ -1393,13 +1398,45 @@ void CritCells<ComplexType, DistMatType>::runAlphaTest(const std::string &fileNa
     size_t n = this->distMatrix.size();
     auto binom_table = getBinomialTable(n, maxdim);
 
-    auto sorted_simplex = getSortedDimCells(binom_table, vertex_handle_index, delaunay_d, 3);
+    //get edges
+    auto sorted_simplex = getSortedDimCells(binom_table, vertex_handle_index, delaunay_d, 1);
+    //remove mst edges
+    auto active_facet_hash_table = getActiveEdgeIndexHashTable(binom_table, sorted_simplex);
+    
+    std::unordered_set<size_t> dim_active_index_set;
+    for(auto& pair: active_facet_hash_table) dim_active_index_set.insert(pair.second);
 
-    for (auto pair: sorted_simplex)
+
+    //get triangles
+    auto sorted_cofacet = getSortedDimCells(binom_table, vertex_handle_index, delaunay_d, 2);
+
+    Bi_Graph_Match bi_graph(1, 1, 1);
+    
+    for (size_t dim = 2; dim <= maxdim; dim++)
     {
-        std::cout<<pair.first<<"  "<<pair.second<<'\n';
+        bi_graph.updateDimension(sorted_cofacet.size(), sorted_simplex.size());
+        buildInterface(bi_graph, binom_table, sorted_cofacet, dim, active_facet_hash_table);
+
+        bi_graph.parallelMaxFacetInit(0, sorted_cofacet.size(), 0, sorted_simplex.size(), threadnumber);
+
+        // bi_graph.parallelKarpSipserInit(1);
+
+        // bi_graph.parallelFacetDFSMatch(1);
+        bi_graph.serialCofacetDFSMatch();
+
+        std::vector<size_t> crit_index = bi_graph.getCriticalIndex(dim_active_index_set, sorted_simplex.size());
+        for(auto t: crit_index) std::cout<<"  idx and weight = "<<t<<" "<<sorted_simplex[t].second<<"   ";
+        std::cout<<'\n'<<'\n';
+
+        dim_active_index_set = bi_graph.getActiveIndexSet();
+        active_facet_hash_table = getActiveFacetIndexHashTable(sorted_cofacet, dim_active_index_set);
+
+        if (dim != maxdim)
+        {
+            sorted_simplex = getSortedDimCells(binom_table, vertex_handle_index, delaunay_d, dim + 1);
+            std::swap(sorted_simplex, sorted_cofacet);
+        }
     }
 
     return;
-    
 }

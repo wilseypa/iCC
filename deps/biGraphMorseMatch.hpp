@@ -1,6 +1,8 @@
 #pragma once
 
 #include <vector>
+#include <unordered_set>
+
 
 class Bi_Graph_Match 
 {
@@ -28,18 +30,12 @@ public:
     // bool isRightSinglePath(int cofacetindex);
 
     //parallel bipartite matching helper function
-    int facetDfsAugPath(const size_t startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<size_t>& aug_path_tid);
+    int64_t facetDfsAugPath(const size_t startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<size_t>& aug_path_tid);
 
-    // int facetRightSinglePathDFSAugPath(int facetindex, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<int>& aug_path_tid);
-
-    // int facetRightDFSAugPathWithCheck(int facetindex, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<int>& aug_path_tid);
-
-    // int facetLeftDFSAugPath(int facetindex, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<int>& aug_path_tid);
-
-    // int facetRightDFSAugPath(int facetindex, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<int>& aug_path_tid);
+    int64_t facetRightDfsAugPath(const size_t startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<size_t>& aug_path_tid);
 
     void add2SingleOrRemove(const size_t index, std::vector<uint64_t>& removed_flag, const size_t round);
-    int serialCofacetLeftDFSAugPath(const size_t cofacetindex, std::vector<uint8_t>& cofacet_dfs_flag, std::vector<size_t>& aug_path, std::vector<uint64_t>& removed_flag, const size_t round);
+    int64_t serialCofacetDFSAugPath(const size_t cofacetindex, std::vector<uint8_t>& cofacet_dfs_flag, std::vector<size_t>& aug_path, std::vector<uint64_t>& removed_flag, const size_t round);
 
     // std::set<int> criticalFacetBackwardSearch(int facetindex);
     
@@ -57,7 +53,7 @@ public:
 
     void parallelFacetDFSMatch(const int threadnum);
 
-    // void parallelDirectionalFacetDFSMatch();
+    void parallelDirectionalFacetDFSMatch(const int threadnum);
 
     void serialCofacetDFSMatch();
 
@@ -73,9 +69,9 @@ public:
 
     void buildInterface(const std::vector<std::vector<int>>& cofacet_bin, int cofacet_index_min, int cofacet_index_max, const std::vector<std::vector<int>>& simplex_bin, int simplex_index_max, const std::vector<int>& active_index);
 
-    std::vector<size_t> getActiveIndex(); 
+    std::unordered_set<size_t> getActiveIndexSet(); 
     
-    std::vector<size_t> getCriticalIndex(const std::vector<size_t>& dim_active_index, const size_t simplex_index_max);
+    std::vector<size_t> getCriticalIndex(const std::unordered_set<size_t>& dim_active_index_set, const size_t simplex_index_max);
 
     // std::vector<std::set<int>> getBackwardSingleFacetIndex(std::vector<int> critical_facet_index);
 
