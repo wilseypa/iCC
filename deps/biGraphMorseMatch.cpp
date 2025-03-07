@@ -3,6 +3,8 @@
 #include <numeric>
 #include <execution>
 #include <cstdlib>
+#include <queue>
+#include <utility>
 #include "omp.h"
 
 #include "biGraphMorseMatch.hpp"
@@ -236,55 +238,101 @@ int64_t Bi_Graph_Match::facetDfsAugPath(const size_t startnode, std::vector<int>
     return topindex + 1;
 }
 
+int64_t Bi_Graph_Match::facetDirectNeighborMatch(std::vector<size_t>& unmatched_facet)
+{
+    int64_t counter = 0;
+    auto cmp_lambda = [] (const std::pair<size_t, size_t>& lhs, const std::pair<size_t, size_t>& rhs) 
+    {
+        if (lhs.first != rhs.first) return lhs.first > rhs.first;
+
+        return lhs.second < rhs.second;
+    };
+
+    std::priority_queue<std::pair<size_t, size_t>, std::vector<std::pair<size_t, size_t>>, decltype(cmp_lambda)> cofacet_facet_pq(cmp_lambda);
+
+    //collect unmatched cofacet/facet pair
+    for (auto& vidx: unmatched_facet)
+    {
+        for (auto& uidx: adj_list[vidx])
+        {
+            if (match_list[uidx] < 0) cofacet_facet_pq.push(std::make_pair(uidx, vidx));
+        }
+    }
+
+    std::vector<size_t> dfs_stack;
+    int flag = 0;
+    
+    while (!cofacet_facet_pq.empty())
+    {
+        auto pg_top = cofacet_facet_pq.top();
+        cofacet_facet_pq.pop();
+
+        size_t uidx = pg_top.first;
+        size_t vidx = pg_top.second;
+
+        if (match_list[uidx] < 0 && match_list[vidx] < 0)
+        {
+            flag = 0;
+            for (auto& facetidx: adj_list[uidx])
+            {
+                int64_t cofacetidx = match_list[facetidx];
+                if (cofacetidx >= 0 && adj_list[cofacetidx][0] > vidx) dfs_stack.push_back(cofacetidx);
+            }
+
+            while (!dfs_stack.empty())
+            {
+                size_t topidx = dfs_stack.back();
+                dfs_stack.pop_back();
+
+                for (auto& facetidx: adj_list[topidx])
+                {
+                    if (facetidx == vidx)
+                    {
+                        flag = 1;
+                        break;
+                    }
+
+                    int64_t cofacetidx = match_list[facetidx];
+                    if (cofacetidx >= 0 && cofacetidx != topidx && adj_list[cofacetidx][0] > vidx) dfs_stack.push_back(cofacetidx);
+                }
+
+                if (flag) break;
+            }
+
+            if (!flag)
+            {
+                match_list[uidx] = vidx;
+                match_list[vidx] = uidx;
+                counter += 1;
+            }
+        }
+    }
+
+    return counter;
+}
+
 
 int64_t Bi_Graph_Match::facetRightDfsAugPath(const size_t startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<size_t>& aug_path_tid)
 {
     int64_t topindex = -1;
-    size_t firstlookahead = u + 1;
     aug_path_tid[++topindex] = startnode;
 
     while (topindex >= 0) 
     {
         size_t vidx = aug_path_tid[topindex];
         int endflag = 0;
-        //look ahead, look for v's unmatched neighbor
-        for (const auto& uidx : adj_list[vidx]) 
-        {
-            if (__sync_fetch_and_add(&(look_ahead_flag[uidx]), 1) == 0 && match_list[uidx] < 0) 
-            {
-                
-                //if uidx is the first lookahead. save it and continue
-                if (vidx == startnode)
-                {
-                    __sync_fetch_and_add(&(dfs_flag[uidx]), 1);
-                    firstlookahead = uidx;
-                    break;
-                }
 
-                //for the later lookahead. compare it with the firstlookahead. take the smaller one
-                if (uidx < firstlookahead)
+        if (topindex != startnode)
+        {
+            //look ahead, look for v's unmatched neighbor
+            for (const auto& uidx : adj_list[vidx]) 
+            {
+                if (__sync_fetch_and_add(&(look_ahead_flag[uidx]), 1) == 0 && match_list[uidx] < 0) 
                 {
                     __sync_fetch_and_add(&(dfs_flag[uidx]), 1);
-                    if (firstlookahead < u + 1)
-                    {
-                        __sync_fetch_and_sub(&(look_ahead_flag[firstlookahead]), 1);    //recover the status of firstlookahead
-                        __sync_fetch_and_sub(&(dfs_flag[firstlookahead]), 1);
-                    }
                     aug_path_tid[++topindex] = uidx;
                     return topindex + 1;    //path length
                 }
-                else
-                {
-                    //reset lookahead flag of uidx
-                    //dfs flag along the path will be reset at the next round
-                    __sync_fetch_and_sub(&(look_ahead_flag[uidx]), 1);
-                    topindex = 1;
-                    aug_path_tid[topindex] = firstlookahead;
-                    //length of aug path == 1
-                    return topindex + 1;
-                }
-
-                    
             }
         }
         //dfs
@@ -392,8 +440,19 @@ int64_t Bi_Graph_Match::serialCofacetDFSAugPath(const size_t cofacetindex, std::
     topindex = -1;
     aug_path[++topindex] = maxfacetindex;
 
-    std::cout<<"cofacet idx = "<<cofacetindex<<"  max facet = "<<maxfacetindex<<"  rel max facet = "<<maxfacetindex - u<<"  adj list = ";
-    for (auto t: adj_list[cofacetindex]) std::cout<<t<<"  ";
+    bool temp = false;
+    std::cout<<"cofacet idx = "<<cofacetindex<<" maxfacet idx(rel) = "<<maxfacetindex<<"("<<maxfacetindex - u<<")";
+    if (std::find(adj_list[cofacetindex].begin(), adj_list[cofacetindex].end(), maxfacetindex) != adj_list[cofacetindex].end()) temp = true;
+    else temp = false;
+
+    if (temp)
+    {
+        std::cout<<"  max facet pos in cofacet adj = "<<std::find(adj_list[cofacetindex].begin(), adj_list[cofacetindex].end(), maxfacetindex) - adj_list[cofacetindex].begin();
+        std::cout<<"  cofacet pos in maxfacet adj = "<<std::find(adj_list[maxfacetindex].begin(), adj_list[maxfacetindex].end(), cofacetindex) - adj_list[maxfacetindex].begin();
+    }
+    // for (auto t: adj_list[cofacetindex]) std::cout<<t<<"  ";
+    // std::cout<<" facet adj list = ";
+    // for (auto t: adj_list[maxfacetindex]) std::cout<<t<<"  ";
     std::cout<<'\n';
         
     while (!endflag)
@@ -553,6 +612,9 @@ void Bi_Graph_Match::serialCofacetDFSMatch()
         initialunmatched = finalunmatched;
 
         finalunmatched = 0;
+
+        //no need to run 2nd round
+        break;
     }
 
     return;
@@ -872,6 +934,13 @@ void Bi_Graph_Match::parallelDirectionalFacetDFSMatch(const int threadnum)
         }
     }
 
+    std::cout<<"before direct match. initial unmatched = "<<initialunmatched<<'\n';
+
+    //try to match the direct neighbor first
+    int64_t directmatch = facetDirectNeighborMatch(unmatched_v_init);
+
+    std::cout<<"after direct match. unmatched = "<<initialunmatched - directmatch<<'\n';
+
     //storing aug path one path per thread
     std::vector<std::vector<size_t>> aug_path(threadnum, std::vector<size_t>(u + v, 0));
 
@@ -887,10 +956,13 @@ void Bi_Graph_Match::parallelDirectionalFacetDFSMatch(const int threadnum)
 #pragma omp parallel for schedule(dynamic)
         for (int64_t i = 0; i < initialunmatched; i++)
         // for (int64_t i = initialunmatched - 1; i >= 0; i--)
-        {
+        {   
+            size_t vstart = unmatched_v_init[i];
+            if (match_list[vstart] >= 0) continue;
+
             auto& aug_path_tid = aug_path[omp_get_thread_num()];
 
-            size_t vstart = unmatched_v_init[i];
+            
             int64_t augpathlen = facetRightDfsAugPath(vstart, dfs_flag, look_ahead_flag, aug_path_tid);
 
             //augmentation
@@ -1137,3 +1209,4 @@ void Bi_Graph_Match::checkCofacetByIndex(std::vector<std::vector<int>>& cofacet_
         std::cout<<"  match = "<<match_list[i] - u<<'\n';
     }
 }
+

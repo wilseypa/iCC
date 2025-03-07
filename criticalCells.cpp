@@ -1179,16 +1179,33 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
 
         // bi_graph.parallelKarpSipserInit(1);
 
-        bi_graph.parallelFacetDFSMatch(1);
+        // bi_graph.parallelFacetDFSMatch(1);
         
-        // bi_graph.parallelDirectionalFacetDFSMatch(1);
+        bi_graph.parallelDirectionalFacetDFSMatch(1);
 
-        // bi_graph.serialCofacetDFSMatch();        
+        // bi_graph.serialCofacetDFSMatch();     
+        
+        // for (size_t i = 0; i < bi_graph.u; i++) {
+        //     auto imate = bi_graph.match_list[i];
+        //     if (imate != -1 && bi_graph.match_list[imate] != i) {
+        //         std::cout<<"matching error !!!  i mate = "<<bi_graph.match_list[i]<<"  imate match = "<<bi_graph.match_list[imate]<<'\n';
+        //         return;
+        //     }
+        // }
+
+        // for (size_t i = bi_graph.u; i < (bi_graph.u + bi_graph.v); i++) {
+        //     auto imate = bi_graph.match_list[i];
+        //     if (imate != -1 && bi_graph.match_list[imate] != i) {
+        //         std::cout<<"matching error !!!  i mate = "<<bi_graph.match_list[i]<<"  imate match = "<<bi_graph.match_list[imate]<<'\n';
+        //         return;
+        //     }
+        // }
+
         
         auto reverted = bi_graph.dfsCycleRemoval();
-        std::cout<<reverted<<'\n';
+        std::cout<<"reverted = "<<reverted<<'\n';
 
-        std::cout<<"check graph dim = "<<dim<<"  cofacet size = "<<sorted_cofacet.size()<<"  facet size = "<<sorted_simplex.size()<<'\n';
+        // std::cout<<"check graph dim = "<<dim<<"  cofacet size = "<<sorted_cofacet.size()<<"  facet size = "<<sorted_simplex.size()<<'\n';
         // // std::vector<size_t> cof_idx = {119, 120, 144, 146};
         // std::vector<size_t> cof_idx = {301, 303, 304};
         // std::vector<size_t> f_idx = {231, 234};
@@ -1219,9 +1236,9 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
 
 
         std::vector<size_t> crit_index = bi_graph.getCriticalIndex(dim_active_index_set, sorted_simplex.size());
-        // for(auto t: crit_index) std::cout<<"  idx and weight = "<<t<<" "<<sorted_simplex[t].second<<"   ";
-        // std::cout<<'\n'<<'\n';
-        std::cout<<"dim = "<<dim<<"   "<<crit_index.size()<<'\n';
+        for(auto t: crit_index) std::cout<<"  idx and weight = "<<t<<" "<<sorted_simplex[t].second<<"   ";
+        std::cout<<'\n'<<'\n';
+        // std::cout<<"dim = "<<dim<<"   "<<crit_index.size()<<'\n';
 
         dim_active_index_set = bi_graph.getActiveIndexSet();
         active_index_hash_table = getActiveFacetIndexHashTable(sorted_cofacet, dim_active_index_set);
@@ -1255,7 +1272,7 @@ double CritCells<ComplexType, DistMatType>::getAlphaSimplexWeight(const std::vec
 
 template <typename ComplexType, typename DistMatType>
 std::vector<std::pair<int64_t, double>> CritCells<ComplexType, DistMatType>::getSortedDimCells(const std::vector<std::vector<int64_t>>& binomial_table, std::unordered_map<CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>::Vertex_handle, size_t>& vertex_handle_index,
-                                                                                               CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>& delaunay_d, const size_t dim)
+                                                                                               CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>& delaunay_d, const size_t dim, double maxeps)
 {
     std::vector<std::pair<int64_t, double>> sortd_d_cell;
 
@@ -1285,7 +1302,7 @@ std::vector<std::pair<int64_t, double>> CritCells<ComplexType, DistMatType>::get
             std::sort(simplex_pt.begin(), simplex_pt.end(), std::greater<size_t>());
             int64_t bindex = getBinomialIndex(binomial_table, simplex_pt, 0);
             double weight = getAlphaSimplexWeight(simplex_pt);
-            sortd_d_cell.emplace_back(bindex, weight);
+            if (weight < maxeps) sortd_d_cell.emplace_back(bindex, weight);
             simplex_pt.clear();
         }
         sortSimplexByWeightThenIndex(sortd_d_cell);
@@ -1304,7 +1321,7 @@ std::vector<std::pair<int64_t, double>> CritCells<ComplexType, DistMatType>::get
             std::sort(simplex_pt.begin(), simplex_pt.end(), std::greater<size_t>());
             int64_t bindex = getBinomialIndex(binomial_table, simplex_pt, 0);
             double weight = getAlphaSimplexWeight(simplex_pt);
-            sortd_d_cell.emplace_back(bindex, weight);
+            if (weight < maxeps) sortd_d_cell.emplace_back(bindex, weight);
             simplex_pt.clear();
         }
         sortSimplexByWeightThenIndex(sortd_d_cell);
@@ -1355,7 +1372,7 @@ std::vector<std::pair<int64_t, double>> CritCells<ComplexType, DistMatType>::get
 
             cell_bindex_lookup.insert(bindex);
             double weight = getAlphaSimplexWeight(cell_pt);
-            sortd_d_cell.emplace_back(bindex, weight);
+            if (weight < maxeps) sortd_d_cell.emplace_back(bindex, weight);
             cell_pt.clear();    //clean up the pt array for d cell
         }
         simplex_pt.clear();    //clean up the pt array for full cell
@@ -1367,9 +1384,9 @@ std::vector<std::pair<int64_t, double>> CritCells<ComplexType, DistMatType>::get
 
 
 template <typename ComplexType, typename DistMatType>
-void CritCells<ComplexType, DistMatType>::runAlphaTest(const std::string &fileName)
+void CritCells<ComplexType, DistMatType>::runAlphaTest(const std::string &fileName, double maxeps, int threadnumber)
 {
-    int threadnumber = 1;
+    // int threadnumber = 1;
 
     //read input and create delaunay. should move it to the template later
     std::vector<std::vector<double>> input_pt = readInput::readCSV(fileName);
@@ -1399,7 +1416,7 @@ void CritCells<ComplexType, DistMatType>::runAlphaTest(const std::string &fileNa
     auto binom_table = getBinomialTable(n, maxdim);
 
     //get edges
-    auto sorted_simplex = getSortedDimCells(binom_table, vertex_handle_index, delaunay_d, 1);
+    auto sorted_simplex = getSortedDimCells(binom_table, vertex_handle_index, delaunay_d, 1, maxeps);
     //remove mst edges
     auto active_facet_hash_table = getActiveEdgeIndexHashTable(binom_table, sorted_simplex);
     
@@ -1408,7 +1425,7 @@ void CritCells<ComplexType, DistMatType>::runAlphaTest(const std::string &fileNa
 
 
     //get triangles
-    auto sorted_cofacet = getSortedDimCells(binom_table, vertex_handle_index, delaunay_d, 2);
+    auto sorted_cofacet = getSortedDimCells(binom_table, vertex_handle_index, delaunay_d, 2, maxeps);
 
     Bi_Graph_Match bi_graph(1, 1, 1);
     
@@ -1422,7 +1439,37 @@ void CritCells<ComplexType, DistMatType>::runAlphaTest(const std::string &fileNa
         // bi_graph.parallelKarpSipserInit(1);
 
         // bi_graph.parallelFacetDFSMatch(1);
-        bi_graph.serialCofacetDFSMatch();
+        bi_graph.parallelDirectionalFacetDFSMatch(1);
+
+        // bi_graph.serialCofacetDFSMatch();
+
+        // for (auto& p: sorted_cofacet) std::cout<<p.first<<"  "<<p.second<<'\n';
+
+        auto reverted = bi_graph.dfsCycleRemoval();
+        std::cout<<"reverted cycle = "<<reverted<<'\n';
+
+
+        std::vector<size_t> cof_idx = {6, 227};
+        std::vector<size_t> f_idx = {};
+
+        // if (dim == 2)
+        // {
+        //     for (auto j: cof_idx)
+        //     {
+        //         std::cout<<"idx = "<<j<<"  match = "<<bi_graph.match_list[j]<<"("<<bi_graph.match_list[j] - int64_t(sorted_cofacet.size())<<")"<<"  weight = "<<sorted_cofacet[j].second<<"    adj = ";
+        //         for (auto t : bi_graph.adj_list[j]) std::cout<<t<<"("<<t - sorted_cofacet.size()<<")"<<"  ";
+        //         std::cout<<'\n';
+        //     }
+
+        //     for (auto j: f_idx)
+        //     {
+        //         std::cout<<"facet idx = "<<j<<"  weight = "<<sorted_simplex[j].second<<"  match = "<<bi_graph.match_list[j + sorted_cofacet.size()]<<"  adj = ";
+        //         for (auto t: bi_graph.adj_list[j + sorted_cofacet.size()])  std::cout<<t<<"  ";
+        //         std::cout<<'\n';
+        //     }
+        // }
+
+
 
         std::vector<size_t> crit_index = bi_graph.getCriticalIndex(dim_active_index_set, sorted_simplex.size());
         for(auto t: crit_index) std::cout<<"  idx and weight = "<<t<<" "<<sorted_simplex[t].second<<"   ";
@@ -1433,7 +1480,7 @@ void CritCells<ComplexType, DistMatType>::runAlphaTest(const std::string &fileNa
 
         if (dim != maxdim)
         {
-            sorted_simplex = getSortedDimCells(binom_table, vertex_handle_index, delaunay_d, dim + 1);
+            sorted_simplex = getSortedDimCells(binom_table, vertex_handle_index, delaunay_d, dim + 1, maxeps);
             std::swap(sorted_simplex, sorted_cofacet);
         }
     }

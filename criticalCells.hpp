@@ -168,11 +168,11 @@ public:
     void runMorseTest(size_t maxdim, double maxeps, int threadnumber);
 
     std::vector<std::pair<int64_t, double>> getSortedDimCells(const std::vector<std::vector<int64_t>>& binomial_table, std::unordered_map<CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>::Vertex_handle, size_t>& vertex_handle_index, 
-                                                              CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>& delaunay_d, const size_t dim);
+                                                              CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>& delaunay_d, const size_t dim, double maxeps);
 
     double getAlphaSimplexWeight(const std::vector<size_t>& alpha_simplex);
 
-    void runAlphaTest(const std::string &fileName);
+    void runAlphaTest(const std::string &fileName, double maxeps, int threadnumber);
 
 
 private:
