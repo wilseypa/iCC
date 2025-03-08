@@ -1201,6 +1201,11 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
         //     }
         // }
 
+        // for (size_t i = 0; i < bi_graph.u; i++)
+        // {
+        //     if (bi_graph.adj_list[i].size() > dim + 1) std::cout<<"dim = "<<dim<<"  i = "<<i<<"  adj size = "<<bi_graph.adj_list[i].size()<<'\n';
+        // }
+
         
         auto reverted = bi_graph.dfsCycleRemoval();
         std::cout<<"reverted = "<<reverted<<'\n';
@@ -1449,8 +1454,8 @@ void CritCells<ComplexType, DistMatType>::runAlphaTest(const std::string &fileNa
         std::cout<<"reverted cycle = "<<reverted<<'\n';
 
 
-        std::vector<size_t> cof_idx = {6, 227};
-        std::vector<size_t> f_idx = {};
+        // std::vector<size_t> cof_idx = {6, 227};
+        // std::vector<size_t> f_idx = {};
 
         // if (dim == 2)
         // {

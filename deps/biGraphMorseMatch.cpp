@@ -11,6 +11,8 @@
 
 #include <iostream>
 
+#include <cassert>
+
 void Bi_Graph_Match::parallelKarpSipserInit(const int threadnum) 
 {
     std::vector<int> node_deg(u, 0);
@@ -322,12 +324,17 @@ int64_t Bi_Graph_Match::facetRightDfsAugPath(const size_t startnode, std::vector
         size_t vidx = aug_path_tid[topindex];
         int endflag = 0;
 
-        if (topindex != startnode)
+        if (vidx != startnode)
         {
             //look ahead, look for v's unmatched neighbor
+            //heuristic: vidx is the second largest in uidx adj list
             for (const auto& uidx : adj_list[vidx]) 
             {
-                if (__sync_fetch_and_add(&(look_ahead_flag[uidx]), 1) == 0 && match_list[uidx] < 0) 
+                if (match_list[uidx] >= 0) continue;
+
+                size_t vpos = std::find(adj_list[uidx].begin(), adj_list[uidx].end(), vidx) - adj_list[uidx].begin();
+
+                if (vpos < 2 && __sync_fetch_and_add(&(look_ahead_flag[uidx]), 1) == 0) 
                 {
                     __sync_fetch_and_add(&(dfs_flag[uidx]), 1);
                     aug_path_tid[++topindex] = uidx;
@@ -338,11 +345,25 @@ int64_t Bi_Graph_Match::facetRightDfsAugPath(const size_t startnode, std::vector
         //dfs
         for (const auto& uidx : adj_list[vidx]) 
         {
-            if (match_list[uidx] < vidx) continue;
+            if (match_list[uidx] < 0 || match_list[uidx] < vidx) continue;
 
-            if (__sync_fetch_and_add(&(dfs_flag[uidx]), 1) == 0) 
+            // if (vidx == startnode)
+            if (false)
             {
-                if (match_list[uidx] >= 0) 
+                //heuristic: startnood is the second largest in uidx adj list
+                size_t vpos = std::find(adj_list[uidx].begin(), adj_list[uidx].end(), vidx) - adj_list[uidx].begin();
+
+                if (vpos < 2 && __sync_fetch_and_add(&(dfs_flag[uidx]), 1) == 0) 
+                {
+                        aug_path_tid[++topindex] = uidx;
+                        aug_path_tid[++topindex] = match_list[uidx];
+                        endflag = 1;
+                        break;
+                }
+            }
+            else
+            {
+                if (__sync_fetch_and_add(&(dfs_flag[uidx]), 1) == 0) 
                 {
                     aug_path_tid[++topindex] = uidx;
                     aug_path_tid[++topindex] = match_list[uidx];
@@ -448,12 +469,12 @@ int64_t Bi_Graph_Match::serialCofacetDFSAugPath(const size_t cofacetindex, std::
     if (temp)
     {
         std::cout<<"  max facet pos in cofacet adj = "<<std::find(adj_list[cofacetindex].begin(), adj_list[cofacetindex].end(), maxfacetindex) - adj_list[cofacetindex].begin();
-        std::cout<<"  cofacet pos in maxfacet adj = "<<std::find(adj_list[maxfacetindex].begin(), adj_list[maxfacetindex].end(), cofacetindex) - adj_list[maxfacetindex].begin();
+        std::cout<<"  cofacet pos in maxfacet adj = "<<std::find(adj_list[maxfacetindex].begin(), adj_list[maxfacetindex].end(), cofacetindex) - adj_list[maxfacetindex].begin()<<'\n';
     }
     // for (auto t: adj_list[cofacetindex]) std::cout<<t<<"  ";
     // std::cout<<" facet adj list = ";
     // for (auto t: adj_list[maxfacetindex]) std::cout<<t<<"  ";
-    std::cout<<'\n';
+    // std::cout<<'\n';
         
     while (!endflag)
     {
@@ -467,6 +488,21 @@ int64_t Bi_Graph_Match::serialCofacetDFSAugPath(const size_t cofacetindex, std::
             if (uidx == cofacetindex)
             {
                 aug_path[++topindex] = uidx;
+
+                if (!temp)
+                {
+                    std::cout<<"  backward facet rel idx in cofacet adj = ";
+                    for (int64_t i = topindex; i > 0; i-=2)
+                    {
+                        auto facet = aug_path[i - 1];
+                        size_t augpos = std::find(adj_list[i].begin(), adj_list[i].end(), facet) - adj_list[i].begin();
+                        int64_t matchpos = -1;
+                        if (i > 1) matchpos = std::find(adj_list[aug_path[i - 2]].begin(), adj_list[aug_path[i - 2]].end(), facet) - adj_list[aug_path[i - 2]].begin();
+                        std::cout<<augpos<<"("<<matchpos<<") ";
+                    }
+                    std::cout<<'\n';
+                }
+
                 return topindex + 1;
             }
 

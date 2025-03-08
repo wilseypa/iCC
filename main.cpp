@@ -8,7 +8,7 @@
 int main()
 {   
     // std::string filename = "testdata3d_2.csv";
-    std::string filename = "test_3dsphere_50.csv";
+    std::string filename = "test_3dsphere_100.csv";
     CritCells<VR, NormallDistMat> cc(filename);
 
     // cc.runAlphaTest(filename);
