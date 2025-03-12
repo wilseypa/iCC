@@ -37,7 +37,8 @@ public:
     int64_t facetRightDfsAugPath(const size_t startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<size_t>& aug_path_tid);
 
     void add2SingleOrRemove(const size_t index, std::vector<uint64_t>& removed_flag, const size_t round);
-    int64_t serialCofacetDFSAugPath(const size_t cofacetindex, std::vector<uint8_t>& cofacet_dfs_flag, std::vector<size_t>& aug_path, std::vector<uint64_t>& removed_flag, const size_t round);
+
+    int64_t serialCofacetDFSAugPath(const size_t cofacetindex, std::vector<size_t>& aug_path, std::vector<size_t>& cofacet_stack, std::vector<size_t>& facet_stack);
 
     // std::set<int> criticalFacetBackwardSearch(int facetindex);
     

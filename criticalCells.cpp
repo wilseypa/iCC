@@ -1181,9 +1181,9 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
 
         // bi_graph.parallelFacetDFSMatch(1);
         
-        bi_graph.parallelDirectionalFacetDFSMatch(1);
+        // bi_graph.parallelDirectionalFacetDFSMatch(1);
 
-        // bi_graph.serialCofacetDFSMatch();     
+        bi_graph.serialCofacetDFSMatch();     
         
         // for (size_t i = 0; i < bi_graph.u; i++) {
         //     auto imate = bi_graph.match_list[i];
@@ -1207,8 +1207,8 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
         // }
 
         
-        auto reverted = bi_graph.dfsCycleRemoval();
-        std::cout<<"reverted = "<<reverted<<'\n';
+        // auto reverted = bi_graph.dfsCycleRemoval();
+        // std::cout<<"reverted = "<<reverted<<'\n';
 
         // std::cout<<"check graph dim = "<<dim<<"  cofacet size = "<<sorted_cofacet.size()<<"  facet size = "<<sorted_simplex.size()<<'\n';
         // // std::vector<size_t> cof_idx = {119, 120, 144, 146};
@@ -1444,18 +1444,18 @@ void CritCells<ComplexType, DistMatType>::runAlphaTest(const std::string &fileNa
         // bi_graph.parallelKarpSipserInit(1);
 
         // bi_graph.parallelFacetDFSMatch(1);
-        bi_graph.parallelDirectionalFacetDFSMatch(1);
+        // bi_graph.parallelDirectionalFacetDFSMatch(1);
 
-        // bi_graph.serialCofacetDFSMatch();
+        bi_graph.serialCofacetDFSMatch();
 
         // for (auto& p: sorted_cofacet) std::cout<<p.first<<"  "<<p.second<<'\n';
 
-        auto reverted = bi_graph.dfsCycleRemoval();
-        std::cout<<"reverted cycle = "<<reverted<<'\n';
+        // auto reverted = bi_graph.dfsCycleRemoval();
+        // std::cout<<"reverted cycle = "<<reverted<<'\n';
 
 
-        // std::vector<size_t> cof_idx = {6, 227};
-        // std::vector<size_t> f_idx = {};
+        // std::vector<size_t> cof_idx = {6, 10, 11, 12};
+        // std::vector<size_t> f_idx = {10, 17, 22, 28, 29};
 
         // if (dim == 2)
         // {
