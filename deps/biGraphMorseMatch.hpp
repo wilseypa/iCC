@@ -26,7 +26,7 @@ public:
 
     void parallelMaxFacetInit(const size_t cofacet_index_min, const size_t cofacet_index_max, const size_t facet_index_min, const size_t facet_index_max, const int threadnum);
 
-
+    void parallelMaxFacetInitMod(const size_t cofacet_index_min, const size_t cofacet_index_max, const size_t facet_index_min, const size_t facet_index_max, const int threadnum);
     // bool isRightSinglePath(int cofacetindex);
 
     //parallel bipartite matching helper function

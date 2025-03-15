@@ -146,8 +146,112 @@ void Bi_Graph_Match::parallelMaxFacetInit(const size_t cofacet_index_min, const 
     std::vector<int> visit_flag_u(umax - umin, 0);
     std::vector<int> visit_flag_v(vmax - vmin, 0);
 
-    // std::vector<int> node_deg(vmax - vmin, 0);
-    // std::transform(std::execution::par, adj_list.begin() + vmin, adj_list.begin() + vmax, node_deg.begin(), [](const auto& u_adj) { return u_adj.size(); });
+    omp_set_num_threads(threadnum);
+
+//match max facet
+#pragma omp parallel for schedule(dynamic)
+    for (size_t i = vmin; i < vmax; i++)
+    {
+        int64_t min2ndcofacet = -1;
+        int64_t max2ndcofacet = -1;
+        int64_t min2ndfacet = i;
+        int64_t max2ndfacet = 0;
+        bool firstflag = true;
+        for (const auto& uidx: adj_list[i])    //uidx in v adj is in ascending order
+        {
+            auto vit = adj_list[uidx].begin();    //vidx in u adj is in descending order
+            if (i == *vit)    //i == max facet of uidx
+            {                
+                //i is the largest facet of a cofacet(uidx)
+                //lock i first, if cannot then move on to the next i.
+                if (firstflag && (__sync_fetch_and_add(&(visit_flag_v[i - vmin]), 1) != 0)) break;
+                firstflag = false;
+
+                //no race for uidx here
+                //check the 2nd largest facet of uidx
+                auto vit2nd = adj_list[uidx].begin() + 1;
+
+                if (vit2nd != adj_list[uidx].end())
+                {
+                    // std::cout<<max2ndcofacet<<"  "<<min2ndcofacet<<"  "<<i<<'\n';
+
+                    if (*vit2nd < min2ndfacet)
+                    {
+                        // std::cout<<"min 2nd cofacet pair. 2nd min facet = "<<*vit2nd<<"  "<<i<<'\n';
+                        min2ndfacet = *vit2nd;
+                        min2ndcofacet = uidx;
+                    } 
+                    if (*vit2nd > max2ndfacet)
+                    {
+                        // std::cout<<"max 2nd cofacet pair"<<'\n';
+                        max2ndfacet = *vit2nd;
+                        max2ndcofacet = uidx;
+                    }
+                }
+                else
+                {
+                    min2ndcofacet = uidx;
+                    min2ndfacet = -1;    //no other 2nd facet less than -1
+                }
+            }
+        }
+
+        if (min2ndcofacet >= 0)
+        {   
+            // std::cout<<"apprent pair. min 2nd cofacet = "<<min2ndcofacet<<"  max 2nd cofacet = "<<max2ndcofacet<<'\n';
+            //no race for min2ndcofacet here
+            visit_flag_u[min2ndcofacet - umin] += 1;
+            match_list[min2ndcofacet] = i;
+            match_list[i] = min2ndcofacet;
+        }
+
+        if (max2ndcofacet >= 0 && max2ndcofacet != min2ndcofacet)
+        {
+            // std::cout<<"2nd largest facet match. cofacet = "<<max2ndcofacet<<"  facet = "<<max2ndfacet<<'\n';
+            //no race for max2ndcofacet here
+            if (__sync_fetch_and_add(&(visit_flag_v[max2ndfacet - vmin]), 1) == 0)
+            {
+                visit_flag_u[max2ndcofacet - umin] += 1;
+                match_list[max2ndcofacet] = max2ndfacet;
+                match_list[max2ndfacet] = max2ndcofacet;
+            }
+        }
+    }
+
+//para 2nd max facet
+#pragma omp parallel for schedule(dynamic)
+    for (size_t i = umin; i < umax; i++)
+    {
+        if (visit_flag_u[i - umin] == 0)
+        {
+            //if i's 2nd facet is available
+            if (adj_list[i].begin() + 1 == adj_list[i].end()) continue;
+
+            auto vit = adj_list[i].begin() + 1;
+
+            if (__sync_fetch_and_add(&(visit_flag_v[*vit - vmin]), 1) == 0)
+            {
+                match_list[i] = *vit;
+                match_list[*vit] = i;
+            }
+        }
+    }
+
+    // auto unmatched = std::count_if(std::execution::par, match_list.begin() + u, match_list.end(), [](int value) { return value < 0; });
+    // std::cout<<"unmatched dim - 1 after init = "<<unmatched<<'\n';
+
+    return;
+}
+
+void Bi_Graph_Match::parallelMaxFacetInitMod(const size_t cofacet_index_min, const size_t cofacet_index_max, const size_t facet_index_min, const size_t facet_index_max, const int threadnum)
+{
+    //convert index
+    size_t umin = cofacet_index_min;
+    size_t umax = cofacet_index_max;
+    size_t vmin = facet_index_min + u;
+    size_t vmax = facet_index_max + u;
+
+    std::vector<int> visit_flag_v(vmax - vmin, 0);
 
     omp_set_num_threads(threadnum);
 
@@ -155,39 +259,69 @@ void Bi_Graph_Match::parallelMaxFacetInit(const size_t cofacet_index_min, const 
 #pragma omp parallel for schedule(dynamic)
     for (size_t i = vmin; i < vmax; i++)
     {
+        int64_t min2ndcofacet = -1;
+        int64_t max2ndcofacet = -1;
+        int64_t min2ndfacet = i;
+        int64_t max2ndfacet = 0;
+        bool firstflag = true;
         for (const auto& uidx: adj_list[i])    //uidx in v adj is in ascending order
         {
             auto vit = adj_list[uidx].begin();    //vidx in u adj is in descending order
             if (i == *vit)    //i == max facet of uidx
-            {
-                //no race here
-                visit_flag_u[uidx - umin] += 1;
-                visit_flag_v[i - vmin] += 1;
-                match_list[uidx] = i;
-                match_list[i] = uidx;
+            {                
+                //i is the largest facet of a cofacet(uidx)
+                //lock i first, if cannot then move on to the next i.
+                if (firstflag && (__sync_fetch_and_add(&(visit_flag_v[i - vmin]), 1) != 0)) break;
+                firstflag = false;
 
-                break;
+                //no race for uidx here
+                //check the 2nd largest facet of uidx
+                auto vit2nd = adj_list[uidx].begin() + 1;
+
+                if (vit2nd != adj_list[uidx].end())
+                {
+                    // std::cout<<max2ndcofacet<<"  "<<min2ndcofacet<<"  "<<i<<'\n';
+
+                    if (*vit2nd < min2ndfacet)
+                    {
+                        // std::cout<<"min 2nd cofacet pair. 2nd min facet = "<<*vit2nd<<"  "<<i<<'\n';
+                        min2ndfacet = *vit2nd;
+                        min2ndcofacet = uidx;
+                    } 
+                    if (*vit2nd > max2ndfacet)
+                    {
+                        // std::cout<<"max 2nd cofacet pair"<<'\n';
+                        max2ndfacet = *vit2nd;
+                        max2ndcofacet = uidx;
+                    }
+                }
+                else
+                {
+                    min2ndcofacet = uidx;
+                    min2ndfacet = -1;    //no other 2nd facet less than -1
+                }
+            }
+        }
+
+        if (min2ndcofacet >= 0)
+        {   
+            // std::cout<<"apprent pair. min 2nd cofacet = "<<min2ndcofacet<<"  max 2nd cofacet = "<<max2ndcofacet<<'\n';
+            //no race for min2ndcofacet here
+            match_list[min2ndcofacet] = i;
+            match_list[i] = min2ndcofacet;
+        }
+
+        if (max2ndcofacet >= 0 && max2ndcofacet != min2ndcofacet)
+        {
+            // std::cout<<"2nd largest facet match. cofacet = "<<max2ndcofacet<<"  facet = "<<max2ndfacet<<'\n';
+            //no race for max2ndcofacet here
+            if (__sync_fetch_and_add(&(visit_flag_v[max2ndfacet - vmin]), 1) == 0)
+            {
+                match_list[max2ndcofacet] = max2ndfacet;
+                match_list[max2ndfacet] = max2ndcofacet;
             }
         }
     }
-
-// //para min cofacet
-// #pragma omp parallel for schedule(static)
-//     for (size_t i = vmin; i < vmax; i++)
-//     {
-//         if ((match_list[i] < 0) && !(adj_list[i].empty()))
-//         {
-//             //if i's first cofacet is available
-//             if (__sync_fetch_and_add(&(visit_flag_u[adj_list[i][0] - umin]), 1) == 0)
-//             {
-//                 match_list[adj_list[i][0]] = i;
-//                 match_list[i] = adj_list[i][0];
-//             }
-//         }
-//     }
-
-    // auto unmatched = std::count_if(std::execution::par, match_list.begin() + u, match_list.end(), [](int value) { return value < 0; });
-    // std::cout<<"unmatched dim - 1 after init = "<<unmatched<<'\n';
 
     return;
 }
@@ -206,7 +340,7 @@ int64_t Bi_Graph_Match::facetDfsAugPath(const size_t startnode, std::vector<int>
         //look ahead, look for v's unmatched neighbor
         for (const auto& uidx : adj_list[vidx]) 
         {
-            if (__sync_fetch_and_add(&(look_ahead_flag[uidx]), 1) == 0 && match_list[uidx] < 0) 
+            if (__sync_fetch_and_add(&(look_ahead_flag[uidx]), 1) == 0 && match_list[uidx] < 0)
             {
                 // if (vidx != adj_list[uidx].back())
                 {   
@@ -223,7 +357,7 @@ int64_t Bi_Graph_Match::facetDfsAugPath(const size_t startnode, std::vector<int>
 
             if (__sync_fetch_and_add(&(dfs_flag[uidx]), 1) == 0) 
             {
-                if (match_list[uidx] >= 0) 
+                if (match_list[uidx] > 0 && match_list[uidx] > vidx)
                 {
                     aug_path_tid[++topindex] = uidx;
                     aug_path_tid[++topindex] = match_list[uidx];
@@ -610,6 +744,28 @@ void Bi_Graph_Match::serialCofacetDFSMatch()
 
         for (int64_t j = 0; j < augpathlen; j += 2) 
         {
+            if (j == 0)
+            {
+                std::cout<<"print aug path facet to cofacet:  ";
+                for (auto i = 0; i < augpathlen - 1; i+=2)
+                {   
+                    auto facet = aug_path[i];
+                    auto cofacet = aug_path[i + 1];
+                    auto facetpos = std::find(adj_list[cofacet].begin(), adj_list[cofacet].end(), facet) - adj_list[cofacet].begin();
+                    int64_t matchpos;
+                    if (i > 1)
+                    {
+                        auto matchcofacet = aug_path[i - 1];
+                        matchpos = std::find(adj_list[matchcofacet].begin(), adj_list[matchcofacet].end(), facet) - adj_list[matchcofacet].begin();
+                    }
+                    else matchpos = -1;
+
+                    std::cout<<"("<<matchpos<<")"<<facetpos<<"  ";
+                }
+                std::cout<<"\n";
+            }
+            
+
             match_list[aug_path[j]] = aug_path[j + 1];
             match_list[aug_path[j + 1]] = aug_path[j];
         }
@@ -871,8 +1027,8 @@ void Bi_Graph_Match::parallelFacetDFSMatch(const int threadnum)
         std::fill(std::execution::par, dfs_flag.begin(), dfs_flag.end(), 0);
 
 #pragma omp parallel for schedule(dynamic)
-        // for (size_t i = 0; i < initialunmatched; i++)
-        for (int64_t i = initialunmatched - 1; i >= 0; i--)
+        for (size_t i = 0; i < initialunmatched; i++)
+        // for (int64_t i = initialunmatched - 1; i >= 0; i--)
         {
             auto& aug_path_tid = aug_path[omp_get_thread_num()];
 
