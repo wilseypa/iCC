@@ -1175,42 +1175,53 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
         bi_graph.updateDimension(sorted_cofacet.size(), sorted_simplex.size());
         buildInterface(bi_graph, binom_table, sorted_cofacet, dim, active_index_hash_table);
 
-        // bi_graph.parallelMaxFacetInit(0, sorted_cofacet.size(), 0, sorted_simplex.size(), threadnumber);
-
-        bi_graph.parallelMaxFacetInitMod(0, sorted_cofacet.size(), 0, sorted_simplex.size(), threadnumber);
+        if (dim == 2)
+        {
+            bi_graph.parallelMaxFacetInitMod(0, sorted_cofacet.size(), 0, sorted_simplex.size(), threadnumber);
+            bi_graph.serialCofacetDFSMatch();
+        }
+        
+        if (dim == 3)
+        {
+            bi_graph.parallelMaxFacetInit(0, sorted_cofacet.size(), 0, sorted_simplex.size(), threadnumber);
+            bi_graph.parallelFacetDFSMatch(threadnumber);
+        }
+        // bi_graph.parallelMaxFacetInitMod(0, sorted_cofacet.size(), 0, sorted_simplex.size(), threadnumber);
 
         // bi_graph.parallelKarpSipserInit(1);
 
-        // bi_graph.parallelFacetDFSMatch(threadnumber);
         
         // bi_graph.parallelDirectionalFacetDFSMatch(1);
 
-        bi_graph.serialCofacetDFSMatch();
+        // bi_graph.serialCofacetDFSMatch();
         
-        for (size_t i = 0; i < bi_graph.u; i++) {
-            auto imate = bi_graph.match_list[i];
-            if (imate != -1 && bi_graph.match_list[imate] != i) {
-                std::cout<<"matching error !!!  i mate = "<<bi_graph.match_list[i]<<"  imate match = "<<bi_graph.match_list[imate]<<'\n';
-                return;
-            }
-        }
+        // for (size_t i = 0; i < bi_graph.u; i++) {
+        //     auto imate = bi_graph.match_list[i];
+        //     if (imate != -1 && bi_graph.match_list[imate] != i) {
+        //         std::cout<<"matching error !!!  i mate = "<<bi_graph.match_list[i]<<"  imate match = "<<bi_graph.match_list[imate]<<'\n';
+        //         return;
+        //     }
+        // }
 
-        for (size_t i = bi_graph.u; i < (bi_graph.u + bi_graph.v); i++) {
-            auto imate = bi_graph.match_list[i];
-            if (imate != -1 && bi_graph.match_list[imate] != i) {
-                std::cout<<"matching error !!!  i mate = "<<bi_graph.match_list[i]<<"  imate match = "<<bi_graph.match_list[imate]<<'\n';
-                return;
-            }
-        }
+        // for (size_t i = bi_graph.u; i < (bi_graph.u + bi_graph.v); i++) {
+        //     auto imate = bi_graph.match_list[i];
+        //     if (imate != -1 && bi_graph.match_list[imate] != i) {
+        //         std::cout<<"matching error !!!  i mate = "<<bi_graph.match_list[i]<<"  imate match = "<<bi_graph.match_list[imate]<<'\n';
+        //         return;
+        //     }
+        // }
 
         // for (size_t i = 0; i < bi_graph.u; i++)
         // {
         //     if (bi_graph.adj_list[i].size() > dim + 1) std::cout<<"dim = "<<dim<<"  i = "<<i<<"  adj size = "<<bi_graph.adj_list[i].size()<<'\n';
         // }
 
+        if (dim == 3)
+        {
+            auto reverted = bi_graph.dfsCycleRemoval();
+            std::cout<<"reverted = "<<reverted<<'\n';
+        }
         
-        auto reverted = bi_graph.dfsCycleRemoval();
-        std::cout<<"reverted = "<<reverted<<'\n';
 
         // std::cout<<"check graph dim = "<<dim<<"  cofacet size = "<<sorted_cofacet.size()<<"  facet size = "<<sorted_simplex.size()<<'\n';
         // // std::vector<size_t> cof_idx = {119, 120, 144, 146};
@@ -1242,16 +1253,18 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
 
 
 
-        std::vector<size_t> crit_index = bi_graph.getCriticalIndex(dim_active_index_set, sorted_simplex.size());
-        // for(auto t: crit_index) std::cout<<"  idx and weight = "<<t<<" "<<sorted_simplex[t].second<<"   ";
-        // std::cout<<'\n'<<'\n';
-        std::cout<<"dim = "<<dim<<"   "<<crit_index.size()<<'\n';
+        // std::vector<size_t> crit_index = bi_graph.getCriticalIndex(dim_active_index_set, sorted_simplex.size());
+        // // for(auto t: crit_index) std::cout<<"  idx and weight = "<<t<<" "<<sorted_simplex[t].second<<"   ";
+        // // std::cout<<'\n'<<'\n';
+        // std::cout<<"dim = "<<dim<<"   "<<crit_index.size()<<'\n';
 
-        dim_active_index_set = bi_graph.getActiveIndexSet();
-        active_index_hash_table = getActiveFacetIndexHashTable(sorted_cofacet, dim_active_index_set);
+        // dim_active_index_set = bi_graph.getActiveIndexSet();
+        // active_index_hash_table = getActiveFacetIndexHashTable(sorted_cofacet, dim_active_index_set);
 
         if (dim != maxdim)
         {
+            dim_active_index_set = bi_graph.getActiveIndexSet();
+            active_index_hash_table = getActiveFacetIndexHashTable(sorted_cofacet, dim_active_index_set);
             sorted_simplex = getSortedCofacetList(binom_table, sorted_cofacet, dim, maxeps, 1);
             std::swap(sorted_simplex, sorted_cofacet);
         }
