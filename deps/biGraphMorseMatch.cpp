@@ -744,26 +744,26 @@ void Bi_Graph_Match::serialCofacetDFSMatch()
 
         for (int64_t j = 0; j < augpathlen; j += 2) 
         {
-            // if (j == 0)
-            // {
-            //     std::cout<<"print aug path facet to cofacet:  ";
-            //     for (auto i = 0; i < augpathlen - 1; i+=2)
-            //     {   
-            //         auto facet = aug_path[i];
-            //         auto cofacet = aug_path[i + 1];
-            //         auto facetpos = std::find(adj_list[cofacet].begin(), adj_list[cofacet].end(), facet) - adj_list[cofacet].begin();
-            //         int64_t matchpos;
-            //         if (i > 1)
-            //         {
-            //             auto matchcofacet = aug_path[i - 1];
-            //             matchpos = std::find(adj_list[matchcofacet].begin(), adj_list[matchcofacet].end(), facet) - adj_list[matchcofacet].begin();
-            //         }
-            //         else matchpos = -1;
+            if (j == 0)
+            {
+                std::cout<<"print aug path facet to cofacet:  ";
+                for (auto i = 0; i < augpathlen - 1; i+=2)
+                {   
+                    auto facet = aug_path[i];
+                    auto cofacet = aug_path[i + 1];
+                    auto facetpos = std::find(adj_list[cofacet].begin(), adj_list[cofacet].end(), facet) - adj_list[cofacet].begin();
+                    int64_t matchpos;
+                    if (i > 1)
+                    {
+                        auto matchcofacet = aug_path[i - 1];
+                        matchpos = std::find(adj_list[matchcofacet].begin(), adj_list[matchcofacet].end(), facet) - adj_list[matchcofacet].begin();
+                    }
+                    else matchpos = -1;
 
-            //         std::cout<<"("<<matchpos<<")"<<facetpos<<"  ";
-            //     }
-            //     std::cout<<"\n";
-            // }
+                    std::cout<<"("<<matchpos<<")"<<facetpos<<"  ";
+                }
+                std::cout<<"\n";
+            }
             
 
             match_list[aug_path[j]] = aug_path[j + 1];

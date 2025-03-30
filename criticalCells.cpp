@@ -1175,16 +1175,34 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
         bi_graph.updateDimension(sorted_cofacet.size(), sorted_simplex.size());
         buildInterface(bi_graph, binom_table, sorted_cofacet, dim, active_index_hash_table);
 
-        if (dim == 2)
+        if (true)
         {
+            auto st0 = std::chrono::high_resolution_clock::now();
             bi_graph.parallelMaxFacetInitMod(0, sorted_cofacet.size(), 0, sorted_simplex.size(), threadnumber);
+            auto st1 = std::chrono::high_resolution_clock::now();
+            auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
+            std::cout<<"dim = "<<dim<<" init run time = "<<pt_ms.count() <<'\n';
+
+            st0 = std::chrono::high_resolution_clock::now();
             bi_graph.serialCofacetDFSMatch();
+            st1 = std::chrono::high_resolution_clock::now();
+            pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
+            std::cout<<"dim = "<<dim<<" match run time = "<<pt_ms.count() <<'\n';
         }
         
-        if (dim == 3)
+        if (false)
         {
-            bi_graph.parallelMaxFacetInit(0, sorted_cofacet.size(), 0, sorted_simplex.size(), threadnumber);
+            auto st0 = std::chrono::high_resolution_clock::now();
+            bi_graph.parallelMaxFacetInitMod(0, sorted_cofacet.size(), 0, sorted_simplex.size(), threadnumber);
+            auto st1 = std::chrono::high_resolution_clock::now();
+            auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
+            std::cout<<"dim = "<<dim<<" init run time = "<<pt_ms.count() <<'\n';
+
+            st0 = std::chrono::high_resolution_clock::now();
             bi_graph.parallelFacetDFSMatch(threadnumber);
+            st1 = std::chrono::high_resolution_clock::now();
+            pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
+            std::cout<<"dim = "<<dim<<" match run time = "<<pt_ms.count() <<'\n';
         }
         // bi_graph.parallelMaxFacetInitMod(0, sorted_cofacet.size(), 0, sorted_simplex.size(), threadnumber);
 
@@ -1216,10 +1234,14 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
         //     if (bi_graph.adj_list[i].size() > dim + 1) std::cout<<"dim = "<<dim<<"  i = "<<i<<"  adj size = "<<bi_graph.adj_list[i].size()<<'\n';
         // }
 
-        if (dim == 3)
+        if (false)
         {
+            auto st0 = std::chrono::high_resolution_clock::now();
             auto reverted = bi_graph.dfsCycleRemoval();
             std::cout<<"reverted = "<<reverted<<'\n';
+            auto st1 = std::chrono::high_resolution_clock::now();
+            auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
+            std::cout<<"dim = "<<dim<<" cycle removal run time = "<<pt_ms.count() <<'\n';
         }
         
 
@@ -1253,19 +1275,34 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
 
 
 
-        // std::vector<size_t> crit_index = bi_graph.getCriticalIndex(dim_active_index_set, sorted_simplex.size());
-        // // for(auto t: crit_index) std::cout<<"  idx and weight = "<<t<<" "<<sorted_simplex[t].second<<"   ";
-        // // std::cout<<'\n'<<'\n';
-        // std::cout<<"dim = "<<dim<<"   "<<crit_index.size()<<'\n';
+        std::vector<size_t> crit_index = bi_graph.getCriticalIndex(dim_active_index_set, sorted_simplex.size());
+        // for(auto t: crit_index) std::cout<<"  idx and weight = "<<t<<" "<<sorted_simplex[t].second<<"   ";
+        // std::cout<<'\n'<<'\n';
+        std::cout<<"dim = "<<dim<<"   "<<crit_index.size()<<'\n';
 
         // dim_active_index_set = bi_graph.getActiveIndexSet();
         // active_index_hash_table = getActiveFacetIndexHashTable(sorted_cofacet, dim_active_index_set);
 
         if (dim != maxdim)
         {
+            auto st0 = std::chrono::high_resolution_clock::now();
             dim_active_index_set = bi_graph.getActiveIndexSet();
+            auto st1 = std::chrono::high_resolution_clock::now();
+            auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
+            std::cout<<"dim = "<<dim<<"  active index set run time = "<<pt_ms.count() <<'\n';
+
+            st0 = std::chrono::high_resolution_clock::now();
             active_index_hash_table = getActiveFacetIndexHashTable(sorted_cofacet, dim_active_index_set);
-            sorted_simplex = getSortedCofacetList(binom_table, sorted_cofacet, dim, maxeps, 1);
+            st1 = std::chrono::high_resolution_clock::now();
+            pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
+            std::cout<<"dim = "<<dim<<"  active index hash table run time = "<<pt_ms.count() <<'\n';
+
+            st0 = std::chrono::high_resolution_clock::now();
+            sorted_simplex = getSortedCofacetList(binom_table, sorted_cofacet, dim, maxeps, threadnumber);
+            st1 = std::chrono::high_resolution_clock::now();
+            pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
+            std::cout<<"dim = "<<dim<<"  get sorted cofacet run time = "<<pt_ms.count() <<'\n';
+
             std::swap(sorted_simplex, sorted_cofacet);
         }
 
