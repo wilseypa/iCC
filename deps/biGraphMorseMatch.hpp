@@ -32,7 +32,7 @@ public:
     //parallel bipartite matching helper function
     int64_t facetDfsAugPath(const size_t startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<size_t>& aug_path_tid);
 
-    int64_t facetDirectNeighborMatch(std::vector<size_t>& unmatched_facet);
+    int64_t facetDirectNeighborMatch(const size_t facetindex);
 
     int64_t facetRightDfsAugPath(const size_t startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<size_t>& aug_path_tid);
 

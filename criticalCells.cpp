@@ -1175,7 +1175,7 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
         bi_graph.updateDimension(sorted_cofacet.size(), sorted_simplex.size());
         buildInterface(bi_graph, binom_table, sorted_cofacet, dim, active_index_hash_table);
 
-        if (true)
+        if (false)
         {
             auto st0 = std::chrono::high_resolution_clock::now();
             bi_graph.parallelMaxFacetInitMod(0, sorted_cofacet.size(), 0, sorted_simplex.size(), threadnumber);
@@ -1190,7 +1190,7 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
             std::cout<<"dim = "<<dim<<" match run time = "<<pt_ms.count() <<'\n';
         }
         
-        if (false)
+        if (true)
         {
             auto st0 = std::chrono::high_resolution_clock::now();
             bi_graph.parallelMaxFacetInitMod(0, sorted_cofacet.size(), 0, sorted_simplex.size(), threadnumber);
@@ -1199,7 +1199,10 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
             std::cout<<"dim = "<<dim<<" init run time = "<<pt_ms.count() <<'\n';
 
             st0 = std::chrono::high_resolution_clock::now();
-            bi_graph.parallelFacetDFSMatch(threadnumber);
+            bi_graph.parallelDirectionalFacetDFSMatch(1);
+            // bi_graph.parallelFacetDFSMatch(threadnumber);
+            
+            // bi_graph.serialCofacetDFSMatch();
             st1 = std::chrono::high_resolution_clock::now();
             pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
             std::cout<<"dim = "<<dim<<" match run time = "<<pt_ms.count() <<'\n';
@@ -1234,7 +1237,7 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
         //     if (bi_graph.adj_list[i].size() > dim + 1) std::cout<<"dim = "<<dim<<"  i = "<<i<<"  adj size = "<<bi_graph.adj_list[i].size()<<'\n';
         // }
 
-        if (false)
+        if (true)
         {
             auto st0 = std::chrono::high_resolution_clock::now();
             auto reverted = bi_graph.dfsCycleRemoval();

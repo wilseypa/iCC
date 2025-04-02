@@ -374,77 +374,113 @@ int64_t Bi_Graph_Match::facetDfsAugPath(const size_t startnode, std::vector<int>
     return topindex + 1;
 }
 
-int64_t Bi_Graph_Match::facetDirectNeighborMatch(std::vector<size_t>& unmatched_facet)
+int64_t Bi_Graph_Match::facetDirectNeighborMatch(const size_t facetindex)
 {
-    int64_t counter = 0;
-    auto cmp_lambda = [] (const std::pair<size_t, size_t>& lhs, const std::pair<size_t, size_t>& rhs) 
-    {
-        if (lhs.first != rhs.first) return lhs.first > rhs.first;
-
-        return lhs.second < rhs.second;
-    };
-
-    std::priority_queue<std::pair<size_t, size_t>, std::vector<std::pair<size_t, size_t>>, decltype(cmp_lambda)> cofacet_facet_pq(cmp_lambda);
-
-    //collect unmatched cofacet/facet pair
-    for (auto& vidx: unmatched_facet)
-    {
-        for (auto& uidx: adj_list[vidx])
-        {
-            if (match_list[uidx] < 0) cofacet_facet_pq.push(std::make_pair(uidx, vidx));
-        }
-    }
-
-    std::vector<size_t> dfs_stack;
+    std::vector<size_t> vidx_list;
     int flag = 0;
-    
-    while (!cofacet_facet_pq.empty())
+    //no race condition
+    for (const auto& uidx : adj_list[facetindex])
     {
-        auto pg_top = cofacet_facet_pq.top();
-        cofacet_facet_pq.pop();
-
-        size_t uidx = pg_top.first;
-        size_t vidx = pg_top.second;
-
-        if (match_list[uidx] < 0 && match_list[vidx] < 0)
+        if (match_list[uidx] == -1) 
         {
+            vidx_list.clear();
             flag = 0;
-            for (auto& facetidx: adj_list[uidx])
+            //test if facetindex is the largest unmatched facet of uidx
+            for (const auto& vidx : adj_list[uidx])
             {
-                int64_t cofacetidx = match_list[facetidx];
-                if (cofacetidx >= 0 && adj_list[cofacetidx][0] > vidx) dfs_stack.push_back(cofacetidx);
-            }
-
-            while (!dfs_stack.empty())
-            {
-                size_t topidx = dfs_stack.back();
-                dfs_stack.pop_back();
-
-                for (auto& facetidx: adj_list[topidx])
+                //collect the matched (and larger) facets
+                if (match_list[vidx] >= 0)
                 {
-                    if (facetidx == vidx)
-                    {
-                        flag = 1;
-                        break;
-                    }
-
-                    int64_t cofacetidx = match_list[facetidx];
-                    if (cofacetidx >= 0 && cofacetidx != topidx && adj_list[cofacetidx][0] > vidx) dfs_stack.push_back(cofacetidx);
+                    vidx_list.push_back(vidx);
+                    continue;
                 }
 
-                if (flag) break;
-            }
+                //check the first found unmatched facet
+                if (vidx == facetindex)    //facetindex is the largest unmatched
+                {
+                    //test the cycle condition
+                    auto vit = vidx_list.begin();
+
+                    auto vitmate = match_list[*vit];
+                    if (adj_list[vitmate].begin() + 1 != adj_list[vitmate].end())
+                    {
+                        auto downedge = *(adj_list[vitmate].begin() + 1);
+                        if (downedge > facetindex)
+                        {
+                            flag = 1;
+                            break;
+                        }
+                    }
+
+                    for (vit = vidx_list.begin() + 1; vit != vidx_list.end(); ++vit)
+                    {
+                        auto vitmate = match_list[*vit];
+                        
+                        if (vitmate > uidx)
+                        {
+                            flag = 1;
+                            break;
+                        }
+                        else
+                        {
+                            //if *vit is the max facet of vitmate
+                            if (adj_list[vitmate][0] == *vit)
+                            {
+                                if (adj_list[vitmate].begin() + 1 != adj_list[vitmate].end())
+                                {
+                                    auto downedge = *(adj_list[vitmate].begin() + 1);
+                                    if (downedge > facetindex)
+                                    {
+                                        flag = 1;
+                                        break;
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                //*vit is the 2nd largest facet of vitmate
+                                if (adj_list[vitmate].begin() + 2 != adj_list[vitmate].end())
+                                {
+                                    auto downedge0 = *(adj_list[vitmate].begin() + 2);
+                                    if (downedge0 > facetindex)
+                                    {
+                                        flag = 1;
+                                        break;
+                                    }
+                                }
+                                //max facet of vitmate. check the 2nd largest facet of maxmate
+                                auto maxfacet = adj_list[vitmate][0];
+                                auto maxmate = match_list[maxfacet];
+                                if (adj_list[maxmate].begin() + 1 != adj_list[maxmate].end())
+                                {
+                                    auto downedge1 = *(adj_list[maxmate].begin() + 1);
+                                    if (downedge1 > facetindex)
+                                    {
+                                        flag = 1;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                    }
+                }
+                else
+                {
+                    flag = 1;
+                    break;
+                }
+            }    //all breaks get to here
 
             if (!flag)
             {
-                match_list[uidx] = vidx;
-                match_list[vidx] = uidx;
-                counter += 1;
+                // std::cout<<"facetindex = "<<facetindex<<"  uidx = "<<uidx<<'\n';
+                return uidx;
             }
         }
     }
 
-    return counter;
+    return -1;
 }
 
 
@@ -1088,18 +1124,61 @@ void Bi_Graph_Match::parallelDirectionalFacetDFSMatch(const int threadnum)
             std::copy_n(thread_buff.begin(), ct, unmatched_v_init.begin() + offset);
         }
     }
-
-    std::cout<<"before direct match. initial unmatched = "<<initialunmatched<<'\n';
-
-    //try to match the direct neighbor first
-    int64_t directmatch = facetDirectNeighborMatch(unmatched_v_init);
-
-    std::cout<<"after direct match. unmatched = "<<initialunmatched - directmatch<<'\n';
-
+    
     //storing aug path one path per thread
     std::vector<std::vector<size_t>> aug_path(threadnum, std::vector<size_t>(u + v, 0));
+    
+    std::cout<<"before direct match. initial unmatched = "<<initialunmatched<<'\n';
 
-    while (true) {
+    //direct neighbor match
+#pragma omp parallel
+    {
+        size_t ct = 0;
+#pragma omp for schedule(dynamic)
+        for (int64_t i = 0; i < initialunmatched; i++)
+        {
+            size_t facetindex = unmatched_v_init[i];
+
+            int64_t cofacetindex = facetDirectNeighborMatch(facetindex);
+
+            auto& aug_path_tid = aug_path[omp_get_thread_num()];
+
+            if (cofacetindex >= 0)
+            {
+                aug_path_tid[ct++] = facetindex;
+                aug_path_tid[ct++] = cofacetindex;
+            }
+            else
+            {
+                //store the unmatched node, need atomic op on the shared count var
+                unmatched_v_final[__sync_fetch_and_add(&finalunmatched, 1)] = facetindex;
+            }
+        }
+    }
+
+    //augmentation
+#pragma omp parallel for schedule(static)
+    for (auto& aug_path_tid : aug_path)
+    {
+        for (int64_t i = 0; i < (u + v); i += 2) 
+        {
+            // std::cout<<"aug path tid = "<<aug_path_tid[i]<<"  "<<aug_path_tid[i + 1]<<'\n';
+
+            if (aug_path_tid[i] == 0) break;
+
+            match_list[aug_path_tid[i]] = aug_path_tid[i + 1];
+            match_list[aug_path_tid[i + 1]] = aug_path_tid[i];
+        }
+    }
+
+    std::swap(unmatched_v_init, unmatched_v_final);
+
+    initialunmatched = finalunmatched;
+
+    std::cout<<"after direct match. unmatched = "<<initialunmatched<<'\n';
+
+
+    while (false) {
 
         // std::cout<<"aug match round "<<'\n';
 
