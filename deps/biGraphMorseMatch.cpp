@@ -243,37 +243,49 @@ void Bi_Graph_Match::parallelMaxFacetInit(const size_t cofacet_index_min, const 
     return;
 }
 
-void Bi_Graph_Match::parallelMaxFacetInitMod(const size_t cofacet_index_min, const size_t cofacet_index_max, const size_t facet_index_min, const size_t facet_index_max, const int threadnum)
+void Bi_Graph_Match::parallelMaxFacetInitMod(const std::vector<std::pair<int64_t, double>>& sorted_facet, const std::vector<std::pair<int64_t, double>>& sorted_cofacet, const int threadnum)
 {
     //convert index
-    size_t umin = cofacet_index_min;
-    size_t umax = cofacet_index_max;
-    size_t vmin = facet_index_min + u;
-    size_t vmax = facet_index_max + u;
+    size_t umin = 0;
+    size_t umax = u;
+    size_t vmin = 0 + u;
+    size_t vmax = v + u;
 
-    std::vector<int> visit_flag_v(vmax - vmin, 0);
+    std::vector<int> visit_flag_v(v, 0);
 
     omp_set_num_threads(threadnum);
 
-//match max facet
+//mark max facet
 #pragma omp parallel for schedule(dynamic)
-    for (size_t i = vmin; i < vmax; i++)
+    for (size_t i = u; i < u + v; i++)
     {
+        for (const auto& uidx: adj_list[i])    //uidx in v adj is in ascending order
+        {
+            auto vit = adj_list[uidx].begin();    //vidx in u adj is in descending order
+            if (i == *vit)    //i == max facet of uidx
+            {
+                visit_flag_v[i - u] += 1;    //no race here   
+                break;
+            }
+        }        
+    }
+
+#pragma omp parallel for schedule(dynamic)
+    for (size_t i = u; i < u + v; i++)
+    {
+        if (visit_flag_v[i - u] == 0) continue;
+
         int64_t min2ndcofacet = -1;
         int64_t max2ndcofacet = -1;
         int64_t min2ndfacet = i;
         int64_t max2ndfacet = 0;
-        bool firstflag = true;
+
         for (const auto& uidx: adj_list[i])    //uidx in v adj is in ascending order
         {
             auto vit = adj_list[uidx].begin();    //vidx in u adj is in descending order
             if (i == *vit)    //i == max facet of uidx
             {                
-                //i is the largest facet of a cofacet(uidx)
-                //lock i first, if cannot then move on to the next i.
-                if (firstflag && (__sync_fetch_and_add(&(visit_flag_v[i - vmin]), 1) != 0)) break;
-                firstflag = false;
-
+                //i is the largest facet of uidx
                 //no race for uidx here
                 //check the 2nd largest facet of uidx
                 auto vit2nd = adj_list[uidx].begin() + 1;
@@ -309,6 +321,13 @@ void Bi_Graph_Match::parallelMaxFacetInitMod(const size_t cofacet_index_min, con
             //no race for min2ndcofacet here
             match_list[min2ndcofacet] = i;
             match_list[i] = min2ndcofacet;
+
+            // auto facetweight = sorted_facet[i - u].second;
+            // auto cofacetweight = sorted_cofacet[min2ndcofacet].second;
+            // if (facetweight != cofacetweight)
+            // {
+            //     std::cout<<"facet weight = "<<facetweight<<"  cofacet weight = "<<cofacetweight<<'\n';
+            // }
         }
 
         if (max2ndcofacet >= 0 && max2ndcofacet != min2ndcofacet)
@@ -317,10 +336,29 @@ void Bi_Graph_Match::parallelMaxFacetInitMod(const size_t cofacet_index_min, con
             //no race for max2ndcofacet here
             if (__sync_fetch_and_add(&(visit_flag_v[max2ndfacet - vmin]), 1) == 0)
             {
+                // std::cout<<"max2ndcofacet pos in 2ndmaxfacet = ";
+                // auto tempit = std::find(adj_list[max2ndfacet].begin(), adj_list[max2ndfacet].end(), max2ndcofacet);
+                // auto tempdis = std::distance(adj_list[max2ndfacet].begin(), tempit);
+                // if (tempdis != 0)
+                // {
+                //     // std::cout<<tempdis<<"  "<<"first cofacet match = "<<match_list[adj_list[max2ndfacet][0]]<<'\n';
+                //     auto tempcofacet = adj_list[max2ndfacet][0];
+                //     auto tempmatch = match_list[tempcofacet];
+                //     auto matchpos = std::distance(adj_list[tempcofacet].begin(), std::find(adj_list[tempcofacet].begin(), adj_list[tempcofacet].end(), tempmatch));
+                //     std::cout<<tempdis<<"  "<<"first cofacet's facet match pos = "<<matchpos<<'\n';
+                // }
                 match_list[max2ndcofacet] = max2ndfacet;
                 match_list[max2ndfacet] = max2ndcofacet;
+
+                auto facetweight = sorted_facet[max2ndfacet - u].second;
+                auto cofacetweight = sorted_cofacet[max2ndcofacet].second;
+                if (facetweight != cofacetweight)
+                {
+                    std::cout<<"facet weight = "<<facetweight<<"  cofacet weight = "<<cofacetweight<<'\n';
+                }                           
             }
         }
+
     }
 
     return;
@@ -483,6 +521,63 @@ int64_t Bi_Graph_Match::facetDirectNeighborMatch(const size_t facetindex)
     return -1;
 }
 
+int64_t Bi_Graph_Match::facetDirectNeighborMatchWithReduction(const size_t facetindex, const size_t cofacetindex, std::vector<size_t>::iterator facet_iter, std::vector<size_t>::iterator cofacet_iter)
+{
+    int64_t facetcount = 0;
+    int64_t cofacetcount = 0;
+    *(cofacet_iter + cofacetcount) = cofacetindex;
+    cofacetcount++;
+
+    auto cmp_lamdab = [] (const size_t lhs, const size_t rhs) { return lhs < rhs; };
+
+    std::priority_queue<size_t, std::vector<size_t>, decltype(cmp_lamdab)> facet_queue(cmp_lamdab);
+
+    int64_t maxfacet = -1;
+
+    while (cofacetcount > 0)
+    {
+        size_t top = *(cofacet_iter + cofacetcount);
+        cofacetcount--;
+
+        for (auto& vidx: adj_list[top]) 
+        {
+            if (match_list[vidx] != top) facet_queue.push(vidx);
+        }
+
+        while (!facet_queue.empty())
+        {
+            size_t facet = facet_queue.top();
+            facet_queue.pop();
+
+            if (facet_queue.empty() || facet != facet_queue.top())
+            {
+                if (match_list[facet] < 0)
+                {
+                    // std::cout<<"facet = "<<facet<<"  start cofacet = "<<cofacetindex<<'\n';
+                    maxfacet = facet;
+                }
+                else
+                {
+                    *(cofacet_iter + cofacetcount) = match_list[facet];
+                    cofacetcount++;
+                    *(facet_iter + facetcount) = facet;
+                    facetcount++;
+                }
+                break;
+            }
+            else facet_queue.pop();
+        }
+
+        if (maxfacet == facetindex)
+        {
+            return cofacetindex;
+        }
+        else return -1;
+    }
+
+    return -1;
+}
+
 
 int64_t Bi_Graph_Match::facetRightDfsAugPath(const size_t startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<size_t>& aug_path_tid)
 {
@@ -591,28 +686,6 @@ int64_t Bi_Graph_Match::serialCofacetDFSAugPath(const size_t cofacetindex, std::
 
     int64_t maxfacet = -1;
 
-    // if (cofacetindex == 895)
-    // {
-    //     std::cout<<"adj of 237 = ";
-    //     for (auto i: adj_list[237]) std::cout<<i<<"  ";
-    //     std::cout<<'\n';
-    //     std::cout<<"adj of 380 = ";
-    //     for (auto i: adj_list[380]) std::cout<<i<<"  ";
-    //     std::cout<<'\n';
-    //     std::cout<<"adj of 379 = ";
-    //     for (auto i: adj_list[379]) std::cout<<i<<"  ";
-    //     std::cout<<'\n';
-    //     std::cout<<"adj of 282 = ";
-    //     for (auto i: adj_list[282]) std::cout<<i<<"  ";
-    //     std::cout<<'\n';
-    //     std::cout<<"adj of 460 = ";
-    //     for (auto i: adj_list[460]) std::cout<<i<<"  ";
-    //     std::cout<<'\n';
-    //     std::cout<<"adj of 461 = ";
-    //     for (auto i: adj_list[461]) std::cout<<i<<"  ";
-    //     std::cout<<'\n';
-    // }
-
     while (!cofacet_stack.empty())
     {
         size_t top = cofacet_stack.back();
@@ -659,6 +732,8 @@ int64_t Bi_Graph_Match::serialCofacetDFSAugPath(const size_t cofacetindex, std::
     //find augmenting path from maxfacet to cofacetindex
     if (maxfacet > 0)
     {
+        std::cout<<"max faccet rel idx = "<<maxfacet - u<<"  ending cofacet idx = "<<cofacetindex<<"  first cofacet of max facet = "<<adj_list[maxfacet][0]<<'\n';
+
         aug_path[++topindex] = maxfacet;
         size_t topfacet = aug_path[topindex];
         for (auto vit = facet_stack.rbegin(); vit != facet_stack.rend(); ++vit)
@@ -683,67 +758,6 @@ int64_t Bi_Graph_Match::serialCofacetDFSAugPath(const size_t cofacetindex, std::
 
     return -1;
 }
-
-// std::set<int> Bi_Graph_Match::criticalFacetBackwardSearch(int facetindex)
-// {
-//     //facet index is the index in simplex/facet bin
-//     //facetindex + u = index in bi graph
-//     std::vector<int> dfs_stack;
-//     dfs_stack.push_back(facetindex + u);
-
-//     std::set<int> single_facet;
-//     std::set<int> removed_index;
-
-//     single_facet.insert(facetindex);
-
-//     while(!dfs_stack.empty())
-//     {
-//         int top = dfs_stack.back();
-//         dfs_stack.pop_back();
-
-//         for (auto uidx: adj_list[top])
-//         { 
-//             if (match_list[uidx] < 0) continue;
-
-//             int vidx = match_list[uidx];
-
-//             if (vidx != top)
-//             {
-//                 dfs_stack.push_back(vidx);
-//                 add2SingleOrRemove(vidx - u, single_facet, removed_index);
-//             }
-//         }
-//     }
-
-//     return single_facet;
-// }
-
-
-// std::vector<std::set<int>> Bi_Graph_Match::getBackwardSingleFacetIndex(std::vector<int> critical_facet_index)
-// {
-//     std::vector<std::set<int>> backward_single_facet_index;
-
-//     for (auto ci : critical_facet_index)
-//     {
-//         std::set<int> ci_backward_index = criticalFacetBackwardSearch(ci);
-
-//         //remove duplicates with previous ci's
-//         for (auto& facet_index_set: backward_single_facet_index)
-//         {
-//             for (auto i: facet_index_set)
-//             {
-//                 auto it = ci_backward_index.find(i);
-//                 if (it != ci_backward_index.end()) ci_backward_index.erase(it);
-//             }
-//         }
-
-//         backward_single_facet_index.push_back(ci_backward_index);
-
-        
-//     }
-
-//     return backward_single_facet_index;
-// }
 
 
 void Bi_Graph_Match::serialCofacetDFSMatch()
@@ -780,26 +794,26 @@ void Bi_Graph_Match::serialCofacetDFSMatch()
 
         for (int64_t j = 0; j < augpathlen; j += 2) 
         {
-            if (j == 0)
-            {
-                std::cout<<"print aug path facet to cofacet:  ";
-                for (auto i = 0; i < augpathlen - 1; i+=2)
-                {   
-                    auto facet = aug_path[i];
-                    auto cofacet = aug_path[i + 1];
-                    auto facetpos = std::find(adj_list[cofacet].begin(), adj_list[cofacet].end(), facet) - adj_list[cofacet].begin();
-                    int64_t matchpos;
-                    if (i > 1)
-                    {
-                        auto matchcofacet = aug_path[i - 1];
-                        matchpos = std::find(adj_list[matchcofacet].begin(), adj_list[matchcofacet].end(), facet) - adj_list[matchcofacet].begin();
-                    }
-                    else matchpos = -1;
+            // if (j == 0)
+            // {
+            //     std::cout<<"print aug path facet to cofacet:  ";
+            //     for (auto i = 0; i < augpathlen - 1; i+=2)
+            //     {   
+            //         auto facet = aug_path[i];
+            //         auto cofacet = aug_path[i + 1];
+            //         auto facetpos = std::find(adj_list[cofacet].begin(), adj_list[cofacet].end(), facet) - adj_list[cofacet].begin();
+            //         int64_t matchpos;
+            //         if (i > 1)
+            //         {
+            //             auto matchcofacet = aug_path[i - 1];
+            //             matchpos = std::find(adj_list[matchcofacet].begin(), adj_list[matchcofacet].end(), facet) - adj_list[matchcofacet].begin();
+            //         }
+            //         else matchpos = -1;
 
-                    std::cout<<"("<<matchpos<<")"<<facetpos<<"  ";
-                }
-                std::cout<<"\n";
-            }
+            //         std::cout<<"("<<matchpos<<")"<<facetpos<<"  ";
+            //     }
+            //     std::cout<<"\n";
+            // }
             
 
             match_list[aug_path[j]] = aug_path[j + 1];
@@ -812,31 +826,6 @@ void Bi_Graph_Match::serialCofacetDFSMatch()
 }
 
 
-// int Bi_Graph_Match::findRoot() {
-//     auto root_lambda = [&](const auto i) {return (state_flag[i] == 0);};
-//     std::vector<int> range(u);
-//     std::iota(range.begin(), range.end(), 0);
-//     auto it = std::find_if(range.begin(), range.end(), root_lambda);
-//     if (it != range.end()) {
-//         return *it;
-//     } else {
-//         return -1;
-//     }
-// }
-
-// int Bi_Graph_Match::getParent(std::vector<int>& parent_workspace, int uidx) {
-//     parent_workspace.clear();
-//     int vidx = match_list[uidx];
-//     //uidx is a source node has no parent (umatched)
-//     if (vidx == -1) return 0;
-//      //i is d simp
-//     for (auto& i: adj_list[vidx]) {
-//         int imate = match_list[i];
-//         if (imate != -1 && imate != vidx) parent_workspace.push_back(i);
-//     }
-//     return parent_workspace.size();
-// }
-
 size_t Bi_Graph_Match::getChild(std::vector<size_t>& child_workspace, const size_t uidx) 
 {
     child_workspace.clear();
@@ -848,175 +837,6 @@ size_t Bi_Graph_Match::getChild(std::vector<size_t>& child_workspace, const size
 
     return child_workspace.size();
 }
-
-// void Bi_Graph_Match::getAncestor(std::vector<int>& ancestor_workspace, int rootnum, int uidx) {
-//     //use rootnum to confine the ancestor search in current "bfs component"
-//     ancestor_workspace.clear();
-
-//     std::deque<int> bfs_queue;
-//     std::vector<int> parent_workspace;
-//     parent_workspace.reserve(udegree);
-
-//     //temp change uidx's rootflag to avoid cycle infi loop
-//     int rootflag = state_flag[uidx];
-//     state_flag[uidx] = -1;
-    
-//     getParent(parent_workspace, uidx);
-//     for (auto& i: parent_workspace) {
-//         if(state_flag[i] == rootnum) bfs_queue.push_back(i);
-//     }
-
-//     //cycle can be found during this process but need ancestors for look up
-//     while (!bfs_queue.empty()) {
-//         int front = std::move(bfs_queue.front());
-//         bfs_queue.pop_front();
-//         if (std::find(ancestor_workspace.begin(), ancestor_workspace.end(), front) == ancestor_workspace.end()) ancestor_workspace.push_back(front);
-        
-//         //parent of queue front
-//         getParent(parent_workspace, front);
-//         for(auto& i: parent_workspace) {
-//             if (state_flag[i] == rootnum && std::find(bfs_queue.begin(), bfs_queue.end(), i) == bfs_queue.end()) {
-//                 bfs_queue.push_back(i);
-//             }
-//         }
-//     }
-
-//     //recover rootflag
-//     state_flag[uidx] = rootflag;
-
-//     return;
-// }
-
-// bool Bi_Graph_Match::isBackwardAcyclic(std::vector<int>& ancestor_d_simp, std::vector<int>& u_child) {
-    //par
-//     for (auto& i: u_child) {
-//         if (state_flag[i] == 0) continue;
-//         if (std::find(ancestor_d_simp.begin(), ancestor_d_simp.end(), i) != ancestor_d_simp.end()) {
-//             std::cout<<"found cycle at = "<<i<<"   ancestor simp = ";
-//             for(auto i: ancestor_d_simp) std::cout<<i<<"  ";
-//             std::cout<<"  child simp = ";
-//             for(auto j: u_child) std::cout<<j<<"  ";
-//             std::cout<<'\n';
-//             return false;
-//         }
-//     }
-
-//     return true;
-// }
-
-// int Bi_Graph_Match::lookAheadDFS(std::deque<int>& graph_bfs_queue, std::vector<int>& ancestor_d_simp, std::vector<int>& child_d_simp, int rootnum, int uidx) {
-//     if (child_d_simp.size() == 0) return 0;
-
-//     std::vector<int> lookahead_vec;
-
-//     //par ch workspace do not overlap. can be reused
-//     std::vector<int> parent_workspace;
-//     parent_workspace.reserve(udegree);
-
-//     std::vector<int> child_workspace;
-//     child_workspace.reserve(udegree);
-
-//     for (auto& i: child_d_simp) {
-//         int parentnum = getParent(parent_workspace, i);
-//         //if uidx is the only parent of i (in the whole graph). use look ahead shortcut
-//         if (parentnum == 1) {
-//             lookahead_vec.push_back(i);
-//         } else if (state_flag[i] == 0 && std::find(graph_bfs_queue.begin(), graph_bfs_queue.end(), i) == graph_bfs_queue.end()) {
-//             //if i has more than 1 par and has not been searched yet (or not in current bfs component). push to global bfs queue
-//             graph_bfs_queue.push_back(i);
-//         }
-//     }
-
-//     //start look ahead op on children of uidx
-
-//     ancestor_d_simp.push_back(uidx);
-//     int reverted = 0;
-//     bool flag;    //working var
-//     //the nodes appeared in lookahead stack at the same time are independent 
-//     while (!lookahead_vec.empty()) {
-
-//         flag = false;
-
-//         int top = std::move(lookahead_vec.back());
-//         lookahead_vec.pop_back();
-//         state_flag[top] = rootnum;
-
-//         //child_workspace contains the children of top
-//         int childnum = getChild(child_workspace, top);
-//         if (childnum == 0) continue;
-
-//         //child in unsearched part of current bfs component
-//         auto iter = std::remove_if(child_workspace.begin(), child_workspace.end(), [&](const auto& i) {return (state_flag[i] != 0 && state_flag[i] != rootnum);});
-//         child_workspace.erase(iter, child_workspace.end());
-
-//         //if top is not acyclic. the lookahead of top is over
-//         //push its unsearched children or reencountered children to bfs queue
-//         if (!isBackwardAcyclic(ancestor_d_simp, child_workspace)) {
-            
-//             int temp = match_list[top];
-
-//             match_list[top] = -1;
-//             match_list[temp] = -1;
-//             reverted += 1;
-
-//         } else {
-//         //check if the child of top can be pushed to look ahead stack
-//             for (auto& i: child_workspace) {
-//                 if (getParent(parent_workspace, i) == 1) {
-//                     //if top is the only parent of i. keep look ahead op
-//                     lookahead_vec.push_back(i);
-//                     //raise flag for adding top to ancestor
-//                     flag = true;
-//                 }else if (state_flag[i] == 0 && std::find(graph_bfs_queue.begin(), graph_bfs_queue.end(), i) == graph_bfs_queue.end()) {
-//                     graph_bfs_queue.push_back(i);
-//                 } 
-//             }
-//         }
-//         //if any of top's child is pushed to look ahead stack, update ancestor
-//         if (flag) ancestor_d_simp.push_back(top);
-//         //not all nodes in the stack have ances-des relationship with top
-//         //but this does not bring extra cycle rm. simplfied implementation
-//     }
-//     return reverted;
-//  }
-
-//  int Bi_Graph_Match::serialBFS(std::vector<int>& ancestor_d_simp, int rootnum, int root) {
-//     int reverted = 0;
-
-//     std::deque<int> bfs_queue;
-//     bfs_queue.push_back(root);
-
-//     std::vector<int> front_child;
-//     front_child.reserve(udegree);
-
-//     while (!bfs_queue.empty()) {
-//         int front = std::move(bfs_queue.front());
-//         bfs_queue.pop_front();
-//         state_flag[front] = rootnum;
-        
-//         int childnum = getChild(front_child, front);
-//         if (childnum == 0) continue;
-
-//         //child in unsearched part of current bfs component
-//         auto iter = std::remove_if(front_child.begin(), front_child.end(), [&](const auto& i) {return (state_flag[i] != 0 && state_flag[i] != rootnum);});
-//         front_child.erase(iter, front_child.end());
-
-//         getAncestor(ancestor_d_simp, rootnum, front);
-
-//         if (!isBackwardAcyclic(ancestor_d_simp, front_child)) {
-//             int temp = match_list[front];
-
-//             match_list[front] = -1;
-//             match_list[temp] = -1;
-//             reverted += 1;
-//         } else {
-//             //look ahead and push descendant to bfs queue
-//             reverted += lookAheadDFS(bfs_queue, ancestor_d_simp, front_child, rootnum, front);
-//         }
-//     }
-    
-//     return reverted;
-// }
 
 
 void Bi_Graph_Match::parallelFacetDFSMatch(const int threadnum) 
@@ -1094,7 +914,7 @@ void Bi_Graph_Match::parallelFacetDFSMatch(const int threadnum)
     return;   
 }
 
-void Bi_Graph_Match::parallelDirectionalFacetDFSMatch(const int threadnum)
+void Bi_Graph_Match::parallelDirectionalFacetDFSMatch(const std::vector<std::pair<int64_t, double>>& sorted_facet, const std::vector<std::pair<int64_t, double>>& sorted_cofacet, const int threadnum)
 {
     std::vector<size_t> unmatched_v_init(v, 0);
     std::vector<size_t> unmatched_v_final(v, 0);
@@ -1126,7 +946,7 @@ void Bi_Graph_Match::parallelDirectionalFacetDFSMatch(const int threadnum)
     }
     
     //storing aug path one path per thread
-    std::vector<std::vector<size_t>> aug_path(threadnum, std::vector<size_t>(u + v, 0));
+    std::vector<std::vector<size_t>> work_space(threadnum, std::vector<size_t>(u + v, 0));
     
     std::cout<<"before direct match. initial unmatched = "<<initialunmatched<<'\n';
 
@@ -1141,7 +961,7 @@ void Bi_Graph_Match::parallelDirectionalFacetDFSMatch(const int threadnum)
 
             int64_t cofacetindex = facetDirectNeighborMatch(facetindex);
 
-            auto& aug_path_tid = aug_path[omp_get_thread_num()];
+            auto& aug_path_tid = work_space[omp_get_thread_num()];
 
             if (cofacetindex >= 0)
             {
@@ -1158,13 +978,21 @@ void Bi_Graph_Match::parallelDirectionalFacetDFSMatch(const int threadnum)
 
     //augmentation
 #pragma omp parallel for schedule(static)
-    for (auto& aug_path_tid : aug_path)
+    for (auto& aug_path_tid : work_space)
     {
         for (int64_t i = 0; i < (u + v); i += 2) 
         {
-            // std::cout<<"aug path tid = "<<aug_path_tid[i]<<"  "<<aug_path_tid[i + 1]<<'\n';
-
             if (aug_path_tid[i] == 0) break;
+
+            auto tempfacet = aug_path_tid[i];
+            auto tempcofacet = aug_path_tid[i + 1];
+            auto firstcofacet = adj_list[tempfacet][0];
+            auto dis = std::find(adj_list[tempfacet].begin(), adj_list[tempfacet].end(), tempcofacet) - adj_list[tempfacet].begin();
+            std::cout<<"facet idx = "<<tempfacet<<"  cofacet pos = "<<dis<<'\n';
+
+            auto facetweight = sorted_facet[aug_path_tid[i] - u].second;
+            auto cofacetweight = sorted_cofacet[aug_path_tid[i + 1]].second;
+            if (facetweight < cofacetweight) std::cout<<"facet weight = "<<facetweight<<"  cofacet weight = "<<cofacetweight<<"  first cofacet weight = "<<sorted_cofacet[firstcofacet].second<<'\n';
 
             match_list[aug_path_tid[i]] = aug_path_tid[i + 1];
             match_list[aug_path_tid[i + 1]] = aug_path_tid[i];
@@ -1174,80 +1002,55 @@ void Bi_Graph_Match::parallelDirectionalFacetDFSMatch(const int threadnum)
     std::swap(unmatched_v_init, unmatched_v_final);
 
     initialunmatched = finalunmatched;
+    finalunmatched = 0;
 
     std::cout<<"after direct match. unmatched = "<<initialunmatched<<'\n';
 
+    //direct neighbor match with reduction
+    for (int64_t i = 0; i < initialunmatched; i++)
+    {
+        size_t facetindex = unmatched_v_init[i];
 
-    while (false) {
+        auto cofacet_iter = work_space[omp_get_thread_num()].begin();
+        auto facet_iter = work_space[omp_get_thread_num()].begin() + u;
 
-        // std::cout<<"aug match round "<<'\n';
+        int flag = 0;
+        auto m = adj_list[facetindex].size();
+#pragma omp parallel for schedule(dynamic) shared(flag)
+        for (auto j = 0; j < m; j++)
+        {
+            #pragma omp cancellation point for
 
-        //shared among threads
-        finalunmatched = 0;
+            size_t cofacetindex = adj_list[facetindex][j];
+            if (match_list[cofacetindex] > 0) continue;
 
-        std::fill(std::execution::par, dfs_flag.begin(), dfs_flag.end(), 0);
+            int64_t cofacet = facetDirectNeighborMatchWithReduction(facetindex, cofacetindex, facet_iter, cofacet_iter);
+            if (cofacet >= 0 && !flag)
+            {
+#pragma omp critical
+                {
+                    if (!flag) flag = 1;
+                
+                    match_list[facetindex] = cofacet;
+                    match_list[cofacet] = facetindex;
+                }
 
-#pragma omp parallel for schedule(dynamic)
-        for (int64_t i = 0; i < initialunmatched; i++)
-        // for (int64_t i = initialunmatched - 1; i >= 0; i--)
-        {   
-            size_t vstart = unmatched_v_init[i];
-            if (match_list[vstart] >= 0) continue;
-
-            auto& aug_path_tid = aug_path[omp_get_thread_num()];
-
-            
-            int64_t augpathlen = facetRightDfsAugPath(vstart, dfs_flag, look_ahead_flag, aug_path_tid);
-
-            //augmentation
-            for (int64_t j = 0; j < augpathlen; j += 2) {
-                match_list[aug_path_tid[j]] = aug_path_tid[j + 1];
-                match_list[aug_path_tid[j + 1]] = aug_path_tid[j];
+                #pragma omp cancel for
             }
-            //store the unmatched node, need atomic op on the shared count var
-            if (augpathlen <= 0)
-                unmatched_v_final[__sync_fetch_and_add(&finalunmatched, 1)] = vstart;
         }
 
-        if ((finalunmatched == 0) || (initialunmatched == finalunmatched)) {
-            break;
-        }
-        //try more aug paths, let final_unmatched be the init_unmatched
-        std::swap(unmatched_v_init, unmatched_v_final);
-
-        initialunmatched = finalunmatched;
+        if (!flag) unmatched_v_final[finalunmatched++] = facetindex;
     }
+
+
+    while (false) {}
 
     //non-isolated unmatched
     return;  
 }
 
 
-// // int Bi_Graph_Match::serialCycleRemoval() {
-//     //assume u is the d simplex of d interface
-//     state_flag.resize(u, 0);
 
-//     int reverted = 0;
-
-//     int root = findRoot();
-//     int rootnum = 0;
-
-//     //ancestor workspace. avoid multiple reallocation
-//     std::vector<int> ancestor_workspace;
-//     ancestor_workspace.reserve(u);
-
-//     while (root != -1) {
-
-//         // std::cout << "current root = " << root << '\n';
-
-//         rootnum += 1;
-
-//         reverted += serialBFS(ancestor_workspace, rootnum, root);
-
-//         root = findRoot();
-//     }
-//     return reverted;
-// }
 
 int Bi_Graph_Match::dfsCycleRemoval()
 {

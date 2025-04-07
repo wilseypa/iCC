@@ -26,13 +26,15 @@ public:
 
     void parallelMaxFacetInit(const size_t cofacet_index_min, const size_t cofacet_index_max, const size_t facet_index_min, const size_t facet_index_max, const int threadnum);
 
-    void parallelMaxFacetInitMod(const size_t cofacet_index_min, const size_t cofacet_index_max, const size_t facet_index_min, const size_t facet_index_max, const int threadnum);
+    void parallelMaxFacetInitMod(const std::vector<std::pair<int64_t, double>>& sorted_facet, const std::vector<std::pair<int64_t, double>>& sorted_cofacet, const int threadnum);
     // bool isRightSinglePath(int cofacetindex);
 
     //parallel bipartite matching helper function
     int64_t facetDfsAugPath(const size_t startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<size_t>& aug_path_tid);
 
     int64_t facetDirectNeighborMatch(const size_t facetindex);
+
+    int64_t facetDirectNeighborMatchWithReduction(const size_t facetindex, const size_t cofacetindex, std::vector<size_t>::iterator facet_iter, std::vector<size_t>::iterator cofacet_iter);
 
     int64_t facetRightDfsAugPath(const size_t startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<size_t>& aug_path_tid);
 
@@ -56,7 +58,7 @@ public:
 
     void parallelFacetDFSMatch(const int threadnum);
 
-    void parallelDirectionalFacetDFSMatch(const int threadnum);
+    void parallelDirectionalFacetDFSMatch(const std::vector<std::pair<int64_t, double>>& sorted_facet, const std::vector<std::pair<int64_t, double>>& sorted_cofacet, const int threadnum);
 
     void serialCofacetDFSMatch();
 
