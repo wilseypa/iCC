@@ -1184,7 +1184,7 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
             std::cout<<"dim = "<<dim<<" init run time = "<<pt_ms.count() <<'\n';
 
             st0 = std::chrono::high_resolution_clock::now();
-            bi_graph.serialCofacetDFSMatch();
+            // bi_graph.serialCofacetDFSMatch(sorted_simplex, sorted_cofacet);
             st1 = std::chrono::high_resolution_clock::now();
             pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
             std::cout<<"dim = "<<dim<<" match run time = "<<pt_ms.count() <<'\n';
@@ -1203,7 +1203,10 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
             // bi_graph.parallelDirectionalFacetDFSMatch(1);
             // bi_graph.parallelFacetDFSMatch(threadnumber);
             
-            bi_graph.serialCofacetDFSMatch();
+            // bi_graph.serialCofacetDFSMatch();
+
+            bi_graph.serialCofacetDFSMatch(sorted_simplex, sorted_cofacet);
+
             st1 = std::chrono::high_resolution_clock::now();
             pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
             std::cout<<"dim = "<<dim<<" match run time = "<<pt_ms.count() <<'\n';
@@ -1497,7 +1500,7 @@ void CritCells<ComplexType, DistMatType>::runAlphaTest(const std::string &fileNa
         // bi_graph.parallelFacetDFSMatch(1);
         // bi_graph.parallelDirectionalFacetDFSMatch(1);
 
-        bi_graph.serialCofacetDFSMatch();
+        // bi_graph.serialCofacetDFSMatch();
 
         // for (auto& p: sorted_cofacet) std::cout<<p.first<<"  "<<p.second<<'\n';
 

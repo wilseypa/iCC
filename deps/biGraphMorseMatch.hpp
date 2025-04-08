@@ -60,7 +60,7 @@ public:
 
     void parallelDirectionalFacetDFSMatch(const std::vector<std::pair<int64_t, double>>& sorted_facet, const std::vector<std::pair<int64_t, double>>& sorted_cofacet, const int threadnum);
 
-    void serialCofacetDFSMatch();
+    void serialCofacetDFSMatch(const std::vector<std::pair<int64_t, double>>& sorted_facet, const std::vector<std::pair<int64_t, double>>& sorted_cofacet);
 
     // int serialCycleRemoval();
 
