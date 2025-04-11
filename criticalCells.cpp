@@ -1193,7 +1193,7 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
         if (true)
         {
             auto st0 = std::chrono::high_resolution_clock::now();
-            bi_graph.parallelMaxFacetInitMod(sorted_simplex, sorted_cofacet, 1);
+            // bi_graph.parallelMaxFacetInitMod(sorted_simplex, sorted_cofacet, 1);
             auto st1 = std::chrono::high_resolution_clock::now();
             auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
             std::cout<<"dim = "<<dim<<" init run time = "<<pt_ms.count() <<'\n';
@@ -1205,7 +1205,7 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
             
             // bi_graph.serialCofacetDFSMatch();
 
-            bi_graph.serialCofacetDFSMatch(sorted_simplex, sorted_cofacet);
+            // bi_graph.serialCofacetDFSMatch(sorted_simplex, sorted_cofacet);
 
             st1 = std::chrono::high_resolution_clock::now();
             pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
@@ -1241,7 +1241,7 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
         //     if (bi_graph.adj_list[i].size() > dim + 1) std::cout<<"dim = "<<dim<<"  i = "<<i<<"  adj size = "<<bi_graph.adj_list[i].size()<<'\n';
         // }
 
-        if (false)
+        if (true)
         {
             auto st0 = std::chrono::high_resolution_clock::now();
             auto reverted = bi_graph.dfsCycleRemoval();

@@ -38,31 +38,17 @@ public:
 
     int64_t facetRightDfsAugPath(const size_t startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<size_t>& aug_path_tid);
 
-    void add2SingleOrRemove(const size_t index, std::vector<uint64_t>& removed_flag, const size_t round);
+    int64_t serialfacetDFSAugPath(const size_t facetindex, std::vector<size_t>& aug_path, std::vector<size_t>::iterator cofacet_iter, std::vector<size_t>::iterator facet_iter);
 
     int64_t serialCofacetDFSAugPath(const size_t cofacetindex, std::vector<size_t>& aug_path, std::vector<size_t>& cofacet_stack, std::vector<size_t>& facet_stack);
 
-    // std::set<int> criticalFacetBackwardSearch(int facetindex);
-    
-
-    //cycle removal helper function
-    // int findRoot();
-    // int getParent(std::vector<int>& parent_workspace, int uidx);
-
     size_t getChild(std::vector<size_t>& child_workspace, const size_t uidx);
-
-    // void getAncestor(std::vector<int>& ancestor_workspace, int rootnum, int uidx);
-    // bool isBackwardAcyclic(std::vector<int>& ancestor_simp, std::vector<int>& u_child);
-    // int lookAheadDFS(std::deque<int>& graph_bfs_queue, std::vector<int>& ancestor_simp, std::vector<int>& child_simp, int rootnum, int uidx);
-    // int serialBFS(std::vector<int>& ancestor_simp, int rootnum, int root);
 
     void parallelFacetDFSMatch(const int threadnum);
 
     void parallelDirectionalFacetDFSMatch(const std::vector<std::pair<int64_t, double>>& sorted_facet, const std::vector<std::pair<int64_t, double>>& sorted_cofacet, const int threadnum);
 
     void serialCofacetDFSMatch(const std::vector<std::pair<int64_t, double>>& sorted_facet, const std::vector<std::pair<int64_t, double>>& sorted_cofacet);
-
-    // int serialCycleRemoval();
 
     int dfsCycleRemoval();
 
