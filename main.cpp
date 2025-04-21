@@ -8,7 +8,7 @@
 int main()
 {   
     // std::string filename = "testdata3d_2.csv";
-    std::string filename = "test_4dsphere_50.csv";
+    std::string filename = "test_4dsphere_75.csv";
     CritCells<VR, NormallDistMat> cc(filename);
 
     // cc.runAlphaTest(filename);
@@ -22,7 +22,7 @@ int main()
     //     std::cout<<'\n';
     // }
     auto st0 = std::chrono::high_resolution_clock::now();
-    cc.runMorseTest(4, 1.6, 4);
+    cc.runMorseTest(4, 2.0, 4);
     // cc.runAlphaTest(filename, 1.5, 1);
     auto st1 = std::chrono::high_resolution_clock::now();
     auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);

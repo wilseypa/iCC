@@ -3,6 +3,8 @@
 #include <vector>
 #include <unordered_set>
 
+#include"robin_hood.h"
+
 
 class Bi_Graph_Match 
 {
@@ -27,20 +29,23 @@ public:
     void parallelMaxFacetInit(const size_t cofacet_index_min, const size_t cofacet_index_max, const size_t facet_index_min, const size_t facet_index_max, const int threadnum);
 
     void parallelMaxFacetInitMod(const std::vector<std::pair<int64_t, double>>& sorted_facet, const std::vector<std::pair<int64_t, double>>& sorted_cofacet, const int threadnum);
-    // bool isRightSinglePath(int cofacetindex);
+
+    void parallelMinCofacetInit(const size_t cofacet_index_min, const size_t cofacet_index_max, const size_t facet_index_min, const size_t facet_index_max, const int threadnum);
 
     //parallel bipartite matching helper function
     int64_t facetDfsAugPath(const size_t startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<size_t>& aug_path_tid);
 
     int64_t facetDirectNeighborMatch(const size_t facetindex);
 
+    int64_t cofacetDirectNeighborMatch(const size_t cofacetindex);
+
     int64_t facetDirectNeighborMatchWithReduction(const size_t facetindex, const size_t cofacetindex, std::vector<size_t>::iterator facet_iter, std::vector<size_t>::iterator cofacet_iter);
 
     int64_t facetRightDfsAugPath(const size_t startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<size_t>& aug_path_tid);
 
-    int64_t serialfacetDFSAugPath(const size_t facetindex, std::vector<size_t>& aug_path, std::vector<size_t>::iterator cofacet_iter, std::vector<size_t>::iterator facet_iter);
-
-    int64_t serialCofacetDFSAugPath(const size_t cofacetindex, std::vector<size_t>& aug_path, std::vector<size_t>& cofacet_stack, std::vector<size_t>& facet_stack);
+    int64_t serialCofacetDFSAugPath(const size_t cofacetindex, std::vector<size_t>& aug_path, std::vector<size_t>& facet_stack);
+    
+    int64_t serialFacetDFSAugPath(const size_t facetindex, std::vector<size_t>& aug_path, std::vector<size_t>& cofacet_stack);
 
     size_t getChild(std::vector<size_t>& child_workspace, const size_t uidx);
 
@@ -48,7 +53,9 @@ public:
 
     void parallelDirectionalFacetDFSMatch(const std::vector<std::pair<int64_t, double>>& sorted_facet, const std::vector<std::pair<int64_t, double>>& sorted_cofacet, const int threadnum);
 
-    void serialCofacetDFSMatch(const std::vector<std::pair<int64_t, double>>& sorted_facet, const std::vector<std::pair<int64_t, double>>& sorted_cofacet);
+    std::vector<std::pair<double, double>> serialCofacetDFSMatch(const std::vector<std::pair<int64_t, double>>& sorted_facet, const std::vector<std::pair<int64_t, double>>& sorted_cofacet);
+
+    std::vector<std::pair<double, double>> serialFacetDFSMatch(const std::vector<std::pair<int64_t, double>>& sorted_facet, const std::vector<std::pair<int64_t, double>>& sorted_cofacet);
 
     int dfsCycleRemoval();
 
@@ -64,7 +71,7 @@ public:
     
     std::vector<size_t> getCriticalIndex(const std::unordered_set<size_t>& dim_active_index_set, const size_t simplex_index_max);
 
-    // std::vector<std::set<int>> getBackwardSingleFacetIndex(std::vector<int> critical_facet_index);
+    robin_hood::unordered_map<int64_t, size_t> getActiveIndexHashTable(const std::vector<std::pair<int64_t, double>>& cofacet_list);
 
 
     void checkSimplex(std::vector<std::vector<int>>& cofacet_bin, std::vector<std::vector<int>>& simplex_bin, std::vector<std::vector<int>>& target_simplex);
