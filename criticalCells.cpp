@@ -1457,12 +1457,14 @@ void CritCells<ComplexType, DistMatType>::runAlphaTest(const std::string &fileNa
     //remove mst edges
     auto active_facet_hash_table = getActiveEdgeIndexHashTable(binom_table, sorted_simplex);
     
-    std::unordered_set<size_t> dim_active_index_set;
-    for(auto& pair: active_facet_hash_table) dim_active_index_set.insert(pair.second);
-
+    // std::unordered_set<size_t> dim_active_index_set;
+    // for(auto& pair: active_facet_hash_table) dim_active_index_set.insert(pair.second);
 
     //get triangles
     auto sorted_cofacet = getSortedDimCells(binom_table, vertex_handle_index, delaunay_d, 2, maxeps);
+
+    std::vector< std::vector< std::pair<double, double> > > persistent_pairs;
+    persistent_pairs.push_back(std::vector< std::pair<double, double> >{std::make_pair(0.0, -1.0)});
 
     Bi_Graph_Match bi_graph(1, 1, 1);
     
@@ -1471,54 +1473,21 @@ void CritCells<ComplexType, DistMatType>::runAlphaTest(const std::string &fileNa
         bi_graph.updateDimension(sorted_cofacet.size(), sorted_simplex.size());
         buildInterface(bi_graph, binom_table, sorted_cofacet, dim, active_facet_hash_table);
 
-        // bi_graph.parallelMaxFacetInit(0, sorted_cofacet.size(), 0, sorted_simplex.size(), threadnumber);
-        bi_graph.parallelMaxFacetInitMod(0, sorted_cofacet.size(), 0, sorted_simplex.size(), threadnumber);
+        bi_graph.parallelMaxFacetInit(0, sorted_cofacet.size(), 0, sorted_simplex.size(), threadnumber);
+        // bi_graph.parallelMinCofacetInit(0, sorted_cofacet.size(), 0, sorted_simplex.size(), threadnumber);
 
 
-        // bi_graph.parallelKarpSipserInit(1);
+        std::vector<std::pair<double, double>> dim_persis_pair = bi_graph.serialCofacetDFSMatch(sorted_simplex, sorted_cofacet);
+        // std::vector<std::pair<double, double>> dim_persis_pair = bi_graph.serialFacetDFSMatch(sorted_simplex, sorted_cofacet);
+        persistent_pairs.push_back(dim_persis_pair);
 
-        // bi_graph.parallelFacetDFSMatch(1);
-        // bi_graph.parallelDirectionalFacetDFSMatch(1);
+        // auto reverted = bi_graph.dfsCycleRemoval();
+        // std::cout<<"reverted cycle = "<<reverted<<'\n';
 
-        // bi_graph.serialCofacetDFSMatch();
-
-        // for (auto& p: sorted_cofacet) std::cout<<p.first<<"  "<<p.second<<'\n';
-
-        auto reverted = bi_graph.dfsCycleRemoval();
-        std::cout<<"reverted cycle = "<<reverted<<'\n';
-
-
-        // std::vector<size_t> cof_idx = {6, 10, 11, 12};
-        // std::vector<size_t> f_idx = {10, 17, 22, 28, 29};
-
-        // if (dim == 2)
-        // {
-        //     for (auto j: cof_idx)
-        //     {
-        //         std::cout<<"idx = "<<j<<"  match = "<<bi_graph.match_list[j]<<"("<<bi_graph.match_list[j] - int64_t(sorted_cofacet.size())<<")"<<"  weight = "<<sorted_cofacet[j].second<<"    adj = ";
-        //         for (auto t : bi_graph.adj_list[j]) std::cout<<t<<"("<<t - sorted_cofacet.size()<<")"<<"  ";
-        //         std::cout<<'\n';
-        //     }
-
-        //     for (auto j: f_idx)
-        //     {
-        //         std::cout<<"facet idx = "<<j<<"  weight = "<<sorted_simplex[j].second<<"  match = "<<bi_graph.match_list[j + sorted_cofacet.size()]<<"  adj = ";
-        //         for (auto t: bi_graph.adj_list[j + sorted_cofacet.size()])  std::cout<<t<<"  ";
-        //         std::cout<<'\n';
-        //     }
-        // }
-
-
-
-        std::vector<size_t> crit_index = bi_graph.getCriticalIndex(dim_active_index_set, sorted_simplex.size());
-        for(auto t: crit_index) std::cout<<"  idx and weight = "<<t<<" "<<sorted_simplex[t].second<<"   ";
-        std::cout<<'\n'<<'\n';
-
-        dim_active_index_set = bi_graph.getActiveIndexSet();
-        active_facet_hash_table = getActiveFacetIndexHashTable(sorted_cofacet, dim_active_index_set);
 
         if (dim != maxdim)
         {
+            active_facet_hash_table = bi_graph.getActiveIndexHashTable(sorted_cofacet);
             sorted_simplex = getSortedDimCells(binom_table, vertex_handle_index, delaunay_d, dim + 1, maxeps);
             std::swap(sorted_simplex, sorted_cofacet);
         }

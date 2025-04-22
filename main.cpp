@@ -22,8 +22,8 @@ int main()
     //     std::cout<<'\n';
     // }
     auto st0 = std::chrono::high_resolution_clock::now();
-    cc.runMorseTest(4, 2.0, 4);
-    // cc.runAlphaTest(filename, 1.5, 1);
+    // cc.runMorseTest(4, 2.0, 4);
+    cc.runAlphaTest(filename, 2.0, 4);
     auto st1 = std::chrono::high_resolution_clock::now();
     auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
     std::cout<<"run time = "<<pt_ms.count() <<'\n';

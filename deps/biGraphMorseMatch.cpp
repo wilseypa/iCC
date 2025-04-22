@@ -835,30 +835,30 @@ std::vector<std::pair<double, double>> Bi_Graph_Match::serialCofacetDFSMatch(con
 
         for (int64_t j = 0; j < augpathlen; j += 2) 
         {
-            // if (j == 0)
-            // {
-            //     int flag = 0;
-            //     // std::cout<<"print aug path weight facet - cofacet:  ";
-            //     for (auto i = 0; i < augpathlen - 1; i+=2)
-            //     {   
-            //         auto facet = aug_path[i];
-            //         auto cofacet = aug_path[i + 1];
-            //         auto firstcofacet = adj_list[aug_path[0]][0];
-            //         auto finalcofacet = aug_path[augpathlen - 1];
-            //         auto facetweight = sorted_facet[facet - u].second;
-            //         auto cofacetweight = sorted_cofacet[cofacet].second;
-            //         auto finalcofacetweight = sorted_cofacet[ustart].second;
-            //         auto firstcofacetweight = sorted_cofacet[firstcofacet].second;
-            //         if (i == 0 && facetweight == finalcofacetweight)
-            //         {
-            //             // std::cout<<"facet weight = "<<facetweight<<"  end cofacet weight = "<<sorted_cofacet[aug_path[augpathlen - 1]].second;
-            //             flag = 1;
-            //             break;
-            //         }
-            //         std::cout<<facetweight<<"  "<<cofacetweight<<"  ";
-            //     }
-            //     if (!flag) std::cout<<"\n";
-            // }
+            if (j == 0)
+            {
+                int flag = 0;
+                // std::cout<<"print aug path weight facet - cofacet:  ";
+                for (auto i = 0; i < augpathlen - 1; i+=2)
+                {   
+                    auto facet = aug_path[i];
+                    auto cofacet = aug_path[i + 1];
+                    auto firstcofacet = adj_list[aug_path[0]][0];
+                    auto finalcofacet = aug_path[augpathlen - 1];
+                    auto facetweight = sorted_facet[facet - u].second;
+                    auto cofacetweight = sorted_cofacet[cofacet].second;
+                    auto finalcofacetweight = sorted_cofacet[ustart].second;
+                    auto firstcofacetweight = sorted_cofacet[firstcofacet].second;
+                    if (i == 0 && facetweight == finalcofacetweight)
+                    {
+                        // std::cout<<"facet weight = "<<facetweight<<"  end cofacet weight = "<<sorted_cofacet[aug_path[augpathlen - 1]].second;
+                        flag = 1;
+                        break;
+                    }
+                    std::cout<<facetweight<<"  "<<cofacetweight<<"  ";
+                }
+                if (!flag) std::cout<<"\n";
+            }
 
             if (j == 0)
             {
@@ -874,7 +874,7 @@ std::vector<std::pair<double, double>> Bi_Graph_Match::serialCofacetDFSMatch(con
 
         if (facetweight != cofacetweight)
         {
-            std::cout<<"facet weight = "<<facetweight<<"  cofacet weight = "<<cofacetweight<<'\n';
+            // std::cout<<"facet weight = "<<facetweight<<"  cofacet weight = "<<cofacetweight<<'\n';
             persistent_pair.push_back(std::make_pair(facetweight, cofacetweight));
         }
     }
