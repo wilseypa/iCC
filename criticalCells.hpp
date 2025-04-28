@@ -174,6 +174,17 @@ public:
 
     void runAlphaTest(const std::string &fileName, double maxeps, int threadnumber);
 
+    std::vector<std::unordered_set<size_t>> getVirtualVertexIndices(const size_t maxdim, double& epsinit, const int threadnumber);
+
+    std::vector<std::unordered_set<size_t>> mergeIntersectingVirtualVertexIndices(std::vector<std::unordered_set<size_t>>& virtual_vertex_indices);
+
+    std::vector<size_t> getActiveVertex(const std::vector<std::unordered_set<size_t>>& virtual_vertex_indices);
+
+    double computeVirtualDistance(const size_t i, const size_t j, const std::vector<std::unordered_set<size_t>>& virtual_vertex_indices);
+
+    robin_hood::unordered_map<uint64_t, double> getVirtualDistanceHashTable(const std::vector<size_t>& active_vertex, const std::vector<std::unordered_set<size_t>>& virtual_vertex_indices);
+
+    double getVirtualDistance(const size_t i, const size_t j, const robin_hood::unordered_map<uint64_t, double>& virtual_distance_hash_table);
 
 private:
     std::map<double, std::vector<std::vector<int>>> binEdgeSimplexes();                                                                             // Direct creation of edgebins to a map

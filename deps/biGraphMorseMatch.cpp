@@ -1467,3 +1467,81 @@ void Bi_Graph_Match::checkCofacetByIndex(std::vector<std::vector<int>>& cofacet_
     }
 }
 
+
+std::vector<std::vector<size_t>> Bi_Graph_Match::serialCofacetDFSReduction(const int maxdim, int dim)
+{
+    std::vector<size_t> unmatched_u_init;
+    unmatched_u_init.reserve(u);
+
+    for(size_t i = 0; i < u; i++)
+    {
+        if (match_list[i] < 0) unmatched_u_init.push_back(i);
+    }
+    
+    size_t initialunmatched = unmatched_u_init.size();
+
+    std::vector<size_t> aug_path(u + v, 0);
+
+    std::vector<size_t> facet_stack;
+    facet_stack.reserve(v);
+
+    std::vector<std::vector<size_t>> reduced_cofacet_index;    //cofacet index to be reduced
+
+    for (size_t i = 0; i < initialunmatched; i++)
+    {
+        auto ustart = unmatched_u_init[i];
+
+        //check direct neighbor match
+        auto directmate = match_list[ustart];
+        if (directmate < -1)
+        {
+            //check if the directmate is still unmatched at this time
+            auto ui = match_list[-directmate];
+            if (ui < 0)
+            {
+                // std::cout<<"direct mate = "<<ustart<<"  directmate = "<<-directmate<<'\n';
+                match_list[ustart] = -directmate;
+                match_list[-directmate] = ustart;
+                continue;
+            }
+        }
+        
+        int64_t augpathlen = serialCofacetDFSAugPath(ustart, aug_path, facet_stack);
+
+
+        if (dim != maxdim)
+        {
+            for (int64_t j = 0; j < augpathlen; j += 2) 
+            {
+
+                match_list[aug_path[j]] = aug_path[j + 1];
+                match_list[aug_path[j + 1]] = aug_path[j];
+            }
+        }
+        else
+        {
+            if (augpathlen > 6)
+            {
+                std::vector<size_t> cof_idx;
+                for (int64_t j = 0; j < augpathlen; j += 2)
+                {
+                    match_list[aug_path[j]] = aug_path[j + 1];
+                    match_list[aug_path[j + 1]] = aug_path[j];
+                    cof_idx.push_back(aug_path[j + 1]);
+                }
+                reduced_cofacet_index.push_back(cof_idx);
+            }
+            else
+            {
+                for (int64_t j = 0; j < augpathlen; j += 2) 
+                {
+                    match_list[aug_path[j]] = aug_path[j + 1];
+                    match_list[aug_path[j + 1]] = aug_path[j];
+                }
+            }
+        }
+            
+    }
+
+    return reduced_cofacet_index;
+}

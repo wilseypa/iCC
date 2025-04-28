@@ -82,4 +82,7 @@ public:
 
     void checkCofacetByIndex(std::vector<std::vector<int>>& cofacet_bin, std::vector<std::vector<int>>& simplex_bin, std::vector<int>& target_cofacet_index);
 
+
+    std::vector<std::vector<size_t>> serialCofacetDFSReduction(const int maxdim, int dim);
+
 };
