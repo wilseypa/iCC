@@ -157,7 +157,7 @@ public:
 
     robin_hood::unordered_map<int64_t, size_t> getActiveEdgeIndexHashTable(const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<std::pair<int64_t, double>>& sorted_edge);
 
-    robin_hood::unordered_map<int64_t, size_t> getActiveFacetIndexHashTable(const std::vector<std::pair<int64_t, double>>& facet_list, const std::unordered_set<size_t>& active_facet_index_set);
+    // robin_hood::unordered_map<int64_t, size_t> getActiveFacetIndexHashTable(const std::vector<std::pair<int64_t, double>>& facet_list, const std::unordered_set<size_t>& active_facet_index_set);
 
     std::vector<std::pair<int64_t, double>> getSortedCofacetList(const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<std::pair<int64_t, double>>& sorted_simplex, const size_t dim, const double maxeps, const int threadnum);
 
@@ -174,9 +174,13 @@ public:
 
     void runAlphaTest(const std::string &fileName, double maxeps, int threadnumber);
 
-    std::vector<std::unordered_set<size_t>> getVirtualVertexIndices(const size_t maxdim, double& epsinit, const int threadnumber);
+
+
+    std::vector<std::unordered_set<size_t>> getVirtualVertexIndices(const std::vector<std::vector<int64_t>>& binomial_table, const size_t maxdim, double& initeps, const int threadnumber);
 
     std::vector<std::unordered_set<size_t>> mergeIntersectingVirtualVertexIndices(std::vector<std::unordered_set<size_t>>& virtual_vertex_indices);
+
+    void updateBinomialTable(std::vector<std::vector<int64_t>>& binomial_table, const size_t vvtnum, const size_t maxdim);
 
     std::vector<size_t> getActiveVertex(const std::vector<std::unordered_set<size_t>>& virtual_vertex_indices);
 
@@ -184,8 +188,18 @@ public:
 
     robin_hood::unordered_map<uint64_t, double> getVirtualDistanceHashTable(const std::vector<size_t>& active_vertex, const std::vector<std::unordered_set<size_t>>& virtual_vertex_indices);
 
-    double getVirtualDistance(const size_t i, const size_t j, const robin_hood::unordered_map<uint64_t, double>& virtual_distance_hash_table);
+    double getVirtualDistance(size_t i, size_t j, const robin_hood::unordered_map<uint64_t, double>& virtual_distance_hash_table);
 
+    std::vector<std::pair<int64_t, double>> getVirtualSortedEdge(const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<size_t>& active_vertex, 
+                                                                 const robin_hood::unordered_map<uint64_t, double>& virtual_distance_hash_table, const double maxeps);
+
+    robin_hood::unordered_map<int64_t, size_t> getVirtualActiveEdgeIndexHashTable(const std::vector<std::vector<int64_t>>& binomial_table, 
+                                                                                  const std::vector<std::pair<int64_t, double>>& sorted_virtual_edge, const size_t vvtnum);
+    
+    std::vector<std::pair<int64_t, double>> getVirtualSortedCofacetList(const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<std::pair<int64_t, double>>& sorted_virtual_simplex, 
+                                                                        const robin_hood::unordered_map<uint64_t, double>& virtual_distance_hash_table, const std::vector<size_t>& active_vertex, const size_t vvtnum, const size_t dim, const double maxeps, const int threadnum);
+
+    void runMorseReductionTest(size_t maxdim, double initeps, double maxeps, int threadnumber);
 private:
     std::map<double, std::vector<std::vector<int>>> binEdgeSimplexes();                                                                             // Direct creation of edgebins to a map
     void binByWeights(std::map<double, std::vector<std::vector<int>>> &weighted_simplicies, std::map<double, std::vector<std::vector<int>>> &bins); // Merged higher dim feature to bins

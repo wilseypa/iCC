@@ -835,30 +835,30 @@ std::vector<std::pair<double, double>> Bi_Graph_Match::serialCofacetDFSMatch(con
 
         for (int64_t j = 0; j < augpathlen; j += 2) 
         {
-            if (j == 0)
-            {
-                int flag = 0;
-                // std::cout<<"print aug path weight facet - cofacet:  ";
-                for (auto i = 0; i < augpathlen - 1; i+=2)
-                {   
-                    auto facet = aug_path[i];
-                    auto cofacet = aug_path[i + 1];
-                    auto firstcofacet = adj_list[aug_path[0]][0];
-                    auto finalcofacet = aug_path[augpathlen - 1];
-                    auto facetweight = sorted_facet[facet - u].second;
-                    auto cofacetweight = sorted_cofacet[cofacet].second;
-                    auto finalcofacetweight = sorted_cofacet[ustart].second;
-                    auto firstcofacetweight = sorted_cofacet[firstcofacet].second;
-                    if (i == 0 && facetweight == finalcofacetweight)
-                    {
-                        // std::cout<<"facet weight = "<<facetweight<<"  end cofacet weight = "<<sorted_cofacet[aug_path[augpathlen - 1]].second;
-                        flag = 1;
-                        break;
-                    }
-                    std::cout<<facetweight<<"  "<<cofacetweight<<"  ";
-                }
-                if (!flag) std::cout<<"\n";
-            }
+            // if (j == 0)
+            // {
+            //     int flag = 0;
+            //     // std::cout<<"print aug path weight facet - cofacet:  ";
+            //     for (auto i = 0; i < augpathlen - 1; i+=2)
+            //     {   
+            //         auto facet = aug_path[i];
+            //         auto cofacet = aug_path[i + 1];
+            //         auto firstcofacet = adj_list[aug_path[0]][0];
+            //         auto finalcofacet = aug_path[augpathlen - 1];
+            //         auto facetweight = sorted_facet[facet - u].second;
+            //         auto cofacetweight = sorted_cofacet[cofacet].second;
+            //         auto finalcofacetweight = sorted_cofacet[ustart].second;
+            //         auto firstcofacetweight = sorted_cofacet[firstcofacet].second;
+            //         if (i == 0 && facetweight == finalcofacetweight)
+            //         {
+            //             // std::cout<<"facet weight = "<<facetweight<<"  end cofacet weight = "<<sorted_cofacet[aug_path[augpathlen - 1]].second;
+            //             flag = 1;
+            //             break;
+            //         }
+            //         std::cout<<facetweight<<"  "<<cofacetweight<<"  ";
+            //     }
+            //     if (!flag) std::cout<<"\n";
+            // }
 
             if (j == 0)
             {
@@ -874,7 +874,7 @@ std::vector<std::pair<double, double>> Bi_Graph_Match::serialCofacetDFSMatch(con
 
         if (facetweight != cofacetweight)
         {
-            // std::cout<<"facet weight = "<<facetweight<<"  cofacet weight = "<<cofacetweight<<'\n';
+            std::cout<<"facet weight = "<<facetweight<<"  cofacet weight = "<<cofacetweight<<'\n';
             persistent_pair.push_back(std::make_pair(facetweight, cofacetweight));
         }
     }
@@ -1401,7 +1401,7 @@ robin_hood::unordered_map<int64_t, size_t> Bi_Graph_Match::getActiveIndexHashTab
         if (match_list[i] < 0)
         {
             auto bindex = cofacet_list[i].first;
-            active_facet_index_hash.insert({bindex, i});
+            active_facet_index_hash.emplace(bindex, i);
         }
     }
 
@@ -1485,7 +1485,7 @@ std::vector<std::vector<size_t>> Bi_Graph_Match::serialCofacetDFSReduction(const
     std::vector<size_t> facet_stack;
     facet_stack.reserve(v);
 
-    std::vector<std::vector<size_t>> reduced_cofacet_index;    //cofacet index to be reduced
+    std::vector<std::vector<size_t>> reduced_cofacet_index_vec;    //cofacet index to be reduced
 
     for (size_t i = 0; i < initialunmatched; i++)
     {
@@ -1520,16 +1520,16 @@ std::vector<std::vector<size_t>> Bi_Graph_Match::serialCofacetDFSReduction(const
         }
         else
         {
-            if (augpathlen > 6)
+            if (augpathlen > 4)
             {
-                std::vector<size_t> cof_idx;
+                std::vector<size_t> aug_path_cof_idx;
                 for (int64_t j = 0; j < augpathlen; j += 2)
                 {
                     match_list[aug_path[j]] = aug_path[j + 1];
                     match_list[aug_path[j + 1]] = aug_path[j];
-                    cof_idx.push_back(aug_path[j + 1]);
+                    aug_path_cof_idx.push_back(aug_path[j + 1]);
                 }
-                reduced_cofacet_index.push_back(cof_idx);
+                reduced_cofacet_index_vec.push_back(std::move(aug_path_cof_idx));
             }
             else
             {
@@ -1543,5 +1543,5 @@ std::vector<std::vector<size_t>> Bi_Graph_Match::serialCofacetDFSReduction(const
             
     }
 
-    return reduced_cofacet_index;
+    return reduced_cofacet_index_vec;
 }
