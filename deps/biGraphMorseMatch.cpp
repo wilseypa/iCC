@@ -669,9 +669,9 @@ int64_t Bi_Graph_Match::serialCofacetDFSAugPath(const size_t cofacetindex, std::
             }
             else
             {
-
+                // std::cout<<"top facet = "<<facet<<"  start cofacet = "<<cofacetindex<<'\n';
                 size_t facetmate = match_list[facet];
-                // if (facetmate > cofacetindex) return -1;
+                if (facetmate > cofacetindex) return -1;
 
                 for (auto vidx: adj_list[facetmate])
                 {
@@ -1301,9 +1301,9 @@ int Bi_Graph_Match::dfsCycleRemoval()
                         //found back edge
                         int64_t temp = match_list[child];
 
-                        // std::cout<<"found cycle cofacet = "<<child<<"  facet = "<<temp<<"  top = "<<top<<'\n';
-                        // for (auto vi: adj_list[child]) std::cout<<vi<<"("<<match_list[vi]<<") ";
-                        // std::cout<<'\n';
+                        std::cout<<"found cycle cofacet = "<<child<<"  facet = "<<temp<<"  top = "<<top<<'\n';
+                        for (auto vi: adj_list[child]) std::cout<<vi<<"("<<match_list[vi]<<") ";
+                        std::cout<<'\n';
                         
 
                         match_list[child] = -1;

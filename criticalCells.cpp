@@ -1095,7 +1095,7 @@ std::vector<int64_t> CritCells<ComplexType, DistMatType>::getFacetBinomialIndex(
     std::vector<int64_t> facet_bindex;
     facet_bindex.reserve(dim + 1);
 
-    size_t npt = this->distMatrix.size();
+    size_t npt = binomial_table.size() - 1;
 
     std::vector<size_t> simplex_vt = getSimplexVertices(binomial_table, binomindex, npt, dim);
 
@@ -1240,7 +1240,7 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
         }
         
 
-        // std::cout<<"check graph dim = "<<dim<<"  cofacet size = "<<sorted_cofacet.size()<<"  facet size = "<<sorted_simplex.size()<<'\n';
+        std::cout<<"check graph dim = "<<dim<<"  cofacet size = "<<sorted_cofacet.size()<<"  facet size = "<<sorted_simplex.size()<<'\n';
         // // std::vector<size_t> cof_idx = {119, 120, 144, 146};
         // std::vector<size_t> cof_idx = {356, 357, 10329, 10332, 15458, 42943};
         // std::vector<size_t> f_idx = {328, 3012, 3755};
@@ -1812,11 +1812,11 @@ robin_hood::unordered_map<int64_t, size_t> CritCells<ComplexType, DistMatType>::
 
 template <typename ComplexType, typename DistMatType>
 std::vector<std::pair<int64_t, double>> CritCells<ComplexType, DistMatType>::getVirtualSortedCofacetList(const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<std::pair<int64_t, double>>& sorted_virtual_simplex, 
-                                                                                                         const robin_hood::unordered_map<uint64_t, double>& virtual_distance_hash_table, const std::vector<size_t>& active_vertex, const size_t vvtnum, const size_t dim, const double maxeps, const int threadnum)
+                                                                                                         const robin_hood::unordered_map<uint64_t, double>& virtual_distance_hash_table, const std::vector<size_t>& active_vertex, const size_t dim, const double maxeps, const int threadnum)
 {
     std::vector<std::pair<int64_t, double>> virtual_cofacet_list;
 
-    size_t npt = this->distMatrix.size() + vvtnum;
+    size_t npt = binomial_table.size() - 1;
 
     std::vector< std::vector< std::pair<size_t, double> > > thread_workspace(sorted_virtual_simplex.size(), std::vector<std::pair<size_t, double>>());
 
@@ -1848,6 +1848,9 @@ std::vector<std::pair<int64_t, double>> CritCells<ComplexType, DistMatType>::get
             auto simpvt = *std::max_element(simplex_vt.begin(), simplex_vt.end(), [this,  &virtual_distance_hash_table, newvt](auto first, auto second)
                                                                                   { return this->getVirtualDistance(newvt, first, virtual_distance_hash_table) < this->getVirtualDistance(newvt, second, virtual_distance_hash_table); });
             double weight = getVirtualDistance(newvt, simpvt, virtual_distance_hash_table);
+
+            assert(weight > 0);
+
             double cofacetweight = (weight > originalweight) ? weight : originalweight;
             if (cofacetweight < maxeps) thread_workspace[i].emplace_back(newvt, cofacetweight);
         }
@@ -1893,6 +1896,8 @@ void CritCells<ComplexType, DistMatType>::runMorseReductionTest(size_t maxdim, d
 
     updateBinomialTable(binom_table, merged_virtual_vertex.size(), maxdim);
 
+    std::cout<<"binomial table size = "<<binom_table.size()<<'\n';
+
     auto active_vertex = getActiveVertex(merged_virtual_vertex);
 
     std::cout<<"active vertex size = "<<active_vertex.size()<<'\n';
@@ -1903,7 +1908,7 @@ void CritCells<ComplexType, DistMatType>::runMorseReductionTest(size_t maxdim, d
 
     auto active_index_hash_table = getVirtualActiveEdgeIndexHashTable(binom_table, sorted_virtual_simplex, merged_virtual_vertex.size());
 
-    auto sorted_virtual_cofacet = getVirtualSortedCofacetList(binom_table, sorted_virtual_simplex, virtual_distance_hash_table, active_vertex, merged_virtual_vertex.size(), 1, maxeps, 1);
+    auto sorted_virtual_cofacet = getVirtualSortedCofacetList(binom_table, sorted_virtual_simplex, virtual_distance_hash_table, active_vertex, 1, maxeps, 1);
 
     std::vector< std::vector< std::pair<double, double> > > persistent_pairs;
     persistent_pairs.push_back(std::vector< std::pair<double, double> >{std::make_pair(0.0, -1.0)});
@@ -1917,36 +1922,57 @@ void CritCells<ComplexType, DistMatType>::runMorseReductionTest(size_t maxdim, d
 
         bi_graph.parallelMaxFacetInit(0, sorted_virtual_cofacet.size(), 0, sorted_virtual_simplex.size(), 1);
 
-        if (dim == maxdim)
-        {
-            std::cout<<"check graph dim = "<<dim<<"  cofacet size = "<<sorted_virtual_cofacet.size()<<"  facet size = "<<sorted_virtual_simplex.size()<<'\n';
-            // std::vector<size_t> cof_idx = {119, 120, 144, 146};
-            std::vector<size_t> cof_idx = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29};
-            std::vector<size_t> f_idx = {};
+        // if (dim == maxdim)
+        // {
+        //     std::cout<<"check graph dim = "<<dim<<"  cofacet size = "<<sorted_virtual_cofacet.size()<<"  facet size = "<<sorted_virtual_simplex.size()<<'\n';
+        //     // std::vector<size_t> cof_idx = {119, 120, 144, 146};
+        //     std::vector<size_t> cof_idx = {985, 986, 987, 988, 989, 990, 991, 992, 993, 994, 995, 996, 997, 998, 999};
+        //     // std::vector<size_t> f_idx = {1457407, 1465014};
+        //     std::vector<size_t> f_idx = {377706, 377962, 377971, 409036, 409042};
 
-            if (true)
-            {
-                for (auto j: cof_idx)
-                {
-                    std::cout<<"idx = "<<j<<"  match = "<<bi_graph.match_list[j]<<"("<<bi_graph.match_list[j] - int64_t(sorted_virtual_cofacet.size())<<")"<<"  weight = "<<sorted_virtual_cofacet[j].second<<"    adj = ";
-                    for (auto t : bi_graph.adj_list[j]) std::cout<<t<<"("<<t - sorted_virtual_cofacet.size()<<")"<<"  ";
-                    std::cout<<'\n';
-                }
+        //     if (true)
+        //     {
+        //         for (auto j: cof_idx)
+        //         {
+        //             auto bindex = sorted_virtual_cofacet[j].first;
+        //             auto simplex_vt = getSimplexVertices(binom_table, bindex, n + merged_virtual_vertex.size(), dim);
+        //             for (auto t : simplex_vt)
+        //             {
+        //                 std::cout<<t<<"  ";
+        //             }
+        //             std::cout<<"idx = "<<j<<"  match = "<<bi_graph.match_list[j]<<"("<<bi_graph.match_list[j] - int64_t(sorted_virtual_cofacet.size())<<")"<<"  weight = "<<sorted_virtual_cofacet[j].second<<"    adj = ";
+        //             for (auto t : bi_graph.adj_list[j]) std::cout<<t<<"("<<t - sorted_virtual_cofacet.size()<<")"<<"  ";
+        //             std::cout<<'\n';
+        //         }
 
-                for (auto j: f_idx)
-                {
-                    std::cout<<"facet idx = "<<j<<"  weight = "<<sorted_virtual_simplex[j].second<<"  match = "<<bi_graph.match_list[j + sorted_virtual_cofacet.size()]<<"  adj = ";
-                    // for (auto t: bi_graph.adj_list[j + sorted_cofacet.size()])  std::cout<<t<<"  ";
-                    std::cout<<'\n';
-                }
-            }
-        }
+        //         for (auto j: f_idx)
+        //         {
+        //             auto bindex = sorted_virtual_simplex[j - sorted_virtual_cofacet.size()].first;
+        //             auto simplex_vt = getSimplexVertices(binom_table, bindex, n + merged_virtual_vertex.size(), dim - 1);
+        //             for (auto t : simplex_vt)
+        //             {
+        //                 std::cout<<t<<"  ";
+        //             }
+        //             std::cout<<"facet idx = "<<j<<"  weight = "<<sorted_virtual_simplex[j - sorted_virtual_cofacet.size()].second<<"  match = "<<bi_graph.match_list[j]<<"  adj = ";
+        //             // for (auto t: bi_graph.adj_list[j])  std::cout<<t<<"  ";
+        //             std::cout<<bi_graph.adj_list[j].size();
+        //             std::cout<<'\n';
+        //         }
 
-        if (dim != maxdim)
+        //         // for (auto j: f_idx)
+        //         // {
+        //         //     std::cout<<"facet idx = "<<j<<"  weight = "<<sorted_virtual_simplex[j].second<<"  match = "<<bi_graph.match_list[j + sorted_virtual_cofacet.size()]<<"  adj = ";
+        //         //     // for (auto t: bi_graph.adj_list[j + sorted_cofacet.size()])  std::cout<<t<<"  ";
+        //         //     std::cout<<'\n';
+        //         // }
+        //     }
+        // }
+
+        if (true)
         {
             std::vector<std::pair<double, double>> dim_persis_pair = bi_graph.serialCofacetDFSMatch(sorted_virtual_simplex, sorted_virtual_cofacet);
             std::cout<<"dim = "<<dim<<"  persis size = "<<dim_persis_pair.size()<<'\n';
-            // persistent_pairs.push_back(dim_persis_pair);
+            persistent_pairs.push_back(dim_persis_pair);
         }
         
 
@@ -1958,7 +1984,7 @@ void CritCells<ComplexType, DistMatType>::runMorseReductionTest(size_t maxdim, d
         if (dim != maxdim)
         {
             active_index_hash_table = bi_graph.getActiveIndexHashTable(sorted_virtual_cofacet);
-            sorted_virtual_simplex = getSortedCofacetList(binom_table, sorted_virtual_cofacet, dim, maxeps, 1);
+            sorted_virtual_simplex = getVirtualSortedCofacetList(binom_table, sorted_virtual_cofacet, virtual_distance_hash_table, active_vertex, dim, maxeps, 1);
             std::swap(sorted_virtual_simplex, sorted_virtual_cofacet);
         }
     }

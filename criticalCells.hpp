@@ -197,7 +197,7 @@ public:
                                                                                   const std::vector<std::pair<int64_t, double>>& sorted_virtual_edge, const size_t vvtnum);
     
     std::vector<std::pair<int64_t, double>> getVirtualSortedCofacetList(const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<std::pair<int64_t, double>>& sorted_virtual_simplex, 
-                                                                        const robin_hood::unordered_map<uint64_t, double>& virtual_distance_hash_table, const std::vector<size_t>& active_vertex, const size_t vvtnum, const size_t dim, const double maxeps, const int threadnum);
+                                                                        const robin_hood::unordered_map<uint64_t, double>& virtual_distance_hash_table, const std::vector<size_t>& active_vertex, const size_t dim, const double maxeps, const int threadnum);
 
     void runMorseReductionTest(size_t maxdim, double initeps, double maxeps, int threadnumber);
 private:
