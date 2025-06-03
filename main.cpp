@@ -7,8 +7,8 @@
 
 int main()
 {   
-    // std::string filename = "testdata3d_2.csv";
-    std::string filename = "test_4dsphere_50.csv";
+    std::string filename = "test_5d_60_double.csv";
+    // std::string filename = "test_2dsquare_double_15.csv";
     CritCells<VR, NormallDistMat> cc(filename);
 
     // cc.runAlphaTest(filename);
@@ -19,12 +19,12 @@ int main()
     // for(auto& dim_cw: critical_weight)
     // {
     //     for (auto& w: dim_cw) std::cout<<w<<"  ";
-    //     std::cout<<'\n';
+    //     std::cout<<'\n';./
     // }
     auto st0 = std::chrono::high_resolution_clock::now();
-    // cc.runMorseTest(4, 2.0, 4);
+    cc.runMorseTest(5, 3.5, 4);
     // cc.runAlphaTest(filename, 2.0, 4);
-    cc.runMorseReductionTest(4, 1.7, 2.0, 4);
+    // cc.runMorseReductionTest(5, 1.8, 3.5, 4);
     auto st1 = std::chrono::high_resolution_clock::now();
     auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
     std::cout<<"run time = "<<pt_ms.count() <<'\n';

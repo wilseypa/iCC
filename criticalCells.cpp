@@ -1160,8 +1160,6 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
     auto sorted_simplex = getSortedEdge(binom_table, maxeps);
 
     auto active_index_hash_table = getActiveEdgeIndexHashTable(binom_table, sorted_simplex);
-    // std::unordered_set<size_t> dim_active_index_set;
-    // for(auto& pair: active_index_hash_table) dim_active_index_set.insert(pair.second);
 
     auto sorted_cofacet = getSortedCofacetList(binom_table, sorted_simplex, 1, maxeps, threadnumber);
 
@@ -1172,62 +1170,48 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
 
     for (size_t dim = 2; dim <= maxdim; dim++)
     {
-        auto st0 = std::chrono::high_resolution_clock::now();
+        // auto st0 = std::chrono::high_resolution_clock::now();
 
         bi_graph.updateDimension(sorted_cofacet.size(), sorted_simplex.size());
         buildInterface(bi_graph, binom_table, sorted_cofacet, dim, active_index_hash_table);
 
-        auto st1 = std::chrono::high_resolution_clock::now();
-        auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
-        std::cout<<"dim = "<<dim<<" build graph run time = "<<pt_ms.count() <<'\n';
+        // auto st1 = std::chrono::high_resolution_clock::now();
+        // auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
+        // std::cout<<"dim = "<<dim<<" build graph run time = "<<pt_ms.count() <<'\n';
 
         
         if (true)
         {
-            auto st0 = std::chrono::high_resolution_clock::now();
+            // auto st0 = std::chrono::high_resolution_clock::now();
 
-            // bi_graph.parallelMaxFacetInit(0, sorted_cofacet.size(), 0, sorted_simplex.size(), threadnumber);
-            bi_graph.parallelMinCofacetInit(0, sorted_cofacet.size(), 0, sorted_simplex.size(), threadnumber);
+            bi_graph.parallelMaxFacetInit(0, sorted_cofacet.size(), 0, sorted_simplex.size(), threadnumber);
+            // bi_graph.parallelMinCofacetInit(0, sorted_cofacet.size(), 0, sorted_simplex.size(), threadnumber);
 
-
-            auto st1 = std::chrono::high_resolution_clock::now();
-            auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
-            std::cout<<"dim = "<<dim<<" init run time = "<<pt_ms.count() <<'\n';
+            // bi_graph.parallelTwoPhaseInit(threadnumber);
+            // bi_graph.parallelFacetDFSMatch(threadnumber);
 
 
-            st0 = std::chrono::high_resolution_clock::now();
+            // auto st1 = std::chrono::high_resolution_clock::now();
+            // auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
+            // std::cout<<"dim = "<<dim<<" init run time = "<<pt_ms.count() <<'\n';
 
-            // std::vector<std::pair<double, double>> dim_persis_pair = bi_graph.serialCofacetDFSMatch(sorted_simplex, sorted_cofacet);
-            std::vector<std::pair<double, double>> dim_persis_pair = bi_graph.serialFacetDFSMatch(sorted_simplex, sorted_cofacet);
-            persistent_pairs.push_back(dim_persis_pair);
 
-            st1 = std::chrono::high_resolution_clock::now();
-            pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
-            std::cout<<"dim = "<<dim<<" match run time = "<<pt_ms.count() <<'\n';
+            // st0 = std::chrono::high_resolution_clock::now();
+
+            std::vector<std::pair<double, double>> dim_persis_pair = bi_graph.serialCofacetDFSMatch(sorted_simplex, sorted_cofacet);
+            // std::vector<std::pair<double, double>> dim_persis_pair = bi_graph.serialFacetDFSMatch(sorted_simplex, sorted_cofacet);
+            // persistent_pairs.push_back(dim_persis_pair);
+
+            // auto reverted = bi_graph.dfsCycleRemoval();
+            // std::cout<<"reverted = "<<reverted<<'\n';
+            std::cout<<'\n';
+
+            // auto st1 = std::chrono::high_resolution_clock::now();
+            // auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
+            // std::cout<<"dim = "<<dim<<" match run time = "<<pt_ms.count() <<'\n';
         }
 
         
-        
-        // for (size_t i = 0; i < bi_graph.u; i++) {
-        //     auto imate = bi_graph.match_list[i];
-        //     if (imate != -1 && bi_graph.match_list[imate] != i) {
-        //         std::cout<<"matching error !!!  i mate = "<<bi_graph.match_list[i]<<"  imate match = "<<bi_graph.match_list[imate]<<'\n';
-        //         return;
-        //     }
-        // }
-
-        // for (size_t i = bi_graph.u; i < (bi_graph.u + bi_graph.v); i++) {
-        //     auto imate = bi_graph.match_list[i];
-        //     if (imate != -1 && bi_graph.match_list[imate] != i) {
-        //         std::cout<<"matching error !!!  i mate = "<<bi_graph.match_list[i]<<"  imate match = "<<bi_graph.match_list[imate]<<'\n';
-        //         return;
-        //     }
-        // }
-
-        // for (size_t i = 0; i < bi_graph.u; i++)
-        // {
-        //     if (bi_graph.adj_list[i].size() > dim + 1) std::cout<<"dim = "<<dim<<"  i = "<<i<<"  adj size = "<<bi_graph.adj_list[i].size()<<'\n';
-        // }
 
         if (false)
         {
@@ -1239,49 +1223,58 @@ void CritCells<ComplexType, DistMatType>::runMorseTest(size_t maxdim, double max
             std::cout<<"dim = "<<dim<<" cycle removal run time = "<<pt_ms.count() <<'\n';
         }
         
-
-        std::cout<<"check graph dim = "<<dim<<"  cofacet size = "<<sorted_cofacet.size()<<"  facet size = "<<sorted_simplex.size()<<'\n';
-        // // std::vector<size_t> cof_idx = {119, 120, 144, 146};
-        // std::vector<size_t> cof_idx = {356, 357, 10329, 10332, 15458, 42943};
-        // std::vector<size_t> f_idx = {328, 3012, 3755};
-
-        // if (dim == 3)
+        if (dim == maxdim) std::cout<<"max dim cofacet size = "<<sorted_cofacet.size()<<"  facet size = "<<sorted_simplex.size()<<'\n';
+        
+        //print DAG edges at the top dim
+        // if (dim == maxdim)
         // {
-        //     for (auto j: cof_idx)
-        //     {
-        //         std::cout<<"idx = "<<j<<"  match = "<<bi_graph.match_list[j]<<"("<<bi_graph.match_list[j] - int64_t(sorted_cofacet.size())<<")"<<"  weight = "<<sorted_cofacet[j].second<<"    adj = ";
-        //         for (auto t : bi_graph.adj_list[j]) std::cout<<t<<"("<<t - sorted_cofacet.size()<<")"<<"  ";
-        //         std::cout<<'\n';
-        //     }
+        //     std::ofstream out("dag_edges.csv");
 
-        //     for (auto j: f_idx)
+        //     std::cout<<"DAG edges: \n";
+        //     for (size_t i = bi_graph.u; i < (bi_graph.u + bi_graph.v); i++)
         //     {
-        //         std::cout<<"facet idx = "<<j<<"  weight = "<<sorted_simplex[j].second<<"  match = "<<bi_graph.match_list[j + sorted_cofacet.size()]<<"  adj = ";
-        //         // for (auto t: bi_graph.adj_list[j + sorted_cofacet.size()])  std::cout<<t<<"  ";
-        //         std::cout<<'\n';
+        //         auto mate = bi_graph.match_list[i];
+        //         if (mate != -1)
+        //         {
+        //             for (auto j : bi_graph.adj_list[i])
+        //             {
+        //                 auto jmate = bi_graph.match_list[j];
+        //                 if (jmate != -1 && jmate != i)
+        //                 {
+        //                     std::cout<<"x = "<<j<<"  y = "<<mate<<'\n';
+        //                     out<<j<<","<<mate<<'\n';
+        //                 }
+        //             }
+        //         }
         //     }
         // }
 
 
-        // std::vector<size_t> crit_index = bi_graph.getCriticalIndex(dim_active_index_set, sorted_simplex.size());
-        // for(auto t: crit_index) std::cout<<"  idx and weight = "<<t<<" "<<sorted_simplex[t].second<<"   ";
-        // std::cout<<'\n'<<'\n';
-        // std::cout<<"dim = "<<dim<<"   "<<crit_index.size()<<'\n';
+        // if (true)
+        // {
+        //     auto critnum = 0;
+        //     for (size_t i = bi_graph.u; i < (bi_graph.u + bi_graph.v); i++)
+        //     {
+        //         auto mate = bi_graph.match_list[i];
+        //         if (mate == -1 && bi_graph.adj_list[i].size() != 0) critnum++;
+        //     }
+        //     std::cout<<"dim = "<<dim<<"  critical facet number = "<<critnum<<'\n';
+        // }
 
 
         if (dim != maxdim)
         {
-            auto st0 = std::chrono::high_resolution_clock::now();
+            // auto st0 = std::chrono::high_resolution_clock::now();
             active_index_hash_table = bi_graph.getActiveIndexHashTable(sorted_cofacet);
-            auto st1 = std::chrono::high_resolution_clock::now();
-            auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
-            std::cout<<"dim = "<<dim<<"  active index hash table run time = "<<pt_ms.count() <<'\n';
+            // auto st1 = std::chrono::high_resolution_clock::now();
+            // auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
+            // std::cout<<"dim = "<<dim<<"  active index hash table run time = "<<pt_ms.count() <<'\n';
 
-            st0 = std::chrono::high_resolution_clock::now();
+            // st0 = std::chrono::high_resolution_clock::now();
             sorted_simplex = getSortedCofacetList(binom_table, sorted_cofacet, dim, maxeps, threadnumber);
-            st1 = std::chrono::high_resolution_clock::now();
-            pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
-            std::cout<<"dim = "<<dim<<"  get sorted cofacet run time = "<<pt_ms.count() <<'\n';
+            // st1 = std::chrono::high_resolution_clock::now();
+            // pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
+            // std::cout<<"dim = "<<dim<<"  get sorted cofacet run time = "<<pt_ms.count() <<'\n';
 
             std::swap(sorted_simplex, sorted_cofacet);
         }
@@ -1473,16 +1466,30 @@ void CritCells<ComplexType, DistMatType>::runAlphaTest(const std::string &fileNa
         bi_graph.updateDimension(sorted_cofacet.size(), sorted_simplex.size());
         buildInterface(bi_graph, binom_table, sorted_cofacet, dim, active_facet_hash_table);
 
-        bi_graph.parallelMaxFacetInit(0, sorted_cofacet.size(), 0, sorted_simplex.size(), threadnumber);
-        // bi_graph.parallelMinCofacetInit(0, sorted_cofacet.size(), 0, sorted_simplex.size(), threadnumber);
+        // bi_graph.parallelMaxFacetInit(0, sorted_cofacet.size(), 0, sorted_simplex.size(), threadnumber);
+        // // bi_graph.parallelMinCofacetInit(0, sorted_cofacet.size(), 0, sorted_simplex.size(), threadnumber);
 
 
-        std::vector<std::pair<double, double>> dim_persis_pair = bi_graph.serialCofacetDFSMatch(sorted_simplex, sorted_cofacet);
-        // std::vector<std::pair<double, double>> dim_persis_pair = bi_graph.serialFacetDFSMatch(sorted_simplex, sorted_cofacet);
-        persistent_pairs.push_back(dim_persis_pair);
+        // std::vector<std::pair<double, double>> dim_persis_pair = bi_graph.serialCofacetDFSMatch(sorted_simplex, sorted_cofacet);
+        // // std::vector<std::pair<double, double>> dim_persis_pair = bi_graph.serialFacetDFSMatch(sorted_simplex, sorted_cofacet);
+        // persistent_pairs.push_back(dim_persis_pair);
 
-        // auto reverted = bi_graph.dfsCycleRemoval();
-        // std::cout<<"reverted cycle = "<<reverted<<'\n';
+        bi_graph.parallelTwoPhaseInit(threadnumber);
+        bi_graph.parallelFacetDFSMatch(threadnumber);
+
+        auto reverted = bi_graph.dfsCycleRemoval();
+        std::cout<<"reverted cycle = "<<reverted<<'\n';
+
+        if (true)
+        {
+            auto critnum = 0;
+            for (size_t i = bi_graph.u; i < (bi_graph.u + bi_graph.v); i++)
+            {
+                auto mate = bi_graph.match_list[i];
+                if (mate == -1 && bi_graph.adj_list[i].size() != 0) critnum++;
+            }
+            std::cout<<"dim = "<<dim<<"  critical facet number = "<<critnum<<'\n';
+        }
 
 
         if (dim != maxdim)
@@ -1511,7 +1518,7 @@ std::vector<std::unordered_set<size_t>> CritCells<ComplexType, DistMatType>::get
 
     std::vector< std::unordered_set<size_t> > virtual_vertex_indices;
 
-    std::vector<std::vector<std::size_t>> reduced_cofacets;
+    std::vector<std::vector<std::size_t>> grad_paths;
     
     Bi_Graph_Match bi_graph(1, 1, 1);
 
@@ -1530,22 +1537,22 @@ std::vector<std::unordered_set<size_t>> CritCells<ComplexType, DistMatType>::get
         }
         else 
         {
-            reduced_cofacets = bi_graph.serialCofacetDFSReduction(maxdim, dim);
-            std::cout<<"reduced cofacet size = "<<reduced_cofacets.size()<<'\n';
+            grad_paths = bi_graph.serialCofacetDFSReduction(maxdim, dim);
+            std::cout<<"eligible gradient path = "<<grad_paths.size()<<'\n';
 
-            // for (auto i : reduced_cofacets)
-            // {
-            //     for (auto j : i)
-            //     {
-            //         std::cout<<j<<"  ";
-            //     }
-            //     std::cout<<'\n';
-            // }
+            for (auto path : grad_paths)
+            {
+                for (auto j : path)
+                {
+                    std::cout<<j<<"  ";
+                }
+                std::cout<<'\n';
+            }
         }
 
         if (dim == maxdim)
         {
-            for (auto aug_path : reduced_cofacets)
+            for (auto aug_path : grad_paths)
             {
                 std::unordered_set<size_t> virtual_vt;
                 for (auto i : aug_path)
@@ -1921,64 +1928,24 @@ void CritCells<ComplexType, DistMatType>::runMorseReductionTest(size_t maxdim, d
         buildInterface(bi_graph, binom_table, sorted_virtual_cofacet, dim, active_index_hash_table);
 
         bi_graph.parallelMaxFacetInit(0, sorted_virtual_cofacet.size(), 0, sorted_virtual_simplex.size(), 1);
-
-        // if (dim == maxdim)
-        // {
-        //     std::cout<<"check graph dim = "<<dim<<"  cofacet size = "<<sorted_virtual_cofacet.size()<<"  facet size = "<<sorted_virtual_simplex.size()<<'\n';
-        //     // std::vector<size_t> cof_idx = {119, 120, 144, 146};
-        //     std::vector<size_t> cof_idx = {985, 986, 987, 988, 989, 990, 991, 992, 993, 994, 995, 996, 997, 998, 999};
-        //     // std::vector<size_t> f_idx = {1457407, 1465014};
-        //     std::vector<size_t> f_idx = {377706, 377962, 377971, 409036, 409042};
-
-        //     if (true)
-        //     {
-        //         for (auto j: cof_idx)
-        //         {
-        //             auto bindex = sorted_virtual_cofacet[j].first;
-        //             auto simplex_vt = getSimplexVertices(binom_table, bindex, n + merged_virtual_vertex.size(), dim);
-        //             for (auto t : simplex_vt)
-        //             {
-        //                 std::cout<<t<<"  ";
-        //             }
-        //             std::cout<<"idx = "<<j<<"  match = "<<bi_graph.match_list[j]<<"("<<bi_graph.match_list[j] - int64_t(sorted_virtual_cofacet.size())<<")"<<"  weight = "<<sorted_virtual_cofacet[j].second<<"    adj = ";
-        //             for (auto t : bi_graph.adj_list[j]) std::cout<<t<<"("<<t - sorted_virtual_cofacet.size()<<")"<<"  ";
-        //             std::cout<<'\n';
-        //         }
-
-        //         for (auto j: f_idx)
-        //         {
-        //             auto bindex = sorted_virtual_simplex[j - sorted_virtual_cofacet.size()].first;
-        //             auto simplex_vt = getSimplexVertices(binom_table, bindex, n + merged_virtual_vertex.size(), dim - 1);
-        //             for (auto t : simplex_vt)
-        //             {
-        //                 std::cout<<t<<"  ";
-        //             }
-        //             std::cout<<"facet idx = "<<j<<"  weight = "<<sorted_virtual_simplex[j - sorted_virtual_cofacet.size()].second<<"  match = "<<bi_graph.match_list[j]<<"  adj = ";
-        //             // for (auto t: bi_graph.adj_list[j])  std::cout<<t<<"  ";
-        //             std::cout<<bi_graph.adj_list[j].size();
-        //             std::cout<<'\n';
-        //         }
-
-        //         // for (auto j: f_idx)
-        //         // {
-        //         //     std::cout<<"facet idx = "<<j<<"  weight = "<<sorted_virtual_simplex[j].second<<"  match = "<<bi_graph.match_list[j + sorted_virtual_cofacet.size()]<<"  adj = ";
-        //         //     // for (auto t: bi_graph.adj_list[j + sorted_cofacet.size()])  std::cout<<t<<"  ";
-        //         //     std::cout<<'\n';
-        //         // }
-        //     }
-        // }
+        bi_graph.parallelMinCofacetInit(0, sorted_virtual_cofacet.size(), 0, sorted_virtual_simplex.size(), threadnumber);
 
         if (true)
         {
             std::vector<std::pair<double, double>> dim_persis_pair = bi_graph.serialCofacetDFSMatch(sorted_virtual_simplex, sorted_virtual_cofacet);
             std::cout<<"dim = "<<dim<<"  persis size = "<<dim_persis_pair.size()<<'\n';
             persistent_pairs.push_back(dim_persis_pair);
+
+            // std::vector<std::pair<double, double>> dim_persis_pair = bi_graph.serialFacetDFSMatch(sorted_virtual_simplex, sorted_virtual_cofacet);
+            // std::cout<<"dim = "<<dim<<"  persis size = "<<dim_persis_pair.size()<<'\n';
+            // persistent_pairs.push_back(dim_persis_pair);
         }
         
 
         auto reverted = bi_graph.dfsCycleRemoval();
         std::cout<<"reverted = "<<reverted<<'\n';
 
+        if (dim == maxdim) std::cout<<"max dim cofacet size = "<<sorted_virtual_cofacet.size()<<"  facet size = "<<sorted_virtual_simplex.size()<<'\n';
 
 
         if (dim != maxdim)
