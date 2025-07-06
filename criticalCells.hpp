@@ -110,31 +110,11 @@ public:
     CritCells(Eigen::SparseMatrix<double> &distMat);
     void run_Compute(int maxDim, int batchsize = 0);
     
-    /*bins by weight range*/
-    //change later
-    std::vector<std::vector<int>> getEdges(double maxweight);
-    std::vector<std::vector<int>> getEdgesByWeightRange(std::vector<std::vector<int>>& sorted_edges, double minweight, double maxweight);
-    double getSimplexWeight(const std::vector<int>& simplex);
-    void sortEdge(std::vector<std::vector<int>>& edge_bin);
 
-    int getMaxFacetIndex(const std::vector<int>& cofacet, const std::vector<std::vector<int>>& facet_bin);
-    void sortSimplex(std::vector<std::vector<int>>& cofacet_bin, const std::vector<std::vector<int>>& facet_bin); 
-
-    std::vector<std::vector<int>> getCofacetBin(std::vector<std::vector<int>>& facet_bin, double maxweight, int threadnum);
 
     int findRoot(std::vector<int>& parent_idx, int x);
     void setUnion(std::vector<int>& parent_idx, int x, int y);
     std::vector<int> getMSTEdgeIndices(std::vector<std::vector<int>>& sorted_edges);
-    
-    std::vector<std::vector<double>> run_MorseMatch(int maxdimension, double mineps, double maxeps, int threadnumber);
-
-    std::vector<double> getApproxDeathWeight(std::vector<std::vector<int>>& facet_bin, std::vector<std::set<int>>& backward_facet_index, double maxeps);
-
-    std::vector< std::vector< std::pair<double, double> > > run_MorseMatchPersistence(int maxdimension, double mineps, double maxeps);
-
-    double getMinimumEpsilon(std::vector<int>& mst_edge_index, std::vector<std::vector<int>>& sorted_edges, double stepsize);
-    std::vector<int> getStepwiseIndex(std::vector<std::vector<int>>& simplex_bin, double mineps, double maxeps, double stepsize);
-    std::vector< std::vector< std::pair<double, double> > > run_MorseMatchStepwise(int maxdimension, double maxeps, double stepsize);
 
     //rewrite
     std::vector<std::vector<int64_t>> getBinomialTable(const size_t vtnum, const size_t maxdim);

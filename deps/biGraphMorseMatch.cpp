@@ -817,12 +817,12 @@ std::vector<std::pair<double, double>> Bi_Graph_Match::serialCofacetDFSMatch(con
 
         if (facetweight != cofacetweight)
         {
-            std::cout<<"facet weight = "<<facetweight<<"  cofacet weight = "<<cofacetweight<<'\n';
+            // std::cout<<"facet weight = "<<facetweight<<"  cofacet weight = "<<cofacetweight<<'\n';
             persistent_pair.push_back(std::make_pair(facetweight, cofacetweight));
         }
     }
 
-    std::cout<<"init umatched cofacet ="<<initialunmatched<<"  total direct match count = "<<count<<'\n';
+    // std::cout<<"init umatched cofacet ="<<initialunmatched<<"  total direct match count = "<<count<<'\n';
 
     return persistent_pair;
 }

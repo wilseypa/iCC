@@ -41,7 +41,7 @@ public:
 
     int64_t facetDirectNeighborMatchWithReduction(const size_t facetindex, const size_t cofacetindex, std::vector<size_t>::iterator facet_iter, std::vector<size_t>::iterator cofacet_iter);
 
-    int64_t facetRightDfsAugPath(const size_t startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<size_t>& aug_path_tid);
+    // int64_t facetRightDfsAugPath(const size_t startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<size_t>& aug_path_tid);
 
     int64_t serialCofacetDFSAugPath(const size_t cofacetindex, std::vector<size_t>& aug_path, std::vector<size_t>& facet_stack);
     
@@ -59,13 +59,13 @@ public:
 
     int dfsCycleRemoval();
 
-    void addEdge(int u, int v);
+    // void addEdge(int u, int v);
 
     Bi_Graph_Match(size_t leftnum, size_t rightnum, size_t leftdimension);
 
     void updateDimension(size_t newleftnum, size_t newrightnum);
 
-    void buildInterface(const std::vector<std::vector<int>>& cofacet_bin, int cofacet_index_min, int cofacet_index_max, const std::vector<std::vector<int>>& simplex_bin, int simplex_index_max, const std::vector<int>& active_index);
+    // void buildInterface(const std::vector<std::vector<int>>& cofacet_bin, int cofacet_index_min, int cofacet_index_max, const std::vector<std::vector<int>>& simplex_bin, int simplex_index_max, const std::vector<int>& active_index);
 
     std::unordered_set<size_t> getActiveIndexSet(); 
     
