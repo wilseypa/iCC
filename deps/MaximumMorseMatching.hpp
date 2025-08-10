@@ -23,9 +23,9 @@ private:
     
     int64_t serialFacetDFSAugPath(BipartiteGraph& graph, const size_t facetindex, std::vector<size_t>& aug_path, std::vector<size_t>& cofacet_stack);
 
-    void serialCofacetDFSMatch(BipartiteGraph& graph);
+    size_t serialCofacetDFSMatch(BipartiteGraph& graph);
 
-    void serialFacetDFSMatch(BipartiteGraph& graph);
+    size_t serialFacetDFSMatch(BipartiteGraph& graph);
 
     std::vector<std::pair<double, double>> serialCofacetDFSMatchWithPersistence(MatchingContext& matching_context);
 

@@ -12,8 +12,8 @@ struct ImplicitConstructionTag {};    //tag for implicit bipartite graph
  */
 struct BipartiteGraph 
 {
-    size_t u_nodes; // Number of nodes on the left (e.g., cofacets)
-    size_t v_nodes; // Number of nodes on the right (e.g., facets)
+    size_t unodes; // Number of nodes on the left (e.g., cofacets)
+    size_t vnodes; // Number of nodes on the right (e.g., facets)
 
     // Adjacency list for the graph. adj_list[0...u-1] are left nodes,
     // adj_list[u...u+v-1] are right nodes.
@@ -23,14 +23,14 @@ struct BipartiteGraph
     std::vector<int64_t> match_list;
 
     explicit BipartiteGraph(size_t u, size_t v)
-        : u_nodes(u),
-          v_nodes(v),
+        : unodes(u),
+          vnodes(v),
           adj_list(u + v),
           match_list(u + v, -1) {}
 
     BipartiteGraph(size_t u, size_t v, ImplicitConstructionTag /* tag */)
-        : u_nodes(u),
-          v_nodes(v),
+        : unodes(u),
+          vnodes(v),
           match_list(u + v, -1) {}
 
 };

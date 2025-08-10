@@ -19,9 +19,9 @@ void ApproximateMorseMatching::parallelTwoPhaseInit(BipartiteGraph& graph)
 {
     //convert index
     size_t umin = 0;
-    size_t umax = graph.u_nodes;
-    size_t vmin = 0 + graph.u_nodes;
-    size_t vmax = graph.u_nodes + graph.v_nodes;
+    size_t umax = graph.unodes;
+    size_t vmin = 0 + graph.unodes;
+    size_t vmax = graph.unodes + graph.vnodes;
 
     std::vector<int> visit_flag_v(vmax - vmin, 0);
 
@@ -112,8 +112,8 @@ void ApproximateMorseMatching::parallelTwoPhaseInit(BipartiteGraph& graph)
 
 void ApproximateMorseMatching::parallelFacetDFSMatch(BipartiteGraph& graph)
 {
-    auto u = graph.u_nodes;
-    auto v = graph.v_nodes;
+    auto u = graph.unodes;
+    auto v = graph.vnodes;
 
     std::vector<size_t> unmatched_v_init(v, 0);
     std::vector<size_t> unmatched_v_final(v, 0);
@@ -235,17 +235,17 @@ void ApproximateMorseMatching::dfsCycleRemoval(BipartiteGraph& graph)
     int reverted = 0;
 
     //0: not visited, 1: visiting, 2: visited
-    std::vector<uint8_t> state_flag(graph.u_nodes, 0);
+    std::vector<uint8_t> state_flag(graph.unodes, 0);
 
     std::vector<size_t> dfs_stack;
-    dfs_stack.reserve(graph.v_nodes);
+    dfs_stack.reserve(graph.vnodes);
 
     int maxdegree = 5; //assume max degree is 5, can be changed
     std::vector<size_t> child_workspace;
     child_workspace.reserve(maxdegree);
 
 
-    for (size_t i = 0; i < graph.u_nodes; i++)
+    for (size_t i = 0; i < graph.unodes; i++)
     {
         if (state_flag[i] != 0) continue;
 
