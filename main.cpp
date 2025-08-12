@@ -1,4 +1,4 @@
-#include "criticalCells.cpp"
+#include "criticalCells.hpp"
 #include <iostream>
 #include <cstdlib> // for std::stoi
 #include <fstream>

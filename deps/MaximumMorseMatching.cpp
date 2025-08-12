@@ -6,6 +6,29 @@
 
 #include "MaximumMorseMatching.hpp"
 
+size_t MaximumMorseMatching::match(MatchingContext& matching_context)
+{
+    // homology
+    // parallelMaxFacetInit(matching_context);
+    // return serialCofacetMorseMatch(matching_context.graph);
+
+    // cohomology
+    parallelMinCofacetInit(matching_context);
+    
+    return serialFacetMorseMatch(matching_context.graph);
+}
+
+std::vector<std::pair<double, double>> MaximumMorseMatching::matchWithPersistence(MatchingContext& matching_context)
+{
+    // homology
+    // parallelMaxFacetInit(matching_context);
+    // return serialCofacetMorseMatchWithPersistence(matching_context);
+
+    // cohomology
+    parallelMinCofacetInit(matching_context);
+    return serialFacetMorseMatchWithPersistence(matching_context);
+}
+
 
 void MaximumMorseMatching::parallelMaxFacetInit(MatchingContext& matching_context)
 {
@@ -74,7 +97,7 @@ void MaximumMorseMatching::parallelMinCofacetInit(MatchingContext& matching_cont
 }
 
 
-int64_t MaximumMorseMatching::serialCofacetDFSAugPath(BipartiteGraph& graph, const size_t cofacetindex, std::vector<size_t>& aug_path, std::vector<size_t>& facet_stack)
+int64_t MaximumMorseMatching::serialCofacetAugPath(BipartiteGraph& graph, const size_t cofacetindex, std::vector<size_t>& aug_path, std::vector<size_t>& facet_stack)
 {
     facet_stack.clear();
 
@@ -159,7 +182,7 @@ int64_t MaximumMorseMatching::serialCofacetDFSAugPath(BipartiteGraph& graph, con
 }
 
 
-int64_t MaximumMorseMatching::serialFacetDFSAugPath(BipartiteGraph& graph, const size_t facetindex, std::vector<size_t>& aug_path, std::vector<size_t>& cofacet_stack)
+int64_t MaximumMorseMatching::serialFacetAugPath(BipartiteGraph& graph, const size_t facetindex, std::vector<size_t>& aug_path, std::vector<size_t>& cofacet_stack)
 {
     cofacet_stack.clear();
 
@@ -232,7 +255,7 @@ int64_t MaximumMorseMatching::serialFacetDFSAugPath(BipartiteGraph& graph, const
 }
 
 
-size_t MaximumMorseMatching::serialCofacetDFSMatch(BipartiteGraph& graph)
+size_t MaximumMorseMatching::serialCofacetMorseMatch(BipartiteGraph& graph)
 {
     std::vector<size_t> aug_path(graph.unodes + graph.vnodes, 0);
 
@@ -245,7 +268,7 @@ size_t MaximumMorseMatching::serialCofacetDFSMatch(BipartiteGraph& graph)
     {
         if (graph.match_list[i] >= 0) continue;    //skip matched 
         
-        int64_t augpathlen = serialCofacetDFSAugPath(graph, i, aug_path, facet_stack);
+        int64_t augpathlen = serialCofacetAugPath(graph, i, aug_path, facet_stack);
 
         if (augpathlen < 0) 
         {
@@ -265,7 +288,7 @@ size_t MaximumMorseMatching::serialCofacetDFSMatch(BipartiteGraph& graph)
 }
 
 
-size_t MaximumMorseMatching::serialFacetDFSMatch(BipartiteGraph& graph)
+size_t MaximumMorseMatching::serialFacetMorseMatch(BipartiteGraph& graph)
 {
     std::vector<size_t> aug_path(graph.unodes + graph.vnodes, 0);
 
@@ -280,7 +303,7 @@ size_t MaximumMorseMatching::serialFacetDFSMatch(BipartiteGraph& graph)
 
         if (graph.match_list[vidx] >= 0) continue;    //skip matched
 
-        int64_t augpathlen = serialFacetDFSAugPath(graph, vidx, aug_path, cofacet_stack);
+        int64_t augpathlen = serialFacetAugPath(graph, vidx, aug_path, cofacet_stack);
 
         if (augpathlen < 0)
         {
@@ -299,7 +322,7 @@ size_t MaximumMorseMatching::serialFacetDFSMatch(BipartiteGraph& graph)
 }
 
 
-std::vector<std::pair<double, double>> MaximumMorseMatching::serialCofacetDFSMatchWithPersistence(MatchingContext& matching_context)
+std::vector<std::pair<double, double>> MaximumMorseMatching::serialCofacetMorseMatchWithPersistence(MatchingContext& matching_context)
 {
     auto& graph = matching_context.graph;
 
@@ -316,7 +339,7 @@ std::vector<std::pair<double, double>> MaximumMorseMatching::serialCofacetDFSMat
     {
         if (graph.match_list[i] >= 0) continue;    //skip matched 
         
-        int64_t augpathlen = serialCofacetDFSAugPath(graph, i, aug_path, facet_stack);
+        int64_t augpathlen = serialCofacetAugPath(graph, i, aug_path, facet_stack);
 
         double facetweight = -1;
         double cofacetweight = -1;
@@ -346,7 +369,7 @@ std::vector<std::pair<double, double>> MaximumMorseMatching::serialCofacetDFSMat
 }
 
 
-std::vector<std::pair<double, double>> MaximumMorseMatching::serialFacetDFSMatchWithPersistence(MatchingContext& matching_context)
+std::vector<std::pair<double, double>> MaximumMorseMatching::serialFacetMorseMatchWithPersistence(MatchingContext& matching_context)
 {
     auto& graph = matching_context.graph;
     std::vector<size_t> aug_path(graph.unodes + graph.vnodes, 0);
@@ -362,7 +385,7 @@ std::vector<std::pair<double, double>> MaximumMorseMatching::serialFacetDFSMatch
 
         if (graph.match_list[vidx] >= 0) continue;    //skip matched
 
-        int64_t augpathlen = serialFacetDFSAugPath(graph, vidx, aug_path, cofacet_stack);
+        int64_t augpathlen = serialFacetAugPath(graph, vidx, aug_path, cofacet_stack);
 
         double facetweight = -1;
         double cofacetweight = -1;

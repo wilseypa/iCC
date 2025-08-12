@@ -13,11 +13,13 @@
 #include<cstdint>
 
 #include"robin_hood.h"
-#include "biGraphMorseMatch.hpp"
 
 #include <CGAL/config.h>
 #include <CGAL/Epick_d.h>
 #include <CGAL/Delaunay_triangulation.h>
+
+#include "BipartiteGraph.hpp"
+#include "DistanceMatrix.hpp"
 
 
 std::ostream &operator<<(std::ostream &os, const std::map<double, std::vector<std::vector<int>>> &bins)
@@ -40,16 +42,6 @@ std::ostream &operator<<(std::ostream &os, const std::map<double, std::vector<st
     return os;
 }
 
-struct SparseDistMat
-{
-    Eigen::SparseMatrix<double> distMatrix;
-    inline double distance(size_t i, size_t j) const { return distMatrix.coeff(i, j); };
-};
-struct NormallDistMat
-{
-    std::vector<std::vector<double>> distMatrix;
-    inline double distance(size_t i, size_t j) const { return this->distMatrix[i][j]; };
-};
 
 /****************************************************** */
 //temp dummy struct for alpha complex
@@ -105,6 +97,7 @@ template <typename ComplexType, typename DistMatType>
 class CritCells : public DistMatType
 {
 public:
+    /*legacy*/
     CritCells(const std::string &fileName);               // FileName to read InputData from
     CritCells(std::vector<std::vector<double>> &distMat); // Input normal Distance matrix
     CritCells(Eigen::SparseMatrix<double> &distMat);
@@ -112,41 +105,23 @@ public:
     
 
 
-    int findRoot(std::vector<int>& parent_idx, int x);
-    void setUnion(std::vector<int>& parent_idx, int x, int y);
-    std::vector<int> getMSTEdgeIndices(std::vector<std::vector<int>>& sorted_edges);
-
-    //rewrite
-    std::vector<std::vector<int64_t>> getBinomialTable(const size_t vtnum, const size_t maxdim);
-
-    int64_t getBinomialIndex(const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<size_t>& simplex_vt, const size_t shift = 0);
-
-    int64_t getEdgeBinomialIndex(const std::vector<std::vector<int64_t>>& binomial_table, size_t j, size_t i);
-
-    size_t getSimplexMaxVertex(const std::vector<std::vector<int64_t>>& binomial_table, const int64_t bindex, size_t vtnum, const size_t dim);
-
-    std::vector<size_t> getSimplexVertices(const std::vector<std::vector<int64_t>>& binomial_table, int64_t bindex, size_t vtnum, const size_t dim);
-
-    void sortSimplexByWeightThenIndex(std::vector<std::pair<int64_t, double>>& simplex_list);
-    
-    std::vector<std::pair<int64_t, double>> getSortedEdge(const std::vector<std::vector<int64_t>>& binomial_table, const double maxeps);
-
     size_t mstFindRoot(std::vector<size_t>& parent_idx, size_t x);
 
     void mstSetUnion(std::vector<size_t>& parent_idx, size_t x, size_t y);
 
     robin_hood::unordered_map<int64_t, size_t> getActiveEdgeIndexHashTable(const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<std::pair<int64_t, double>>& sorted_edge);
 
-    // robin_hood::unordered_map<int64_t, size_t> getActiveFacetIndexHashTable(const std::vector<std::pair<int64_t, double>>& facet_list, const std::unordered_set<size_t>& active_facet_index_set);
+    robin_hood::unordered_map<int64_t, size_t> getActiveFacetIndexHashTable(const BipartiteGraph& bi_graph, const std::vector<std::pair<int64_t, double>>& facet_list);
 
-    std::vector<std::pair<int64_t, double>> getSortedCofacetList(const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<std::pair<int64_t, double>>& sorted_simplex, const size_t dim, const double maxeps, const int threadnum);
+    robin_hood::unordered_map<int64_t, size_t> getFacetIndexHashTable(const std::vector<std::pair<int64_t, double>>& facet_list);
 
-    std::vector<int64_t> getFacetBinomialIndex(const std::vector<std::vector<int64_t>>& binomial_table, const int64_t binomindex, const size_t dim);
-
-    void buildInterface(Bi_Graph_Match& bi_graph, const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<std::pair<int64_t, double>>& cofacet_list, const size_t dim, const robin_hood::unordered_map<int64_t, size_t>& active_facet_index);
+    void buildInterface(BipartiteGraph& bi_graph, const std::vector<std::pair<int64_t, double>>& cofacet_list, 
+                        const robin_hood::unordered_map<int64_t, size_t>& active_facet_index, const std::vector<std::vector<int64_t>>& binomial_table, const size_t dim);
     
     void runMorseTest(size_t maxdim, double maxeps, int threadnumber);
 
+    
+    
     std::vector<std::pair<int64_t, double>> getSortedDimCells(const std::vector<std::vector<int64_t>>& binomial_table, std::unordered_map<CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>::Vertex_handle, size_t>& vertex_handle_index, 
                                                               CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>& delaunay_d, const size_t dim, double maxeps);
 
@@ -185,4 +160,6 @@ private:
     void binByWeights(std::map<double, std::vector<std::vector<int>>> &weighted_simplicies, std::map<double, std::vector<std::vector<int>>> &bins); // Merged higher dim feature to bins
     std::map<double, std::vector<std::vector<int>>> dsimplices_batches(ComplexType &simplex_const, size_t dim, size_t batch_size);                  // Worker is invokation counter
     std::vector<std::vector<int>> dimMatching(std::vector<std::vector<int>> &simplexes, size_t dim, bool final);
+
+
 };

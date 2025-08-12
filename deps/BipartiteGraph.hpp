@@ -33,4 +33,12 @@ struct BipartiteGraph
           vnodes(v),
           match_list(u + v, -1) {}
 
+    void updateDimension(size_t cofacetnum, size_t facetnum)
+    {
+      unodes = cofacetnum;
+      vnodes = facetnum;
+      adj_list.assign(unodes + vnodes, std::vector<size_t>());
+      match_list.assign(unodes + vnodes, -1);
+    }
+
 };

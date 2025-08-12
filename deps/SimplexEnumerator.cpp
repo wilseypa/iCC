@@ -3,18 +3,18 @@
 #include "SimplexEnumerator.hpp"
 #include "SimplexUtility.hpp"
 
-
-std::vector<std::pair<int64_t, double>> SimplexEnumerator::getSortedEdges(const double maxeps)
+template <typename DistMatType>
+std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSortedVREdges(const double maxeps)
 {
     std::vector<std::pair<int64_t, double>> sorted_edge;
 
-    size_t npt = dist_matrix.size();
+    size_t npt = dist_mat_.dist_matrix.size();
 
     for (size_t i = 0; i < npt - 1; i++)
     {
         for (size_t j = i + 1; j < npt; j++)
         {
-            double weight = dist_matrix[i][j];
+            double weight = dist_mat_.getDistance(i, j);
             if (weight < maxeps)
             {
                 int64_t bindex = SimplexUtility::getEdgeBinomialIndex(binomial_table, j, i);
@@ -28,13 +28,13 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator::getSortedEdges(const 
     return sorted_edge;
 }
 
-
-std::vector<std::pair<int64_t, double>> SimplexEnumerator::getSortedVRCofacets(const std::vector<std::pair<int64_t, double>>& sorted_simplex, const size_t dim, const double maxeps, const int threadnum)
+template <typename DistMatType>
+std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSortedVRCofacets(const std::vector<std::pair<int64_t, double>>& sorted_simplex, const size_t dim, const double maxeps, const int threadnum)
 {
     //dim == simplex dimension == cofacet dimension - 1
     std::vector<std::pair<int64_t, double>> cofacet_list;
 
-    size_t npt = dist_matrix.size();
+    size_t npt = dist_mat_.dist_matrix.size();
 
     std::vector< std::vector< std::pair<size_t, double> > > thread_workspace(sorted_simplex.size(), std::vector<std::pair<size_t, double>>());
 
@@ -45,7 +45,7 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator::getSortedVRCofacets(c
     {
         int64_t bindex = sorted_simplex[i].first;
         double originalweight = sorted_simplex[i].second;
-        std::vector<size_t> simplex_vt = SimplexUtility::getSimplexVertices(binomial_table, bindex, npt, dim);
+        std::vector<size_t> simplex_vt = SimplexUtility::getSimplexVertices(binomial_table_, bindex, npt, dim);
 
         //cofacet of {i, j} = {i, j, ...}. i > j
         // auto minidx = *std::min_element(simplex_vt.begin(), simplex_vt.end());
@@ -64,9 +64,9 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator::getSortedVRCofacets(c
     for (size_t i = 0; i < sorted_simplex.size(); i++)
     {
         int64_t bindex = sorted_simplex[i].first;
-        std::vector<size_t> simplex_vt = SimplexUtility::getSimplexVertices(binomial_table, bindex, npt, dim);
+        std::vector<size_t> simplex_vt = SimplexUtility::getSimplexVertices(binomial_table_, bindex, npt, dim);
         //left shift bindex. left shift one position for each simplex vt
-        bindex = SimplexUtility::getBinomialIndex(binomial_table, simplex_vt, 1);
+        bindex = SimplexUtility::getBinomialIndex(binomial_table_, simplex_vt, 1);
         for (auto& idx_weight_pair: thread_workspace[i])
         {
             auto j = idx_weight_pair.first;
@@ -82,7 +82,8 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator::getSortedVRCofacets(c
 }
 
 
-std::vector<std::pair<int64_t, double>> SimplexEnumerator::getSortedAlphaCofacets()
+template <typename DistMatType>
+std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSortedAlphaCofacets()
 {
     // This function is a placeholder for the Alpha cofacet enumeration.
     throw std::runtime_error("Alpha complex has not implemented yet.");
