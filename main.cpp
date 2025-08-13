@@ -9,7 +9,7 @@ int main()
 {   
     std::string filename = "test_5d_60_double.csv";
     // std::string filename = "test_2dsquare_double_15.csv";
-    CritCells<VR, NormallDistMat> cc(filename);
+    CritCells<VR, NormalDistMat> cc(filename);
 
     // cc.runAlphaTest(filename);
     // auto critical_weight = cc.run_MorseMatchPersistence(3, 0, 17);

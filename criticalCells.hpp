@@ -97,8 +97,9 @@ template <typename ComplexType, typename DistMatType>
 class CritCells : public DistMatType
 {
 public:
+    CritCells(const std::string &filename);               // FileName to read InputData from
+
     /*legacy*/
-    CritCells(const std::string &fileName);               // FileName to read InputData from
     CritCells(std::vector<std::vector<double>> &distMat); // Input normal Distance matrix
     CritCells(Eigen::SparseMatrix<double> &distMat);
     void run_Compute(int maxDim, int batchsize = 0);
@@ -118,16 +119,10 @@ public:
     void buildInterface(BipartiteGraph& bi_graph, const std::vector<std::pair<int64_t, double>>& cofacet_list, 
                         const robin_hood::unordered_map<int64_t, size_t>& active_facet_index, const std::vector<std::vector<int64_t>>& binomial_table, const size_t dim);
     
-    void runMorseTest(size_t maxdim, double maxeps, int threadnumber);
+    void runVRMorseTest(size_t maxdim, double maxeps, int threadnumber);
 
     
-    
-    std::vector<std::pair<int64_t, double>> getSortedDimCells(const std::vector<std::vector<int64_t>>& binomial_table, std::unordered_map<CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>::Vertex_handle, size_t>& vertex_handle_index, 
-                                                              CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>& delaunay_d, const size_t dim, double maxeps);
-
-    double getAlphaSimplexWeight(const std::vector<size_t>& alpha_simplex);
-
-    void runAlphaTest(const std::string &fileName, double maxeps, int threadnumber);
+    void runAlphaMorseTest(double maxeps, int threadnumber);
 
 
 
@@ -161,5 +156,9 @@ private:
     std::map<double, std::vector<std::vector<int>>> dsimplices_batches(ComplexType &simplex_const, size_t dim, size_t batch_size);                  // Worker is invokation counter
     std::vector<std::vector<int>> dimMatching(std::vector<std::vector<int>> &simplexes, size_t dim, bool final);
 
+    std::vector< std::vector<double> > point_cloud_;
 
 };
+
+extern template class CritCells<VR, NormalDistMat>;
+extern template class CritCells<Alpha, NormalDistMat>;
