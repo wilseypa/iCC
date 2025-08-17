@@ -3,6 +3,9 @@
 #include <vector>
 #include <cstdint>
 #include <stdexcept>
+#include <numeric> // For std::iota
+
+#include "robin_hood.h"
 
 
 namespace SimplexUtility
@@ -127,6 +130,53 @@ namespace SimplexUtility
         return facet_bindex;
     }
 
-    
+    inline size_t mstFindRoot(std::vector<size_t>& parent_idx, size_t x)
+    {
+        while (parent_idx[x] != x)
+        {
+            parent_idx[x] = parent_idx[parent_idx[x]];
+            x = parent_idx[x];
+        }
+
+        return x;
+    }
+
+    inline void mstSetUnion(std::vector<size_t>& parent_idx, size_t x, size_t y)
+    {
+        size_t p = mstFindRoot(parent_idx, x);
+        size_t q = mstFindRoot(parent_idx, y);
+        parent_idx[p] = parent_idx[q];
+        return;
+    }
+
+    inline robin_hood::unordered_map<int64_t, size_t> getActiveEdgeIndexHashTable(const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<std::pair<int64_t, double>>& sorted_edge, const size_t npts)
+    {
+        robin_hood::unordered_map<int64_t, size_t> active_edge_index_hash;
+        active_edge_index_hash.reserve(sorted_edge.size());
+
+        std::vector<size_t> parent_idx(npts);
+        std::iota(parent_idx.begin(), parent_idx.end(), 0);
+
+        size_t x, y;
+        int64_t bindex;
+        size_t m = sorted_edge.size();
+        std::vector<size_t> edge_vt;
+        for (auto i = 0; i < m; i++)
+        {
+            bindex = sorted_edge[i].first;
+            edge_vt = getSimplexVertices(binomial_table, bindex, npts, 1);
+            x = edge_vt[0];
+            y = edge_vt[1];
+            if (mstFindRoot(parent_idx, x) != mstFindRoot(parent_idx, y))
+            {
+                mstSetUnion(parent_idx, x, y);
+                continue;
+            }
+            active_edge_index_hash.emplace(bindex, i); 
+        }
+
+        return active_edge_index_hash;
+    }
+
 
 }

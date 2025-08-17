@@ -7,9 +7,14 @@
 
 struct NormalDistMat
 {
-    std::vector<std::vector<double>> dist_matrix;
+    std::vector<std::vector<double>> dist_mat;
 
-    inline double getDistance(size_t i, size_t j) const { return this->dist_matrix[i][j]; };
+    inline double getDistance(const size_t i, const size_t j) const 
+    {
+        if (i < j) return this->dist_mat[i][j];
+        
+        return this->dist_mat[j][i];
+    };
 
     NormalDistMat() = default;
 

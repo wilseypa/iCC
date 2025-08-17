@@ -33,7 +33,7 @@ NormalDistMat::NormalDistMat(const std::vector<std::vector<double>>& point_cloud
     const size_t n = point_cloud.size();
     if (n == 0) return;
 
-    dist_matrix.resize(n, std::vector<double>(n, 0.0));
+    dist_mat.resize(n, std::vector<double>(n, 0.0));
 
     omp_set_num_threads(threadnum);
 #pragma omp parallel for schedule(static)
@@ -42,7 +42,7 @@ NormalDistMat::NormalDistMat(const std::vector<std::vector<double>>& point_cloud
         for (size_t j = i + 1; j < n; j++)
         {
             double dist = euclideanDistance(point_cloud[i], point_cloud[j]);
-            dist_matrix[i][j] = dist;
+            dist_mat[i][j] = dist;
             // distMatrix[j][i] = dist; // Symmetric matrix
         }
     }

@@ -153,59 +153,6 @@ std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::dimMatching(s
 
 
 template <typename ComplexType, typename DistMatType>
-size_t CritCells<ComplexType, DistMatType>::mstFindRoot(std::vector<size_t>& parent_idx, size_t x)
-{
-    while (parent_idx[x] != x)
-    {
-        parent_idx[x] = parent_idx[parent_idx[x]];
-        x = parent_idx[x];
-    }
-
-    return x;
-}
-
-template <typename ComplexType, typename DistMatType>
-void CritCells<ComplexType, DistMatType>::mstSetUnion(std::vector<size_t>& parent_idx, size_t x, size_t y)
-{
-    size_t p = mstFindRoot(parent_idx, x);
-    size_t q = mstFindRoot(parent_idx, y);
-    parent_idx[p] = parent_idx[q];
-    return;
-}
-
-template <typename ComplexType, typename DistMatType>
-robin_hood::unordered_map<int64_t, size_t> CritCells<ComplexType, DistMatType>::getActiveEdgeIndexHashTable(const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<std::pair<int64_t, double>>& sorted_edge)
-{
-    robin_hood::unordered_map<int64_t, size_t> active_edge_index_hash;
-    active_edge_index_hash.reserve(sorted_edge.size());
-    
-    size_t npt = this->distMatrix.size();
-
-    std::vector<size_t> parent_idx(npt);
-    std::iota(parent_idx.begin(), parent_idx.end(), 0);
-
-    size_t x, y;
-    int64_t bindex;
-    size_t m = sorted_edge.size();
-    std::vector<size_t> edge_vt;
-    for (auto i = 0; i < m; i++)
-    {
-        bindex = sorted_edge[i].first;
-        edge_vt = getSimplexVertices(binomial_table, bindex, npt, 1);
-        x = edge_vt[0];
-        y = edge_vt[1];
-        if (mstFindRoot(parent_idx, x) != mstFindRoot(parent_idx, y))
-        {
-            mstSetUnion(parent_idx, x, y);
-            continue;
-        }
-        active_edge_index_hash.emplace(bindex, i); 
-    }
-
-    return active_edge_index_hash;
-}
-
-template <typename ComplexType, typename DistMatType>
 robin_hood::unordered_map<int64_t, size_t> CritCells<ComplexType, DistMatType>::getActiveFacetIndexHashTable(const BipartiteGraph& bi_graph, const std::vector<std::pair<int64_t, double>>& facet_list)
 {
     robin_hood::unordered_map<int64_t, size_t> active_facet_index_hash;
@@ -282,11 +229,11 @@ void CritCells<ComplexType, DistMatType>::runVRMorseTest(size_t maxdim, double m
 
     SimplexEnumerator<DistMatType> simplex_enumerator(static_cast<const DistMatType&>(*this), binom_table);
 
-    auto sorted_simplex = simplex_enum::getSortedVREdges(binom_table, maxeps);
+    auto sorted_simplex = simplex_enumerator.getSortedVREdges(binom_table, maxeps);
 
-    auto active_index_hash_table = getActiveEdgeIndexHashTable(binom_table, sorted_simplex);
+    auto active_index_hash_table = SimplexUtility::getActiveEdgeIndexHashTable(binom_table, sorted_simplex, n);
 
-    auto sorted_cofacet = simplex_enumerator::getSortedVRCofacets(binom_table, sorted_simplex, 1, maxeps, threadnumber);
+    auto sorted_cofacet = simplex_enumerator.getSortedVRCofacets(binom_table, sorted_simplex, 1, maxeps, threadnumber);
 
     std::vector< std::vector< std::pair<double, double> > > persistent_pairs;
     persistent_pairs.push_back(std::vector< std::pair<double, double> >{std::make_pair(0.0, -1.0)});
@@ -335,7 +282,7 @@ void CritCells<ComplexType, DistMatType>::runVRMorseTest(size_t maxdim, double m
         {
             active_index_hash_table = getActiveFacetIndexHashTable(bi_graph, sorted_cofacet);
 
-            sorted_simplex = simplex_enumerator::getSortedCofacets(binom_table, sorted_cofacet, dim, maxeps, threadnumber);
+            sorted_simplex = simplex_enumerator.getSortedCofacets(binom_table, sorted_cofacet, dim, maxeps, threadnumber);
 
             std::swap(sorted_simplex, sorted_cofacet);
         }
@@ -373,18 +320,18 @@ void CritCells<ComplexType, DistMatType>::runAlphaMorseTest(double maxeps, int t
     dt_points.clear();
 
     //morse part
-    size_t n = this->dist_matrix.size();
+    size_t n = point_cloud_.size();
     auto binom_table = SimplexUtility::getBinomialTable(n, maxdim);
 
     SimplexEnumerator<DistMatType> simplex_enumerator(static_cast<const DistMatType&>(*this), binom_table);
 
     //get edges
-    auto sorted_simplex = simplex_enumerator::getSortedAlphaCells(binom_table, vertex_handle_index, delaunay_d, 1, maxeps);
+    auto sorted_simplex = simplex_enumerator.getSortedAlphaCells(binom_table, vertex_handle_index, delaunay_d, 1, maxeps);
     //remove mst edges
-    auto active_facet_hash_table = getActiveEdgeIndexHashTable(binom_table, sorted_simplex);
+    auto active_facet_hash_table = SimplexUtility::getActiveEdgeIndexHashTable(binom_table, sorted_simplex, n);
 
     //get triangles
-    auto sorted_cofacet = simplex_enumerator::getSortedAlphaCells(binom_table, vertex_handle_index, delaunay_d, 2, maxeps);
+    auto sorted_cofacet = simplex_enumerator.getSortedAlphaCells(binom_table, vertex_handle_index, delaunay_d, 2, maxeps);
 
     std::vector< std::vector< std::pair<double, double> > > persistent_pairs;
     persistent_pairs.push_back(std::vector< std::pair<double, double> >{std::make_pair(0.0, -1.0)});
@@ -405,7 +352,7 @@ void CritCells<ComplexType, DistMatType>::runAlphaMorseTest(double maxeps, int t
         if (dim != maxdim)
         {
             active_facet_hash_table = getActiveFacetIndexHashTable(bi_graph, sorted_cofacet);
-            sorted_simplex = simplex_enumerator::getSortedAlphaCells(binom_table, vertex_handle_index, delaunay_d, dim + 1, maxeps);
+            sorted_simplex = simplex_enumerator.getSortedAlphaCells(binom_table, vertex_handle_index, delaunay_d, dim + 1, maxeps);
             std::swap(sorted_simplex, sorted_cofacet);
         }
     }

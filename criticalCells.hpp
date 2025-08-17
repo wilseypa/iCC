@@ -104,13 +104,7 @@ public:
     CritCells(Eigen::SparseMatrix<double> &distMat);
     void run_Compute(int maxDim, int batchsize = 0);
     
-
-
-    size_t mstFindRoot(std::vector<size_t>& parent_idx, size_t x);
-
-    void mstSetUnion(std::vector<size_t>& parent_idx, size_t x, size_t y);
-
-    robin_hood::unordered_map<int64_t, size_t> getActiveEdgeIndexHashTable(const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<std::pair<int64_t, double>>& sorted_edge);
+    
 
     robin_hood::unordered_map<int64_t, size_t> getActiveFacetIndexHashTable(const BipartiteGraph& bi_graph, const std::vector<std::pair<int64_t, double>>& facet_list);
 

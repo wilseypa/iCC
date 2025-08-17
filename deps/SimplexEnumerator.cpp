@@ -12,7 +12,7 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSorte
 {
     std::vector<std::pair<int64_t, double>> sorted_edge;
 
-    size_t npt = dist_mat_.dist_matrix.size();
+    size_t npt = dist_mat_.dist_mat.size();
 
     for (size_t i = 0; i < npt - 1; i++)
     {
@@ -38,7 +38,7 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSorte
     //dim == simplex dimension == cofacet dimension - 1
     std::vector<std::pair<int64_t, double>> cofacet_list;
 
-    size_t npt = dist_mat_.dist_matrix.size();
+    size_t npt = dist_mat_.dist_mat.size();
 
     std::vector< std::vector< std::pair<size_t, double> > > thread_workspace(sorted_simplex.size(), std::vector<std::pair<size_t, double>>());
 
@@ -57,8 +57,8 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSorte
         for (size_t j = 0; j < minidx; j++)
         {
             auto idx = *std::max_element(simplex_vt.begin(), simplex_vt.end(), [this, j](auto first, auto second)
-                                                                                { return this->dist_matrix[j][first] < this->dist_matrix[j][second]; });
-            double weight = dist_matrix[j][idx];    //new facet weight
+                                                                                { return this->dist_mat[j][first] < this->dist_mat[j][second]; });
+            double weight = dist_mat[j][idx];    //new facet weight
             double cofacetweight = (weight > originalweight) ? weight : originalweight; 
 
             if (cofacetweight < maxeps) thread_workspace[i].emplace_back(j, cofacetweight);
