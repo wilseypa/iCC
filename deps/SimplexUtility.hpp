@@ -178,5 +178,64 @@ namespace SimplexUtility
         return active_edge_index_hash;
     }
 
+    inline robin_hood::unordered_map<int64_t, size_t> getActiveSimplexIndexHashTable(const std::vector<int64_t>& graph_match_list, const std::vector<std::pair<int64_t, double>>& facet_list)
+    {
+        robin_hood::unordered_map<int64_t, size_t> active_facet_index_hash;
+        active_facet_index_hash.reserve(facet_list.size());
+
+        auto facetnum = facet_list.size();
+        
+        for (auto i = 0; i < facetnum; ++i)
+        {
+            if (graph_match_list[i] < 0)
+            {
+                auto bindex = facet_list[i].first;
+                active_facet_index_hash.emplace(bindex, i);
+            }
+        }
+
+        return active_facet_index_hash;
+    }
+
+    inline robin_hood::unordered_map<int64_t, size_t> getSimplexIndexHashTable(const std::vector<std::pair<int64_t, double>>& facet_list)
+    {
+        robin_hood::unordered_map<int64_t, size_t> facet_index_hash;
+        facet_index_hash.reserve(facet_list.size());
+
+        for (auto i = 0; i < facet_list.size(); ++i)
+        {
+            auto bindex = facet_list[i].first;
+            facet_index_hash.emplace(bindex, i);
+        }
+
+        return facet_index_hash;
+    }
+
+    inline void updateBinomialTable(std::vector<std::vector<int64_t>>& binomial_table, const size_t originalvtnum, const size_t virtualvtnum, const size_t maxdim)
+    {
+        size_t currentvtnum = binomial_table.size() - 1;    //current vertex number in binomial table
+
+        if (currentvtnum >= originalvtnum + virtualvtnum) return;
+
+        for (size_t i = 0; i < virtualvtnum; i++)
+        {
+            binomial_table.emplace_back(maxdim + 1 + 1, 0);
+        }
+
+        // std::cout<<"binomial table size = "<<binomial_table.size()<<'\n';
+
+        for (size_t i = 0; i < virtualvtnum; i++)
+        {
+            binomial_table[currentvtnum + 1 + i][0] = 1;
+            for (size_t j = 1; j < (maxdim + 1 + 1); j++)
+            {
+                binomial_table[currentvtnum + 1 + i][j] = binomial_table[currentvtnum + 1 + i - 1][j - 1] + binomial_table[currentvtnum + 1 + i - 1][j];
+                if (binomial_table[i][j] < 0) throw std::overflow_error("Binomial Overflow Error!");
+            }
+        }
+
+        return;
+    }
+
 
 }

@@ -18,7 +18,7 @@ size_t MaximumMorseMatching::match(MatchingContext& matching_context)
     return serialFacetMorseMatch(matching_context.graph);
 }
 
-size_t MaximumMorseMatching::matchAndPersistence(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair)
+size_t MaximumMorseMatching::matchWithPersistence(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair)
 {
     // homology
     // parallelMaxFacetInit(matching_context);
@@ -29,7 +29,7 @@ size_t MaximumMorseMatching::matchAndPersistence(MatchingContext& matching_conte
     return serialFacetMorseMatchAndPersistence(matching_context, dim_persistent_pair);
 }
 
-int64_t MaximumMorseMatching::matchAndReturnMinCriticalIndex(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair)
+int64_t MaximumMorseMatching::matchWithPersistenceAndReturnMinCriticalIndex(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair)
 {
     // cohomology
     parallelMinCofacetInit(matching_context);
