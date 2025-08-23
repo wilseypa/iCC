@@ -6,6 +6,7 @@
 #include "MatchingContext.hpp"
 #include "ApproximateMorseMatching.hpp"
 #include "MaximumMorseMatching.hpp"
+#include "QuotientAndExpand.hpp"
 
 #include "criticalCells.hpp"
 
@@ -13,6 +14,7 @@
 
 #include <numeric>
 #include <unordered_set>
+#include <type_traits>
 
 
 #ifdef MPI_ENABLED
@@ -38,8 +40,10 @@ CritCells<ComplexType, DistMatType>::CritCells(std::vector<std::vector<double>> 
     this->distMatrix = distMat;
 }
 
+#ifdef BUILD_ICC_LEGACY    //*******************need to use parent_cc to access the CritCells class members***********************//
+
 template <typename ComplexType, typename DistMatType>
-void CritCells<ComplexType, DistMatType>::run_Compute(int maxDim, int batch_size)
+void CritCells<ComplexType, DistMatType>::IccLegacy::run_Compute(int maxDim, int batch_size)
 {
     auto start_time = std::chrono::high_resolution_clock::now();
     ComplexType temp_complex;
@@ -73,7 +77,7 @@ void CritCells<ComplexType, DistMatType>::run_Compute(int maxDim, int batch_size
 }
 
 template <typename ComplexType, typename DistMatType>
-std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatType>::binEdgeSimplexes() // Direct creation of edgebins to a map
+std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatType>::IccLegacy::binEdgeSimplexes() // Direct creation of edgebins to a map
 {
     std::map<double, std::vector<std::vector<int>>> binned_edges;
     for (int i = 0; i < this->distMatrix.size() - 1; i++)
@@ -84,7 +88,7 @@ std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatTy
 
 
 template <typename ComplexType, typename DistMatType>
-void CritCells<ComplexType, DistMatType>::binByWeights(std::map<double, std::vector<std::vector<int>>> &weighted_simplicies, std::map<double, std::vector<std::vector<int>>> &bins) // Merged higher dim feature to bins
+void CritCells<ComplexType, DistMatType>::IccLegacy::binByWeights(std::map<double, std::vector<std::vector<int>>> &weighted_simplicies, std::map<double, std::vector<std::vector<int>>> &bins) // Merged higher dim feature to bins
 {
     for (auto &[weight, simplexes] : weighted_simplicies)
         std::move(simplexes.begin(), simplexes.end(), std::back_inserter(bins[weight]));
@@ -92,7 +96,7 @@ void CritCells<ComplexType, DistMatType>::binByWeights(std::map<double, std::vec
 }
 
 template <typename ComplexType, typename DistMatType>
-std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatType>::dsimplices_batches(ComplexType &complex, size_t dim, size_t batch_size) // Worker is invokation counter
+std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatType>::IccLegacy::dsimplices_batches(ComplexType &complex, size_t dim, size_t batch_size) // Worker is invokation counter
 {
     std::map<double, std::vector<std::vector<int>>> weighted_simplexes;
     if (!complex.is_initialized)
@@ -107,7 +111,7 @@ std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatTy
 }
 
 template <typename ComplexType, typename DistMatType>
-std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::dimMatching(std::vector<std::vector<int>> &simplexes, size_t dim, bool final)
+std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::IccLegacy::dimMatching(std::vector<std::vector<int>> &simplexes, size_t dim, bool final)
 {
     std::vector<std::vector<int>> critCells, simps, cofaces;
     for (auto &simplex : simplexes)
@@ -150,6 +154,7 @@ std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::dimMatching(s
     return critCells;
 }
 
+#endif
 
 
 template <typename ComplexType, typename DistMatType>
@@ -325,3 +330,22 @@ void CritCells<ComplexType, DistMatType>::runAlphaMorseTest(double maxeps, int t
 }
 
 
+template <typename ComplexType, typename DistMatType>
+void CritCells<ComplexType, DistMatType>::runQuotientAndExpand(size_t maxdim, double initeps, double maxeps, int threadnumber)
+{
+    if constexpr (std::is_same_v<ComplexType, Alpha>)
+    {
+        throw std::invalid_argument("Quotient and Expand currently only supports VR complex.");
+    }
+
+    size_t npts = this->dist_mat.size();
+    auto binomial_table = SimplexUtility::getBinomialTable(npts, maxdim);
+
+    QuotientAndExpand<DistMatType> quotient_and_expand(static_cast<DistMatType&>(*this), binomial_table);
+
+    auto virtual_vertex_indices = quotient_and_expand.runQuotient(maxdim, initeps, threadnumber);
+
+    quotient_and_expand.runExpand(virtual_vertex_indices, maxeps, threadnumber);
+
+    return;
+}
