@@ -5,13 +5,13 @@
 
 
 template class SimplexEnumerator<NormalDistMat>;
-template class SimplexEnumerator<SparseDistMat>;
+// template class SimplexEnumerator<SparseDistMat>;
 
 template <typename DistMatType>
 std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSortedVREdges(const double maxeps)
 {
     //********************use openmp later************************//
-    
+
     std::vector<std::pair<int64_t, double>> sorted_edge;
 
     size_t npt = dist_mat_.dist_mat.size();
@@ -23,7 +23,7 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSorte
             double weight = dist_mat_.getDistance(i, j);
             if (weight < maxeps)
             {
-                int64_t bindex = SimplexUtility::getEdgeBinomialIndex(binomial_table, j, i);
+                int64_t bindex = SimplexUtility::getEdgeBinomialIndex(binomial_table_, j, i);
                 sorted_edge.push_back(std::make_pair(bindex, weight));
             }
         }
@@ -40,7 +40,7 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSorte
     //dim == simplex dimension == cofacet dimension - 1
     std::vector<std::pair<int64_t, double>> cofacet_list;
 
-    size_t npts = dist_mat_.dist_mat.size();
+    size_t npts = binomial_table_.size() - 1;
 
     std::vector< std::vector< std::pair<size_t, double> > > thread_workspace(threadnum);
 

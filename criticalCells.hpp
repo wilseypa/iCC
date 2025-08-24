@@ -100,7 +100,7 @@ public:
     CritCells(const std::string &filename);               // FileName to read InputData from
 
     CritCells(std::vector<std::vector<double>> &distMat); // Input normal Distance matrix
-    CritCells(Eigen::SparseMatrix<double> &distMat);
+    // CritCells(Eigen::SparseMatrix<double> &distMat);
 
     /*legacy*/
 #ifdef BUILD_LEGACY_ICC

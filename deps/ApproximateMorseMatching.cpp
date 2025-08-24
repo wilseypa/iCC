@@ -6,12 +6,12 @@
 #include "ApproximateMorseMatching.hpp"
 
 
-void ApproximateMorseMatching::match(MatchingContext& matching_context)
+size_t ApproximateMorseMatching::match(MatchingContext& matching_context)
 {
     parallelTwoPhaseInit(matching_context.graph);
     parallelFacetDFSMatch(matching_context.graph);
     dfsCycleRemoval(matching_context.graph);
-    return;
+    return 0;
 }
 
 

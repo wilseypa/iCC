@@ -1,8 +1,10 @@
 #include <cmath>
 #include <algorithm>
 #include <execution>
+#include <stdexcept>
 
 #include <omp.h>
+
 
 #include "DistanceMatrix.hpp"
 
@@ -28,7 +30,7 @@ namespace    //static namespace
 }
 
 
-NormalDistMat::NormalDistMat(const std::vector<std::vector<double>>& point_cloud, int threadnum = 4)
+NormalDistMat::NormalDistMat(const std::vector<std::vector<double>>& point_cloud, int threadnum)
 {
     const size_t n = point_cloud.size();
     if (n == 0) return;
@@ -41,7 +43,7 @@ NormalDistMat::NormalDistMat(const std::vector<std::vector<double>>& point_cloud
     {
         for (size_t j = i + 1; j < n; j++)
         {
-            double dist = euclideanDistance(point_cloud[i], point_cloud[j]);
+            const double dist = euclideanDistance(point_cloud[i], point_cloud[j]);
             dist_mat[i][j] = dist;
             // distMatrix[j][i] = dist; // Symmetric matrix
         }

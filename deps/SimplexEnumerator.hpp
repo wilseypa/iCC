@@ -10,6 +10,9 @@
 #include "SimplexUtility.hpp"
 #include "DistanceMatrix.hpp"
 
+// Forward-declare complex type tags
+struct VR;
+struct Alpha;
 
 template <typename DistMatType>
 class SimplexEnumerator
@@ -36,7 +39,7 @@ private:
 // Explicit template instantiations
 // loss of generality, but avoid code bloat in header
 extern template class SimplexEnumerator<NormalDistMat>;
-extern template class SimplexEnumerator<SparseDistMat>;
+// extern template class SimplexEnumerator<SparseDistMat>;    //to do
 
 // template <typename DistMatType>
 // template <typename ComplexType>

@@ -6,7 +6,7 @@ set (CMAKE_CXX_STANDARD 23)
 
 find_package(OpenMP REQUIRED)
 # for later use
-# find_package(Eigen3 REQUIRED)
+find_package(Eigen3 REQUIRED)
 # find_package(MPI)
 find_package(CGAL REQUIRED)
 
@@ -25,11 +25,13 @@ target_include_directories(CriticalCells PUBLIC ${CMAKE_SOURCE_DIR}/deps)
 target_link_libraries(CriticalCells PUBLIC
     readInput
     DistanceMatrix
+    SimplexEnumerator
     ApproximateMorseMatching
     MaximumMorseMatching
     QuotientAndExpand
     # External libraries
     OpenMP::OpenMP_CXX
+    Eigen3::Eigen
     CGAL::CGAL
 )
 

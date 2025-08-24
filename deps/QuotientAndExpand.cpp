@@ -1,4 +1,5 @@
 #include <unordered_map>
+#include <stdexcept>
 
 #include "omp.h"
 
@@ -8,7 +9,7 @@
 #include "QuotientAndExpand.hpp"
 
 template class QuotientAndExpand<NormalDistMat>;
-template class QuotientAndExpand<SparseDistMat>;
+// template class QuotientAndExpand<SparseDistMat>;
 
 template <typename DistMatType>
 std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runQuotient(const size_t maxdim, const double initeps, const int threadnumber)
@@ -23,7 +24,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runQuoti
 template <typename DistMatType>
 void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_set<size_t>>& virtual_vertex_indices, const size_t maxdim, const double maxeps, const int threadnumber)
 {
-    size_t originalvtnum = dist_mat_.dist_mat.size();    //number of original vertices
+    size_t originalvtnum = dist_mat_.getVertexNumber();    //number of original vertices
     size_t virtualvtnum = virtual_vertex_indices.size();
 
     SimplexUtility::updateBinomialTable(binomial_table_, originalvtnum, virtualvtnum, maxdim);
@@ -36,7 +37,7 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
 
     auto active_index_hash_table = getVirtualActiveEdgeIndexHashTable(sorted_virtual_simplex, virtualvtnum);
 
-    BipartiteGraph bi_graph(1, 1, 1);
+    BipartiteGraph bi_graph(1, 1);
 
     std::vector<std::pair<double, double>> dim_persistent_pair;
 
@@ -72,7 +73,9 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
 template <typename DistMatType>
 std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getVirtualVertexIndices(const size_t maxdim, const double initeps, const int threadnumber)
 {
-    size_t originalvtnum = dist_mat_.dist_mat.size();    //number of original vertices
+    std::vector< std::unordered_set<size_t> > virtual_vertex_indices;
+
+    size_t originalvtnum = dist_mat_.getVertexNumber();    //number of original vertices
 
     SimplexEnumerator<DistMatType> simplex_enumerator(dist_mat_, binomial_table_);
     
@@ -80,9 +83,9 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getVirtu
 
     auto active_index_hash_table = SimplexUtility::getActiveEdgeIndexHashTable(binomial_table_, sorted_simplex, originalvtnum);
 
-    auto sorted_cofacet = simplex_enumerator.getSortedVRCofacets(binomial_table_, sorted_simplex, 1, initeps, threadnumber);
+    auto sorted_cofacet = simplex_enumerator.getSortedVRCofacets(sorted_simplex, 1, initeps, threadnumber);
 
-    BipartiteGraph bi_graph(1, 1, 1);
+    BipartiteGraph bi_graph(1, 1);
 
     for (size_t dim = 2; dim <= maxdim; dim++)
     {
@@ -125,7 +128,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getVirtu
         {
             active_index_hash_table = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_cofacet);
 
-            sorted_simplex = simplex_enumerator.getSortedVRCofacets(binomial_table_, sorted_cofacet, dim, initeps, threadnumber);
+            sorted_simplex = simplex_enumerator.getSortedVRCofacets(sorted_cofacet, dim, initeps, threadnumber);
             std::swap(sorted_simplex, sorted_cofacet);
         }
 
@@ -268,7 +271,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::trimVert
 template<typename DistMatType>
 std::vector<size_t> QuotientAndExpand<DistMatType>::getActiveVertexIndices(const std::vector<std::unordered_set<size_t>>& virtual_vertex_indices)
 {
-    const size_t originalvtnum = dist_mat_.dist_mat.size();
+    const size_t originalvtnum = dist_mat_.getVertexNumber();
 
     std::vector<bool> is_virtualized(originalvtnum, false);
 
@@ -300,7 +303,7 @@ std::vector<size_t> QuotientAndExpand<DistMatType>::getActiveVertexIndices(const
 template<typename DistMatType>
 double QuotientAndExpand<DistMatType>::computeVirtualDistance(const size_t i, const size_t j, const std::vector<std::unordered_set<size_t>>& virtual_vertex_indices)
 {
-    const size_t originalvtnum = dist_mat_.dist_mat.size();
+    const size_t originalvtnum = dist_mat_.getVertexNumber();;
 
     //passed in as i < j
 
@@ -408,10 +411,10 @@ std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getVirtu
     std::vector<std::pair<int64_t, double>> sorted_edges;
     for (const auto& thread_edges : thread_edge_workspace)
     {
-        sorted_edges.insert(sorted_edge.end(), thread_edges.begin(), thread_edges.end());
+        sorted_edges.insert(sorted_edges.end(), thread_edges.begin(), thread_edges.end());
     }
 
-    SimplexUnitility::sortSimplexByWeightThenIndex(sorted_edges);
+    SimplexUtility::sortSimplexByWeightThenIndex(sorted_edges);
 
     return sorted_edges;
 }
@@ -452,7 +455,7 @@ std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getVirtu
                                                                                                     const std::vector<size_t>& active_vertices, const robin_hood::unordered_map<uint64_t, double>& virtual_distance_hash_table,
                                                                                                     const size_t dim, const double maxeps, int threadnum)
 {
-    std::vector< std::vector< std::pair<size_t, double> > > thread_workspace(sorted_virtual_simplex.size());
+    std::vector< std::vector< std::pair<size_t, double> > > thread_workspace(sorted_virtual_simplex_list.size());
 
     const size_t npts = binomial_table_.size() - 1;
     
@@ -472,7 +475,7 @@ std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getVirtu
 
         auto iter = std::find(active_vertices.begin(), active_vertices.end(), simplex_vertices.back());
 
-        if (iter == active_vertices.end()) std::error("vertex not found in active vertex list");
+        if (iter == active_vertices.end()) std::out_of_range("vertex not found in active vertex list");
         
         auto vtpos = std::distance(active_vertices.begin(), iter);
 
@@ -492,7 +495,7 @@ std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getVirtu
             {
                 int64_t shiftedbindex = SimplexUtility::getBinomialIndex(binomial_table_, simplex_vertices, 1);
                 int64_t cofacetbindex = shiftedbindex + covt;
-                thread_cofacet.emplace_back(cofacetbindex, cofacetweight);
+                thread_cofacets.emplace_back(cofacetbindex, cofacetweight);
             }
         }
     }
@@ -509,10 +512,10 @@ std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getVirtu
 }
 
 template<typename DistMatType>
-void QuotientAndExpand<DistMatType>::buildInterface(const std::vector<std::pair<int64_t, double>>& sorted_cofacet_list,
+void QuotientAndExpand<DistMatType>::buildInterface(BipartiteGraph& bi_graph, const std::vector<std::pair<int64_t, double>>& sorted_cofacet_list,
                                                     const robin_hood::unordered_map<int64_t, size_t>& active_facet_index_hash_table, const size_t dim)
 {
-    auto u = bi_graph.unodes
+    auto u = bi_graph.unodes;
     auto v = bi_graph.vnodes;
 
     // std::cout<<u<<"    "<<v<<'\n';

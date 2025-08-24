@@ -37,7 +37,7 @@ CritCells<ComplexType, DistMatType>::CritCells(const std::string &filename):poin
 template <typename ComplexType, typename DistMatType>
 CritCells<ComplexType, DistMatType>::CritCells(std::vector<std::vector<double>> &distMat)
 {
-    this->distMatrix = distMat;
+    this->dist_mat = distMat;
 }
 
 #ifdef BUILD_LEGACY_ICC    //*******************need to use parent_cc to access the CritCells class members***********************//
@@ -162,7 +162,7 @@ void CritCells<ComplexType, DistMatType>::buildInterface(BipartiteGraph& bi_grap
                                                         const robin_hood::unordered_map<int64_t, size_t>& active_facet_index, const std::vector<std::vector<int64_t>>& binomial_table, const size_t dim)
 {
     // size_t npt = this->distMatrix.size();
-    auto u = bi_graph.unodes
+    auto u = bi_graph.unodes;
     auto v = bi_graph.vnodes;
 
     // std::cout<<u<<"    "<<v<<'\n';
@@ -170,7 +170,7 @@ void CritCells<ComplexType, DistMatType>::buildInterface(BipartiteGraph& bi_grap
     for (size_t i = 0; i < cofacet_list.size(); i++)
     {
         int64_t bindex = cofacet_list[i].first;
-        std::vector<int64_t> facet_bindex = getFacetBinomialIndex(binomial_table, bindex, dim);
+        std::vector<int64_t> facet_bindex = SimplexUtility::getFacetBinomialIndex(binomial_table, bindex, dim);
 
         for (auto fbidx: facet_bindex)
         {
@@ -193,7 +193,7 @@ void CritCells<ComplexType, DistMatType>::buildInterface(BipartiteGraph& bi_grap
 template <typename ComplexType, typename DistMatType>
 void CritCells<ComplexType, DistMatType>::runVRMorseTest(size_t maxdim, double maxeps, int threadnumber)
 {
-    size_t n = this->dist_matrix.size();
+    size_t n = this->getVertexNumber();
     auto binom_table = SimplexUtility::getBinomialTable(n, maxdim);
 
     SimplexEnumerator<DistMatType> simplex_enumerator(static_cast<const DistMatType&>(*this), binom_table);
@@ -202,12 +202,12 @@ void CritCells<ComplexType, DistMatType>::runVRMorseTest(size_t maxdim, double m
 
     auto active_index_hash_table = SimplexUtility::getActiveEdgeIndexHashTable(binom_table, sorted_simplex, n);
 
-    auto sorted_cofacet = simplex_enumerator.getSortedVRCofacets(binom_table, sorted_simplex, 1, maxeps, threadnumber);
+    auto sorted_cofacet = simplex_enumerator.getSortedVRCofacets(sorted_simplex, 1, maxeps, threadnumber);
 
     std::vector< std::vector< std::pair<double, double> > > persistent_pairs;
     persistent_pairs.push_back(std::vector< std::pair<double, double> >{std::make_pair(0.0, -1.0)});
     
-    BipartiteGraph bi_graph(1, 1, 1);
+    BipartiteGraph bi_graph(1, 1);
 
     for (size_t dim = 2; dim <= maxdim; dim++)
     {
@@ -251,7 +251,7 @@ void CritCells<ComplexType, DistMatType>::runVRMorseTest(size_t maxdim, double m
         {
             active_index_hash_table = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_cofacet);
 
-            sorted_simplex = simplex_enumerator.getSortedCofacets(binom_table, sorted_cofacet, dim, maxeps, threadnumber);
+            sorted_simplex = simplex_enumerator.getSortedVRCofacets(sorted_cofacet, dim, maxeps, threadnumber);
 
             std::swap(sorted_simplex, sorted_cofacet);
         }
@@ -305,12 +305,12 @@ void CritCells<ComplexType, DistMatType>::runAlphaMorseTest(double maxeps, int t
     std::vector< std::vector< std::pair<double, double> > > persistent_pairs;
     persistent_pairs.push_back(std::vector< std::pair<double, double> >{std::make_pair(0.0, -1.0)});
 
-    BipartiteGraph bi_graph(1, 1, 1);
+    BipartiteGraph bi_graph(1, 1);
     
     for (size_t dim = 2; dim <= maxdim; dim++)
     {
         bi_graph.updateDimension(sorted_cofacet.size(), sorted_simplex.size());
-        buildInterface(bi_graph, binom_table, sorted_cofacet, dim, active_facet_hash_table);
+        buildInterface(bi_graph, sorted_cofacet, active_facet_hash_table, binom_table, dim);
 
         MatchingContext matching_context(bi_graph, binom_table, sorted_simplex, sorted_cofacet);
 
@@ -320,7 +320,7 @@ void CritCells<ComplexType, DistMatType>::runAlphaMorseTest(double maxeps, int t
 
         if (dim != maxdim)
         {
-            active_facet_hash_table = getActiveFacetIndexHashTable(bi_graph, sorted_cofacet);
+            active_facet_hash_table = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_cofacet);
             sorted_simplex = simplex_enumerator.getSortedAlphaCells(binom_table, vertex_handle_index, delaunay_d, dim + 1, maxeps);
             std::swap(sorted_simplex, sorted_cofacet);
         }
@@ -338,14 +338,14 @@ void CritCells<ComplexType, DistMatType>::runQuotientAndExpand(size_t maxdim, do
         throw std::invalid_argument("Quotient and Expand currently only supports VR complex.");
     }
 
-    size_t npts = this->dist_mat.size();
+    size_t npts = this->getVertexNumber();
     auto binomial_table = SimplexUtility::getBinomialTable(npts, maxdim);
 
-    QuotientAndExpand<DistMatType> quotient_and_expand(static_cast<DistMatType&>(*this), binomial_table);
+    QuotientAndExpand<DistMatType> quotient_and_expand(static_cast<DistMatType&>(*this), binomial_table, npts);
 
     auto virtual_vertex_indices = quotient_and_expand.runQuotient(maxdim, initeps, threadnumber);
 
-    quotient_and_expand.runExpand(virtual_vertex_indices, maxeps, threadnumber);
+    quotient_and_expand.runExpand(virtual_vertex_indices, maxdim,  maxeps, threadnumber);
 
     return;
 }

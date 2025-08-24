@@ -16,7 +16,7 @@ class QuotientAndExpand
 {
 public:
     
-    QuotientAndExpand(DistMatType& dist_mat, const std::vector<std::vector<int64_t>>& binomial_table, const size_t originalvertexnumber):
+    QuotientAndExpand(DistMatType& dist_mat, std::vector<std::vector<int64_t>>& binomial_table, const size_t originalvertexnumber):
     dist_mat_(dist_mat), binomial_table_(binomial_table) {}
 
     std::vector<std::unordered_set<size_t>> runQuotient(const size_t maxdim, const double initeps, const int threadnumber);
@@ -54,7 +54,8 @@ private:
                                                                           const size_t dim, const double maxeps, int threadnum);
                                                                            
     
-    void buildInterface(const std::vector<std::pair<int64_t, double>>& sorted_cofacet_list, const robin_hood::unordered_map<int64_t, size_t>& active_facet_index_hash_table, const size_t dim);
+    void buildInterface(BipartiteGraph& bi_graph, const std::vector<std::pair<int64_t, double>>& sorted_cofacet_list, 
+                        const robin_hood::unordered_map<int64_t, size_t>& active_facet_index_hash_table, const size_t dim);
 
 
     struct UnionFind
@@ -71,7 +72,7 @@ private:
         {
             if (parent[x] != x)
             {
-                parent[x] = find(parent[x]); // Path compression
+                parent[x] = unionFind(parent[x]); // Path compression
             }
             return parent[x];
         }
@@ -103,4 +104,4 @@ private:
 
 
 extern template class QuotientAndExpand<NormalDistMat>;
-extern template class QuotientAndExpand<SparseDistMat>;
+// extern template class QuotientAndExpand<SparseDistMat>;
