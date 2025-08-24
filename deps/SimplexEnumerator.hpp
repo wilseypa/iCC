@@ -33,6 +33,8 @@ private:
     double getAlphaSimplexWeight(const std::vector<size_t>& alpha_simplex);
 };
 
+// Explicit template instantiations
+// loss of generality, but avoid code bloat in header
 extern template class SimplexEnumerator<NormalDistMat>;
 extern template class SimplexEnumerator<SparseDistMat>;
 

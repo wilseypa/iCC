@@ -103,9 +103,9 @@ public:
     CritCells(Eigen::SparseMatrix<double> &distMat);
 
     /*legacy*/
-#ifdef BUILD_ICC_LEGACY
+#ifdef BUILD_LEGACY_ICC
 
-    struct IccLegacy
+    struct ICCLegacy
     {
         CritCells<ComplexType, DistMatType>& parent_cc;
 
@@ -120,7 +120,7 @@ public:
         std::vector<std::vector<int>> dimMatching(std::vector<std::vector<int>> &simplexes, size_t dim, bool final);
     };
 
-    IccLegacy icc_legacy_runner{*this};
+    ICCLegacy icc_legacy_runner{*this};
     
 #endif
     /*legacy end*/

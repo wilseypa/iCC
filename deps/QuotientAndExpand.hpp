@@ -21,7 +21,7 @@ public:
 
     std::vector<std::unordered_set<size_t>> runQuotient(const size_t maxdim, const double initeps, const int threadnumber);
 
-    void runExpand(const std::vector<std::unordered_set<size_t>>& virtual_vertex_indices, const double maxeps, const int threadnumber);
+    void runExpand(const std::vector<std::unordered_set<size_t>>& virtual_vertex_indices, const size_t maxdim, const double maxeps, const int threadnumber);
 
 private:
 
@@ -100,3 +100,7 @@ private:
     };
 
 };
+
+
+extern template class QuotientAndExpand<NormalDistMat>;
+extern template class QuotientAndExpand<SparseDistMat>;

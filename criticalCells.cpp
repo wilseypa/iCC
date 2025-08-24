@@ -40,10 +40,10 @@ CritCells<ComplexType, DistMatType>::CritCells(std::vector<std::vector<double>> 
     this->distMatrix = distMat;
 }
 
-#ifdef BUILD_ICC_LEGACY    //*******************need to use parent_cc to access the CritCells class members***********************//
+#ifdef BUILD_LEGACY_ICC    //*******************need to use parent_cc to access the CritCells class members***********************//
 
 template <typename ComplexType, typename DistMatType>
-void CritCells<ComplexType, DistMatType>::IccLegacy::run_Compute(int maxDim, int batch_size)
+void CritCells<ComplexType, DistMatType>::ICCLegacy::run_Compute(int maxDim, int batch_size)
 {
     auto start_time = std::chrono::high_resolution_clock::now();
     ComplexType temp_complex;
@@ -77,7 +77,7 @@ void CritCells<ComplexType, DistMatType>::IccLegacy::run_Compute(int maxDim, int
 }
 
 template <typename ComplexType, typename DistMatType>
-std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatType>::IccLegacy::binEdgeSimplexes() // Direct creation of edgebins to a map
+std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatType>::ICCLegacy::binEdgeSimplexes() // Direct creation of edgebins to a map
 {
     std::map<double, std::vector<std::vector<int>>> binned_edges;
     for (int i = 0; i < this->distMatrix.size() - 1; i++)
@@ -88,7 +88,7 @@ std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatTy
 
 
 template <typename ComplexType, typename DistMatType>
-void CritCells<ComplexType, DistMatType>::IccLegacy::binByWeights(std::map<double, std::vector<std::vector<int>>> &weighted_simplicies, std::map<double, std::vector<std::vector<int>>> &bins) // Merged higher dim feature to bins
+void CritCells<ComplexType, DistMatType>::ICCLegacy::binByWeights(std::map<double, std::vector<std::vector<int>>> &weighted_simplicies, std::map<double, std::vector<std::vector<int>>> &bins) // Merged higher dim feature to bins
 {
     for (auto &[weight, simplexes] : weighted_simplicies)
         std::move(simplexes.begin(), simplexes.end(), std::back_inserter(bins[weight]));
@@ -96,7 +96,7 @@ void CritCells<ComplexType, DistMatType>::IccLegacy::binByWeights(std::map<doubl
 }
 
 template <typename ComplexType, typename DistMatType>
-std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatType>::IccLegacy::dsimplices_batches(ComplexType &complex, size_t dim, size_t batch_size) // Worker is invokation counter
+std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatType>::ICCLegacy::dsimplices_batches(ComplexType &complex, size_t dim, size_t batch_size) // Worker is invokation counter
 {
     std::map<double, std::vector<std::vector<int>>> weighted_simplexes;
     if (!complex.is_initialized)
@@ -111,7 +111,7 @@ std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatTy
 }
 
 template <typename ComplexType, typename DistMatType>
-std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::IccLegacy::dimMatching(std::vector<std::vector<int>> &simplexes, size_t dim, bool final)
+std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::ICCLegacy::dimMatching(std::vector<std::vector<int>> &simplexes, size_t dim, bool final)
 {
     std::vector<std::vector<int>> critCells, simps, cofaces;
     for (auto &simplex : simplexes)
@@ -198,7 +198,7 @@ void CritCells<ComplexType, DistMatType>::runVRMorseTest(size_t maxdim, double m
 
     SimplexEnumerator<DistMatType> simplex_enumerator(static_cast<const DistMatType&>(*this), binom_table);
 
-    auto sorted_simplex = simplex_enumerator.getSortedVREdges(binom_table, maxeps);
+    auto sorted_simplex = simplex_enumerator.getSortedVREdges(maxeps);
 
     auto active_index_hash_table = SimplexUtility::getActiveEdgeIndexHashTable(binom_table, sorted_simplex, n);
 

@@ -10,6 +10,8 @@ template class SimplexEnumerator<SparseDistMat>;
 template <typename DistMatType>
 std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSortedVREdges(const double maxeps)
 {
+    //********************use openmp later************************//
+    
     std::vector<std::pair<int64_t, double>> sorted_edge;
 
     size_t npt = dist_mat_.dist_mat.size();
@@ -59,14 +61,14 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSorte
         for (size_t covt = 0; covt < minvt; ++covt)
         {
             double newweight = 0.0;
-            for (const aut& vt : simplex_vertices)
+            for (const auto& vt : simplex_vertices)
             {
                 newweight = std::max(newweight, dist_mat_.getDistance(covt, vt));
             }
 
             double cofacetweight = std::max(newweight, weight);
 
-            if (neweight < maxeps)
+            if (newweight < maxeps)
             {
                 int64_t shiftedbindex = SimplexUtility::getBinomialIndex(binomial_table_, simplex_vertices, 1);
                 int64_t cofacetbindex = shiftedbindex + covt;
@@ -117,12 +119,12 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSorte
                 simplex_pt.push_back(vertex_handle_index[vhandle]);
             }
             std::sort(simplex_pt.begin(), simplex_pt.end(), std::greater<size_t>());
-            int64_t bindex = getBinomialIndex(binomial_table, simplex_pt, 0);
+            int64_t bindex = SimplexUtility::getBinomialIndex(binomial_table, simplex_pt, 0);
             double weight = getAlphaSimplexWeight(simplex_pt);
             if (weight < maxeps) sortd_d_cell.emplace_back(bindex, weight);
             simplex_pt.clear();
         }
-        sortSimplexByWeightThenIndex(sortd_d_cell);
+        SimplexUtility::sortSimplexByWeightThenIndex(sortd_d_cell);
         return sortd_d_cell;
     }
 
@@ -136,12 +138,12 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSorte
                 simplex_pt.push_back(vertex_handle_index[vhandle]);
             }
             std::sort(simplex_pt.begin(), simplex_pt.end(), std::greater<size_t>());
-            int64_t bindex = getBinomialIndex(binomial_table, simplex_pt, 0);
+            int64_t bindex = SimplexUtility::getBinomialIndex(binomial_table, simplex_pt, 0);
             double weight = getAlphaSimplexWeight(simplex_pt);
             if (weight < maxeps) sortd_d_cell.emplace_back(bindex, weight);
             simplex_pt.clear();
         }
-        sortSimplexByWeightThenIndex(sortd_d_cell);
+        SimplexUtility::sortSimplexByWeightThenIndex(sortd_d_cell);
         return sortd_d_cell;
     }
 
@@ -173,7 +175,7 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSorte
 
             std::sort(cell_pt.begin(), cell_pt.end(), std::greater<size_t>());
 
-            int64_t bindex = getBinomialIndex(binomial_table, cell_pt, 0);
+            int64_t bindex = SimplexUtility::getBinomialIndex(binomial_table, cell_pt, 0);
 
             // if (bindex == 0)
             // {
@@ -195,7 +197,7 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSorte
         simplex_pt.clear();    //clean up the pt array for full cell
     }
 
-    sortSimplexByWeightThenIndex(sortd_d_cell);
+    SimplexUtility::sortSimplexByWeightThenIndex(sortd_d_cell);
     return sortd_d_cell;
 }
 

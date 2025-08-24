@@ -7,6 +7,9 @@
 #include "MaximumMorseMatching.hpp"
 #include "QuotientAndExpand.hpp"
 
+template class QuotientAndExpand<NormalDistMat>;
+template class QuotientAndExpand<SparseDistMat>;
+
 template <typename DistMatType>
 std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runQuotient(const size_t maxdim, const double initeps, const int threadnumber)
 {
@@ -18,7 +21,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runQuoti
 }
 
 template <typename DistMatType>
-void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_set<size_t>>& virtual_vertex_indices, const double maxeps, const int threadnumber)
+void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_set<size_t>>& virtual_vertex_indices, const size_t maxdim, const double maxeps, const int threadnumber)
 {
     size_t originalvtnum = dist_mat_.dist_mat.size();    //number of original vertices
     size_t virtualvtnum = virtual_vertex_indices.size();
@@ -383,7 +386,7 @@ std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getVirtu
 {
     omp_set_num_threads(threadnum);
 
-    std::vector< <std::vector<< std::pair<int64_t, double>> > thread_edge_workspace(threadnum);
+    std::vector< std::vector< std::pair<int64_t, double> > > thread_edge_workspace(threadnum);
 
 #pragma omp parallel for schedule(dynamic)
     for (size_t i = 0; i < active_vertices.size(); ++i)
@@ -432,7 +435,7 @@ robin_hood::unordered_map<int64_t, size_t> QuotientAndExpand<DistMatType>::getVi
         auto x = edge_vertices[0];
         auto y = edge_vertices[1];
 
-        if (union_find(x) != union_find(y))
+        if (union_find.unionFind(x) != union_find.unionFind(y))
         {
             union_find.unionSets(x, y);
             continue; // Skip adding to the hash table if they are in different sets
@@ -485,11 +488,11 @@ std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getVirtu
 
             double cofacetweight = std::max(newweight, weight);
 
-            if (cofacetweight < maxesp)
+            if (cofacetweight < maxeps)
             {
                 int64_t shiftedbindex = SimplexUtility::getBinomialIndex(binomial_table_, simplex_vertices, 1);
                 int64_t cofacetbindex = shiftedbindex + covt;
-                thread_local_cofacets.emplace_back(cofacetbindex, cofacetweight);
+                thread_cofacet.emplace_back(cofacetbindex, cofacetweight);
             }
         }
     }
