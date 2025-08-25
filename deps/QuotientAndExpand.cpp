@@ -55,7 +55,7 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
 
         MaximumMorseMatching morse_matching(threadnumber);
 
-        std::cout<<"in expand phase. dim = "<<dim<<'\n';
+        std::cout<<"in expand phase. dim = "<<dim<<"  cofacet num = "<<sorted_virtual_cofacet.size()<<"  facet num = "<<sorted_virtual_simplex.size()<<'\n';
 
         auto critsimpnum = morse_matching.matchWithPersistenceBackup(matching_context, dim_persistent_pair);
         std::cout << "dim = "<<dim<<"  critical simplex number: " << critsimpnum << std::endl;
@@ -65,7 +65,7 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
         {
             active_index_hash_table = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_virtual_cofacet);
 
-            sorted_virtual_simplex = getVirtualSortedCofacetList(sorted_virtual_simplex, active_vertices, virtual_distance_hash_table, dim + 1, maxeps, threadnumber);
+            sorted_virtual_simplex = getVirtualSortedCofacetList(sorted_virtual_simplex, active_vertices, virtual_distance_hash_table, dim, maxeps, threadnumber);
             std::swap(sorted_virtual_simplex, sorted_virtual_cofacet);
         }
     }
@@ -128,7 +128,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getVirtu
             //get gradient paths
             auto gradient_paths = extractGradientPahts(matching_context, minfacetweight);
             //get gradient path vertex indices
-            auto virtual_vertex_indices = getGradientPathVertexSets(matching_context, gradient_paths, dim);
+            virtual_vertex_indices = getGradientPathVertexSets(matching_context, gradient_paths, dim);
         }
 
         if (dim != maxdim)
@@ -171,9 +171,9 @@ std::vector< std::vector<size_t> > QuotientAndExpand<DistMatType>::extractGradie
 
     for (size_t facetidx = 0; facetidx < maxfacetindex; ++facetidx)
     {
-        size_t cofacetidx = bi_graph.match_list[facetidx + u];
+        int64_t cofacetidx = bi_graph.match_list[facetidx + u];
 
-        if (cofacetidx < 0 || cofacetidx >= maxcofacetindex) continue;
+        if (cofacetidx < 0 || static_cast<size_t>(cofacetidx) >= maxcofacetindex) continue;
 
         is_in_gradient_path[cofacetidx] = true;
 
@@ -183,9 +183,9 @@ std::vector< std::vector<size_t> > QuotientAndExpand<DistMatType>::extractGradie
 
             if (nextfacetidx == facetidx || nextfacetidx >= maxfacetindex) continue;
 
-            size_t nextcofacetidx = bi_graph.match_list[vidx];
+            int64_t nextcofacetidx = bi_graph.match_list[vidx];
 
-            if (nextcofacetidx < 0 || nextcofacetidx >= maxcofacetindex) continue;
+            if (nextcofacetidx < 0 || static_cast<size_t>(nextcofacetidx) >= maxcofacetindex) continue;
 
             is_in_gradient_path[nextcofacetidx] = true;
             union_find.unionSets(cofacetidx, nextcofacetidx);
@@ -223,7 +223,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getGradi
     std::vector<std::unordered_set<size_t>> gradient_path_vertex_sets;
     gradient_path_vertex_sets.reserve(gradient_paths.size());
 
-    auto npt = matching_context.graph.unodes + matching_context.graph.vnodes;
+    auto npt = matching_context.binomial_table.size() - 1;
 
     for (const auto& grad_path: gradient_paths)
     {
@@ -454,7 +454,7 @@ std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getVirtu
                                                                                                     const std::vector<size_t>& active_vertices, const robin_hood::unordered_map<uint64_t, double>& virtual_distance_hash_table,
                                                                                                     const size_t dim, const double maxeps, int threadnum)
 {
-    std::vector< std::vector< std::pair<int64_t, double> > > thread_workspace(sorted_virtual_simplex_list.size());
+    std::vector< std::vector< std::pair<int64_t, double> > > thread_workspace(threadnum);
 
     const size_t npts = binomial_table_.size() - 1;
     

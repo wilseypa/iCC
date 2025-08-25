@@ -14,9 +14,9 @@ int main()
 
     auto st0 = std::chrono::high_resolution_clock::now();
 
-    // cc.runVRMorseTest(4, 2.0, 4);
+    // cc.runVRMorseTest(3, 2.0, 4);
     // cc.runAlphaMorseTest(1.5, 4);
-    cc.runQuotientAndExpand(3, 1.5, 2.0, 4);
+    cc.runQuotientAndExpand(3, 0.95, 0.95, 4);
 
     auto st1 = std::chrono::high_resolution_clock::now();
     auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
