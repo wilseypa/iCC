@@ -15,6 +15,7 @@
 #include <numeric>
 #include <unordered_set>
 #include <type_traits>
+#include <stdexcept>
 
 
 #ifdef MPI_ENABLED
@@ -30,17 +31,39 @@ template class CritCells<Alpha, NormalDistMat>;
 //     this->distMatrix = distMat;
 // }
 
+// Delegating ctor: read once, then forward to the by-value ctor
 template <typename ComplexType, typename DistMatType>
-CritCells<ComplexType, DistMatType>::CritCells(const std::string &filename):point_cloud_(readInput::readCSV(filename)), DistMatType(point_cloud_)
+CritCells<ComplexType, DistMatType>::CritCells(const std::string &filename) : CritCells(readInput::readCSV(filename))
 {}
 
+// primaary ctor
 template <typename ComplexType, typename DistMatType>
-CritCells<ComplexType, DistMatType>::CritCells(std::vector<std::vector<double>> &distMat)
+CritCells<ComplexType, DistMatType>::CritCells(std::vector<std::vector<double>> point_coordinates) : DistMatType(point_coordinates), point_cloud_(std::move(point_coordinates))
 {
-    this->dist_mat = distMat;
+    if (point_cloud_.empty()) throw std::invalid_argument("Input point cloud is empty.");
 }
 
 #ifdef BUILD_LEGACY_ICC    //*******************need to use parent_cc to access the CritCells class members***********************//
+
+std::ostream &operator<<(std::ostream &os, const std::map<double, std::vector<std::vector<int>>> &bins)
+{
+    for (const auto &[weight, simplexes] : bins)
+    {
+        if (!simplexes.empty())
+        {
+            os << weight << " ";
+            for (const auto &simplex : simplexes)
+            {
+                os << "(";
+                for (const auto &i : simplex)
+                    os << i << " ";
+                os << ")";
+            }
+            os << std::endl;
+        }
+    }
+    return os;
+}
 
 template <typename ComplexType, typename DistMatType>
 void CritCells<ComplexType, DistMatType>::ICCLegacy::run_Compute(int maxDim, int batch_size)
@@ -194,6 +217,9 @@ template <typename ComplexType, typename DistMatType>
 void CritCells<ComplexType, DistMatType>::runVRMorseTest(size_t maxdim, double maxeps, int threadnumber)
 {
     size_t n = this->getVertexNumber();
+
+    std::cout<<"point number: "<<n<<std::endl;
+
     auto binom_table = SimplexUtility::getBinomialTable(n, maxdim);
 
     SimplexEnumerator<DistMatType> simplex_enumerator(static_cast<const DistMatType&>(*this), binom_table);
@@ -204,8 +230,7 @@ void CritCells<ComplexType, DistMatType>::runVRMorseTest(size_t maxdim, double m
 
     auto sorted_cofacet = simplex_enumerator.getSortedVRCofacets(sorted_simplex, 1, maxeps, threadnumber);
 
-    std::vector< std::vector< std::pair<double, double> > > persistent_pairs;
-    persistent_pairs.push_back(std::vector< std::pair<double, double> >{std::make_pair(0.0, -1.0)});
+    std::vector< std::pair<double, double> >  dim_persistent_pairs;
     
     BipartiteGraph bi_graph(1, 1);
 
@@ -218,9 +243,14 @@ void CritCells<ComplexType, DistMatType>::runVRMorseTest(size_t maxdim, double m
         
         MaximumMorseMatching morse_matching(threadnumber);
 
-        auto critsimpnum = morse_matching.match(matching_context);
+        std::cout<<"Processing dim "<<dim<<", cofacet number: "<<sorted_cofacet.size()<<", facet number: "<<sorted_simplex.size()<<std::endl;
+
+        // auto critsimpnum = morse_matching.matchWithPersistenceBackup(matching_context, dim_persistent_pairs);
+        auto critsimpnum = morse_matching.matchWithPersistence(matching_context, dim_persistent_pairs);
 
         std::cout << "critical simplex number: " << critsimpnum << std::endl;
+
+        dim_persistent_pairs.clear();
 
         //print DAG edges at the top dim
         // if (dim == maxdim)

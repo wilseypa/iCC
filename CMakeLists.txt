@@ -17,7 +17,7 @@ option(BUILD_LEGACY_ICC "Build with legacy ICC code" OFF)
 add_subdirectory(deps)
 
 # Create library for CriticalCells
-add_library(CriticalCells SHARED criticalCells.cpp)
+add_library(CriticalCells STATIC criticalCells.cpp)
 
 target_include_directories(CriticalCells PUBLIC ${CMAKE_SOURCE_DIR}/deps)
 

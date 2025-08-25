@@ -22,27 +22,6 @@
 #include "DistanceMatrix.hpp"
 
 
-std::ostream &operator<<(std::ostream &os, const std::map<double, std::vector<std::vector<int>>> &bins)
-{
-    for (const auto &[weight, simplexes] : bins)
-    {
-        if (!simplexes.empty())
-        {
-            os << weight << " ";
-            for (const auto &simplex : simplexes)
-            {
-                os << "(";
-                for (const auto &i : simplex)
-                    os << i << " ";
-                os << ")";
-            }
-            os << std::endl;
-        }
-    }
-    return os;
-}
-
-
 /****************************************************** */
 //temp dummy struct for alpha complex
 struct Alpha
@@ -99,7 +78,8 @@ class CritCells : public DistMatType
 public:
     CritCells(const std::string &filename);               // FileName to read InputData from
 
-    CritCells(std::vector<std::vector<double>> &distMat); // Input normal Distance matrix
+    CritCells(std::vector<std::vector<double>> point_coordinates);    //primary ctor
+
     // CritCells(Eigen::SparseMatrix<double> &distMat);
 
     /*legacy*/

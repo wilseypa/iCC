@@ -22,11 +22,22 @@ size_t MaximumMorseMatching::matchWithPersistence(MatchingContext& matching_cont
 {
     // homology
     // parallelMaxFacetInit(matching_context);
-    // return serialCofacetMorseMatchWithPersistence(matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
+    // return serialCofacetMorseMatchWithPersistence(matching_context, dim_persistent_pair);
 
     // cohomology
     parallelMinCofacetInit(matching_context);
-    return serialFacetMorseMatchAndPersistence(matching_context, dim_persistent_pair);
+    return serialFacetMorseMatchWithPersistence(matching_context, dim_persistent_pair);
+}
+
+size_t MaximumMorseMatching::matchWithPersistenceBackup(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair)
+{
+    // homology
+    parallelMaxFacetInit(matching_context);
+    return serialCofacetMorseMatchWithPersistence(matching_context, dim_persistent_pair);
+
+    // cohomology
+    // parallelMinCofacetInit(matching_context);
+    // return serialFacetMorseMatchWithPersistence(matching_context, dim_persistent_pair);
 }
 
 int64_t MaximumMorseMatching::matchWithPersistenceAndReturnMinCriticalIndex(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair)
@@ -327,7 +338,7 @@ size_t MaximumMorseMatching::serialFacetMorseMatch(BipartiteGraph& graph)
 }
 
 
-size_t MaximumMorseMatching::serialCofacetMorseMatchAndPersistence(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair)
+size_t MaximumMorseMatching::serialCofacetMorseMatchWithPersistence(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair)
 {
     auto& graph = matching_context.graph;
 
@@ -364,6 +375,7 @@ size_t MaximumMorseMatching::serialCofacetMorseMatchAndPersistence(MatchingConte
         if (facetweight != cofacetweight)
         {
             dim_persistent_pair.push_back(std::make_pair(facetweight, cofacetweight));
+            std::cout<<"facetweight = "<<facetweight<<"  cofacetweight = "<<cofacetweight<<'\n';
         }
     }
 
@@ -376,7 +388,7 @@ size_t MaximumMorseMatching::serialCofacetMorseMatchAndPersistence(MatchingConte
 }
 
 
-size_t MaximumMorseMatching::serialFacetMorseMatchAndPersistence(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair)
+size_t MaximumMorseMatching::serialFacetMorseMatchWithPersistence(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair)
 {
     auto& graph = matching_context.graph;
     std::vector<size_t> aug_path(graph.unodes + graph.vnodes, 0);
@@ -420,6 +432,7 @@ size_t MaximumMorseMatching::serialFacetMorseMatchAndPersistence(MatchingContext
         if (facetweight != cofacetweight)
         {
             dim_persistent_pair.push_back(std::make_pair(facetweight, cofacetweight));
+            std::cout<<"facet weight = "<<facetweight<<"  cofacet weight = "<<cofacetweight<<'\n';
         }
 
     }
@@ -435,6 +448,8 @@ int64_t MaximumMorseMatching::serialFacetMorseMatchAndPersistenceReturnMinCritic
 
     std::vector<size_t> cofacet_stack;
     cofacet_stack.reserve(graph.unodes);
+
+    std::cout<<"last dim matching function is called. cofacets num = "<<graph.unodes<<'\n';
 
     int64_t minindex = -1;
 
@@ -472,6 +487,7 @@ int64_t MaximumMorseMatching::serialFacetMorseMatchAndPersistenceReturnMinCritic
         if (facetweight != cofacetweight)
         {
             dim_persistent_pair.push_back(std::make_pair(facetweight, cofacetweight));
+            std::cout<<"maxdim pair:  facet weight = "<<facetweight<<"  cofacet weight = "<<cofacetweight<<'\n';
         }
 
     }

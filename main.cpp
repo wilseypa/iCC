@@ -7,24 +7,17 @@
 
 int main()
 {   
-    std::string filename = "test_5d_60_double.csv";
-    // std::string filename = "test_2dsquare_double_15.csv";
+    std::string filename = "test_3d_90.csv";
     CritCells<VR, NormalDistMat> cc(filename);
 
-    // cc.runAlphaTest(filename);
-    // auto critical_weight = cc.run_MorseMatchPersistence(3, 0, 17);
+    std::cout<<"started running...\n";
 
-    // auto critical_weight = cc.run_MorseMatch(3, 0, 12, 1);
-
-    // for(auto& dim_cw: critical_weight)
-    // {
-    //     for (auto& w: dim_cw) std::cout<<w<<"  ";
-    //     std::cout<<'\n';./
-    // }
     auto st0 = std::chrono::high_resolution_clock::now();
 
-    cc.runVRMorseTest(5, 5.0, 4);
-    
+    // cc.runVRMorseTest(4, 2.0, 4);
+    // cc.runAlphaMorseTest(1.5, 4);
+    cc.runQuotientAndExpand(3, 1.5, 2.0, 4);
+
     auto st1 = std::chrono::high_resolution_clock::now();
     auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
     std::cout<<"run time = "<<pt_ms.count() <<'\n';

@@ -13,6 +13,8 @@ public:
 
     size_t matchWithPersistence(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
 
+    size_t matchWithPersistenceBackup(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
+
     int64_t matchWithPersistenceAndReturnMinCriticalIndex(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
 
 private:
@@ -31,9 +33,9 @@ private:
 
     size_t serialFacetMorseMatch(BipartiteGraph& graph);
 
-    size_t serialCofacetMorseMatchAndPersistence(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
+    size_t serialCofacetMorseMatchWithPersistence(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
 
-    size_t serialFacetMorseMatchAndPersistence(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
+    size_t serialFacetMorseMatchWithPersistence(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
 
     int64_t serialFacetMorseMatchAndPersistenceReturnMinCriticalIndex(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
 

@@ -27,6 +27,8 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
     size_t originalvtnum = dist_mat_.getVertexNumber();    //number of original vertices
     size_t virtualvtnum = virtual_vertex_indices.size();
 
+    std::cout<<"***********virtual vertex num = "<<virtualvtnum<<"*****************"<<'\n';
+
     SimplexUtility::updateBinomialTable(binomial_table_, originalvtnum, virtualvtnum, maxdim);
 
     auto active_vertices = getActiveVertexIndices(virtual_vertex_indices);
@@ -37,14 +39,14 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
 
     auto active_index_hash_table = getVirtualActiveEdgeIndexHashTable(sorted_virtual_simplex, virtualvtnum);
 
+    auto sorted_virtual_cofacet = getVirtualSortedCofacetList(sorted_virtual_simplex, active_vertices, virtual_distance_hash_table, 1, maxeps, threadnumber);
+
     BipartiteGraph bi_graph(1, 1);
 
     std::vector<std::pair<double, double>> dim_persistent_pair;
 
     for (size_t dim = 2; dim <= maxdim; dim++)
     {
-        auto sorted_virtual_cofacet = getVirtualSortedCofacetList(sorted_virtual_simplex, active_vertices, virtual_distance_hash_table, dim, maxeps, threadnumber);
-
         bi_graph.updateDimension(sorted_virtual_cofacet.size(), sorted_virtual_simplex.size());
 
         buildInterface(bi_graph, sorted_virtual_cofacet, active_index_hash_table, dim);
@@ -53,7 +55,9 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
 
         MaximumMorseMatching morse_matching(threadnumber);
 
-        auto critsimpnum = morse_matching.matchWithPersistence(matching_context, dim_persistent_pair);
+        std::cout<<"in expand phase. dim = "<<dim<<'\n';
+
+        auto critsimpnum = morse_matching.matchWithPersistenceBackup(matching_context, dim_persistent_pair);
         std::cout << "dim = "<<dim<<"  critical simplex number: " << critsimpnum << std::endl;
         dim_persistent_pair.clear();
 
@@ -93,6 +97,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getVirtu
         
         buildInterface(bi_graph, sorted_cofacet, active_index_hash_table, dim);
 
+        std::cout<<"graph is constructed at dim = "<<dim<<"\n";
         MatchingContext matching_context(bi_graph, binomial_table_, sorted_simplex, sorted_cofacet);
 
         MaximumMorseMatching morse_matching(threadnumber);
@@ -101,12 +106,14 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getVirtu
 
         if (dim != maxdim)
         {
-            dim_persistent_pair.clear();
+            std::cout<<"Processing dim "<<dim<<", cofacet number: "<<sorted_cofacet.size()<<", facet number: "<<sorted_simplex.size()<<std::endl;
             auto critsimpnum = morse_matching.matchWithPersistence(matching_context, dim_persistent_pair);
             std::cout << "critical simplex number: " << critsimpnum << std::endl;
+            dim_persistent_pair.clear();
         }
         else
         {
+            std::cout<<"Processing max dim "<<dim<<", cofacet number: "<<sorted_cofacet.size()<<", facet number: "<<sorted_simplex.size()<<std::endl;
             dim_persistent_pair.clear();
             auto critidx = morse_matching.matchWithPersistenceAndReturnMinCriticalIndex(matching_context, dim_persistent_pair);
 
@@ -307,7 +314,7 @@ double QuotientAndExpand<DistMatType>::computeVirtualDistance(const size_t i, co
 
     //passed in as i < j
 
-    if (i < originalvtnum && j < originalvtnum) return dist_mat_.dist_mat[i][j];
+    if (i < originalvtnum && j < originalvtnum) return dist_mat_.getDistance(i, j);
 
     const std::unordered_set<size_t> temp_i_set = (i < originalvtnum) ? std::unordered_set<size_t>{i} : std::unordered_set<size_t>();
     const std::unordered_set<size_t> temp_j_set = (j < originalvtnum) ? std::unordered_set<size_t>{j} : std::unordered_set<size_t>();
@@ -320,15 +327,7 @@ double QuotientAndExpand<DistMatType>::computeVirtualDistance(const size_t i, co
     {
         for (const auto& vj : vtset_j)
         {
-            //no intersection. do not need to check for i == j (mindist == 0)
-            if (vi < vj)
-            {
-                mindist = std::min(mindist, dist_mat_.dist_mat[vi][vj]);
-            }
-            else
-            {
-                mindist = std::min(mindist, dist_mat_.dist_mat[vj][vi]);
-            }
+            mindist = std::min(mindist, dist_mat_.getDistance(vi, vj));
         }
     }
 
@@ -455,7 +454,7 @@ std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getVirtu
                                                                                                     const std::vector<size_t>& active_vertices, const robin_hood::unordered_map<uint64_t, double>& virtual_distance_hash_table,
                                                                                                     const size_t dim, const double maxeps, int threadnum)
 {
-    std::vector< std::vector< std::pair<size_t, double> > > thread_workspace(sorted_virtual_simplex_list.size());
+    std::vector< std::vector< std::pair<int64_t, double> > > thread_workspace(sorted_virtual_simplex_list.size());
 
     const size_t npts = binomial_table_.size() - 1;
     
@@ -475,7 +474,7 @@ std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getVirtu
 
         auto iter = std::find(active_vertices.begin(), active_vertices.end(), simplex_vertices.back());
 
-        if (iter == active_vertices.end()) std::out_of_range("vertex not found in active vertex list");
+        if (iter == active_vertices.end()) throw std::out_of_range("vertex not found in active vertex list");
         
         auto vtpos = std::distance(active_vertices.begin(), iter);
 
