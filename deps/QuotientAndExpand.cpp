@@ -18,6 +18,14 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runQuoti
 
     std::vector<std::unordered_set<size_t>> virtual_vertex_indices = trimVertexSets(untrimed_virtual_vertex_indices);
 
+    std::cout<<"found idx in vt"<<'\n';
+    for (auto& virtual_vt : virtual_vertex_indices)
+    {   
+        std::cout<<"size of the vt = "<<virtual_vt.size()<<"  contents :  ";
+        for (auto& vt : virtual_vt) std::cout<<vt<<"  ";
+        std::cout<<'\n';
+    }
+
     return virtual_vertex_indices;
 }
 
@@ -57,7 +65,9 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
 
         std::cout<<"in expand phase. dim = "<<dim<<"  cofacet num = "<<sorted_virtual_cofacet.size()<<"  facet num = "<<sorted_virtual_simplex.size()<<'\n';
 
-        auto critsimpnum = morse_matching.matchWithPersistenceBackup(matching_context, dim_persistent_pair);
+        // auto critsimpnum = morse_matching.matchWithPersistenceBackup(matching_context, dim_persistent_pair);
+        auto critsimpnum = morse_matching.matchWithPersistence(matching_context, dim_persistent_pair);
+
         std::cout << "dim = "<<dim<<"  critical simplex number: " << critsimpnum << std::endl;
         dim_persistent_pair.clear();
 
@@ -65,7 +75,7 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
         {
             active_index_hash_table = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_virtual_cofacet);
 
-            sorted_virtual_simplex = getVirtualSortedCofacetList(sorted_virtual_simplex, active_vertices, virtual_distance_hash_table, dim, maxeps, threadnumber);
+            sorted_virtual_simplex = getVirtualSortedCofacetList(sorted_virtual_cofacet, active_vertices, virtual_distance_hash_table, dim, maxeps, threadnumber);
             std::swap(sorted_virtual_simplex, sorted_virtual_cofacet);
         }
     }
@@ -107,7 +117,10 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getVirtu
         if (dim != maxdim)
         {
             std::cout<<"Processing dim "<<dim<<", cofacet number: "<<sorted_cofacet.size()<<", facet number: "<<sorted_simplex.size()<<std::endl;
+
             auto critsimpnum = morse_matching.matchWithPersistence(matching_context, dim_persistent_pair);
+            // auto critsimpnum = morse_matching.matchWithPersistenceBackup(matching_context, dim_persistent_pair);
+
             std::cout << "critical simplex number: " << critsimpnum << std::endl;
             dim_persistent_pair.clear();
         }
@@ -115,18 +128,23 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getVirtu
         {
             std::cout<<"Processing max dim "<<dim<<", cofacet number: "<<sorted_cofacet.size()<<", facet number: "<<sorted_simplex.size()<<std::endl;
             dim_persistent_pair.clear();
+
             auto critidx = morse_matching.matchWithPersistenceAndReturnMinCriticalIndex(matching_context, dim_persistent_pair);
+            // auto critidx = morse_matching.matchWithPersistenceBackup(matching_context, dim_persistent_pair);
 
-            auto minfacetindex = critidx - bi_graph.unodes;
+            std::cout<<"min critial idx = "<<critidx<<'\n';
 
-            double minfacetweight = -1.0;
+            double minfacetweight = initeps;
             
-            if (minfacetindex >= 0) minfacetweight = sorted_simplex[minfacetindex].second;
-
-            if (minfacetweight < 0.0) minfacetweight = initeps;
+            if (critidx >= 0) 
+            {
+                auto minfacetindex = static_cast<size_t>(critidx) - bi_graph.unodes;
+                minfacetweight = sorted_simplex[minfacetindex].second;
+                std::cout<<"minfacet weight = "<<minfacetweight<<'\n';
+            }
 
             //get gradient paths
-            auto gradient_paths = extractGradientPahts(matching_context, minfacetweight);
+            auto gradient_paths = extractGradientPaths(matching_context, minfacetweight);
             //get gradient path vertex indices
             virtual_vertex_indices = getGradientPathVertexSets(matching_context, gradient_paths, dim);
         }
@@ -141,12 +159,15 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getVirtu
 
     }
 
+    /**************************************debug*********************************************************/
+    // virtual_vertex_indices.clear();
+
     return virtual_vertex_indices;
 }
 
 
 template <typename DistMatType>
-std::vector< std::vector<size_t> > QuotientAndExpand<DistMatType>::extractGradientPahts(const MatchingContext& matching_context, const double minfacetweight)
+std::vector< std::vector<size_t> > QuotientAndExpand<DistMatType>::extractGradientPaths(const MatchingContext& matching_context, const double minfacetweight)
 {
     auto bi_graph = matching_context.graph;
     auto sorted_simplex = matching_context.sorted_facets;
@@ -187,6 +208,8 @@ std::vector< std::vector<size_t> > QuotientAndExpand<DistMatType>::extractGradie
 
             if (nextcofacetidx < 0 || static_cast<size_t>(nextcofacetidx) >= maxcofacetindex) continue;
 
+            if (is_in_gradient_path[nextcofacetidx]) continue;    //skip already claimed path
+
             is_in_gradient_path[nextcofacetidx] = true;
             union_find.unionSets(cofacetidx, nextcofacetidx);
         }
@@ -208,7 +231,7 @@ std::vector< std::vector<size_t> > QuotientAndExpand<DistMatType>::extractGradie
 
     for (const auto& [root, path] : component_map)    //structured binding requires C++17
     {
-        if (!path.empty())
+        if (path.size() > 2)
         {
             gradient_paths.push_back(std::move(path));
         }
@@ -489,6 +512,7 @@ std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getVirtu
             }
 
             double cofacetweight = std::max(newweight, weight);
+            // std::cout<<"potiential cofacet weight = "<<cofacetweight<<'\n';
 
             if (cofacetweight < maxeps)
             {

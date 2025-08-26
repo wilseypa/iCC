@@ -30,7 +30,7 @@ private:
 
     std::vector<std::unordered_set<size_t>> getVirtualVertexIndices(const size_t maxdim, const double initeps, const int threadnumber);
 
-    std::vector< std::vector<size_t> > extractGradientPahts(const MatchingContext& matching_context, const double minfacetweight);
+    std::vector< std::vector<size_t> > extractGradientPaths(const MatchingContext& matching_context, const double minfacetweight);
 
     std::vector<std::unordered_set<size_t>> getGradientPathVertexSets(const MatchingContext& matching_context, const std::vector< std::vector<size_t> >& gradient_paths, const size_t dim);
 
