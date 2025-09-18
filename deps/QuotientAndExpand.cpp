@@ -47,7 +47,7 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
 
     auto active_index_hash_table = getVirtualActiveEdgeIndexHashTable(sorted_virtual_simplex, virtualvtnum);
 
-    auto sorted_virtual_cofacet = getVirtualSortedCofacetList(sorted_virtual_simplex, active_vertices, virtual_distance_hash_table, 1, maxeps, threadnumber);
+    auto sorted_virtual_cofacet = getVirtualCofacetList(sorted_virtual_simplex, active_vertices, virtual_distance_hash_table, 1, maxeps, threadnumber);
 
     BipartiteGraph bi_graph(1, 1);
 
@@ -75,7 +75,7 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
         {
             active_index_hash_table = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_virtual_cofacet);
 
-            sorted_virtual_simplex = getVirtualSortedCofacetList(sorted_virtual_cofacet, active_vertices, virtual_distance_hash_table, dim, maxeps, threadnumber);
+            sorted_virtual_simplex = getVirtualCofacetList(sorted_virtual_cofacet, active_vertices, virtual_distance_hash_table, dim, maxeps, threadnumber);
             std::swap(sorted_virtual_simplex, sorted_virtual_cofacet);
         }
     }
@@ -107,7 +107,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getVirtu
         
         buildInterface(bi_graph, sorted_cofacet, active_index_hash_table, dim);
 
-        std::cout<<"graph is constructed at dim = "<<dim<<"\n";
+        std::cout<<"in quotient phase, graph is constructed at dim = "<<dim<<"\n";
         MatchingContext matching_context(bi_graph, binomial_table_, sorted_simplex, sorted_cofacet);
 
         MaximumMorseMatching morse_matching(threadnumber);
@@ -129,10 +129,10 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getVirtu
             std::cout<<"Processing max dim "<<dim<<", cofacet number: "<<sorted_cofacet.size()<<", facet number: "<<sorted_simplex.size()<<std::endl;
             dim_persistent_pair.clear();
 
-            auto critidx = morse_matching.matchWithPersistenceAndReturnMinCriticalIndex(matching_context, dim_persistent_pair);
+            auto critidx = morse_matching.matchWithPersistenceReturnMinCriticalIndex(matching_context, dim_persistent_pair);
             // auto critidx = morse_matching.matchWithPersistenceBackup(matching_context, dim_persistent_pair);
 
-            std::cout<<"min critial idx = "<<critidx<<'\n';
+            // std::cout<<"min critial idx = "<<critidx<<'\n';
 
             double minfacetweight = initeps;
             
@@ -140,7 +140,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getVirtu
             {
                 auto minfacetindex = static_cast<size_t>(critidx) - bi_graph.unodes;
                 minfacetweight = sorted_simplex[minfacetindex].second;
-                std::cout<<"minfacet weight = "<<minfacetweight<<'\n';
+                // std::cout<<"minfacet weight = "<<minfacetweight<<'\n';
             }
 
             //get gradient paths
@@ -473,7 +473,7 @@ robin_hood::unordered_map<int64_t, size_t> QuotientAndExpand<DistMatType>::getVi
 }
 
 template<typename DistMatType>
-std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getVirtualSortedCofacetList(const std::vector<std::pair<int64_t, double>>& sorted_virtual_simplex_list,
+std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getVirtualCofacetList(const std::vector<std::pair<int64_t, double>>& sorted_virtual_simplex_list,
                                                                                                     const std::vector<size_t>& active_vertices, const robin_hood::unordered_map<uint64_t, double>& virtual_distance_hash_table,
                                                                                                     const size_t dim, const double maxeps, int threadnum)
 {
@@ -533,6 +533,226 @@ std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getVirtu
 
     return sorted_cofacets;
 }
+
+template<typename DistMatType>
+bool QuotientAndExpand<DistMatType>::findCliqueRecursive(const std::vector< std::vector< std::vector<uint64_t> > >& adj_mask,
+                                                         std::vector<uint64_t>& candidate_mask,
+                                                         std::vector<size_t>& current_clique_local_indices, size_t depth)
+{
+    const size_t K = candidate_mask.size();    //clique size
+
+    if (depth == K) return true;    //Successfully found a clique of the target size
+
+    // heuristic: pick the set with the fewest remaining candidates to branch on next.
+    size_t pivot = std::numeric_limits<size_t>::max();
+    size_t mincandidates = std::numeric_limits<size_t>::max();    //size cap of virtual vertex = 64
+
+    const size_t UNCHOSEN = std::numeric_limits<size_t>::max();
+
+    for (auto i = 0; i < K; ++i)
+    {
+        if (current_clique_local_indices[i] == UNCHOSEN)
+        {
+            int candnum = __builtin_popcountll(candidate_mask[i]);    //popcount returns int
+
+            if (candnum > 0 && candnum < mincandidates)
+            {
+                mincandidates = candnum;
+                pivot = i;
+            }
+        }
+    }
+
+    if (pivot == std::numeric_limits<size_t>::max()) return false;    //no valid candidates left
+
+    uint64_t opts = candidate_mask[pivot];
+    while (opts)
+    {
+        uint64_t bit = opts & (-opts);    //get the lowest bit
+        int localidx = __builtin_ctzll(opts);    //local index of the vertex represented by the lowest bit. <64
+        opts ^= bit;    //pop the lowest bit
+
+        current_clique_local_indices[pivot] = static_cast<size_t>(localidx);
+        std::vector<uint64_t> next_candidate_mask = candidate_mask;
+        bool feasible = true;
+
+        //early prune the candidates
+        for (auto j = 0; j < K; ++j)
+        {
+            if (j == pivot || current_clique_local_indices[j] != UNCHOSEN) continue;
+            
+            next_candidate_mask[j] &= adj_mask[pivot][j][static_cast<size_t>(localidx)];
+            if (next_candidate_mask[j] == 0ULL)
+            {
+                feasible = false;
+                break;
+            }
+            
+        }
+
+        if (feasible && findCliqueRecursive(adj_mask, next_candidate_mask, current_clique_local_indices, depth+1)) return true;
+    }
+
+    //unfeasible with current options, backtrack
+    current_clique_local_indices[pivot] = UNCHOSEN;
+    return false;
+}
+
+template<typename DistMatType>
+double QuotientAndExpand<DistMatType>::getGeometricVirtualSimplexWeight(const std::vector<size_t>& simplex_vertices, 
+                               const std::vector<std::unordered_set<size_t>>& virtual_vertex_indices, size_t dim)
+{
+    const size_t MAXSIZE = 64;
+
+    const uint64_t UNCHOSEN = std::numeric_limits<uint64_t>::max();
+
+    const size_t originalvtnum = dist_mat_.getVertexNumber();
+    const size_t K = dim + 1;
+    if (K < 3) return 0;
+
+    //prepare the indices
+    std::vector< std::vector<size_t> > vvt_idx_vec(K);
+    for(auto i = 0; i < K; ++i)
+    {
+        size_t vtidx = simplex_vertices[i];
+
+        if (vtidx < originalvtnum)    //regular vertex
+        {
+            vvt_idx_vec[i] = {vtidx};  
+        }
+        else    //virtual vertex vvt
+        {
+            const auto& idx_set = virtual_vertex_indices[vtidx - originalvtnum];
+            if (idx_set.size() > MAXSIZE) throw std::runtime_error("Virtual vertex set size exceeds the limit.");
+            vvt_idx_vec[i].assign(idx_set.begin(), idx_set.end());
+        }
+    }
+
+    //collect and sort all the possible edges
+    std::vector<EdgeRecord> sorted_edges;
+    for (auto i = 0; i < K; ++i)
+    {
+        for (auto j = i + 1; j < K; ++j)
+        {
+            for (auto locali = 0; locali < vvt_idx_vec[i].size(); ++locali)
+            {
+                for (auto localj = 0; localj < vvt_idx_vec[j].size(); ++localj)
+                {
+                    double weight = dist_mat_.getDistance(vvt_idx_vec[i][locali], vvt_idx_vec[j][localj]);
+                    sorted_edges.push_back({weight, i, j, locali, localj});    //aggregate/list initialization
+                }
+            }
+        }
+    }
+    std::sort(sorted_edges.begin(), sorted_edges.end());
+
+    if (sorted_edges.empty()) return 0.0;
+
+    //incrementally check for a clique
+    //adj mask size == K * K * VT_SIZE_MAX * uint64_t
+    std::vector< std::vector< std::vector<uint64_t> > > adj_mask(K, std::vector< std::vector<uint64_t> >(K));
+    for (auto i = 0; i < K; ++i)
+    {
+        for (auto j = 0; j < K; ++j)
+        {
+            if (i != j) adj_mask[i][j].resize(vvt_idx_vec[i].size(), 0);
+        }
+    }
+
+    for (const auto& edge: sorted_edges)
+    {
+        //update adj mask with new edge
+        adj_mask[edge.virtualidx0][edge.virtualidx1][edge.localidx0] |= (1ULL << edge.localidx1);
+        adj_mask[edge.virtualidx1][edge.virtualidx0][edge.localidx1] |= (1ULL << edge.localidx0);
+
+        std::vector<uint64_t> candidate_mask(K);
+        for (auto i = 0; i < K; ++i)
+        {
+            candidate_mask[i] = (1ULL << vvt_sizes[i]) - 1;    //init mask, all available
+        }
+        
+        std::vector<size_t> current_clique_local_indices(K, UNCHOSEN);
+
+        if (findCliqueRecursive(adj_mask, candidate_mask, current_clique_local_indices, 0)) return edge.weight;
+    }
+
+    return std::numeric_limits<double>::infinity();    //no clique found
+}
+
+template<typename DistMatType>
+std::vector< std::pair<int64_t, double> > QuotientAndExpand<DistMatType>::getGeometricVirtualCofacetList(const std::vector<std::pair<int64_t, double>>& sorted_virtual_simplex_list,
+                                                                                                         const std::vector<size_t>& active_vertices, 
+                                                                                                         const std::vector<std::unordered_set<size_t>>& virtual_vertex_indices,
+                                                                                                         const size_t dim, const double maxeps, int threadnum)
+{
+    std::vector< std::vector< std::pair<int64_t, double> > > thread_workspace(threadnum);
+
+    const size_t npts = binomial_table_.size() - 1;    //original vertex number + virtual vertex number
+    const size_t originalvtnum = dist_mat_.getVertexNumber();
+    
+    omp_set_num_threads(threadnum);
+
+#pragma omp parallel for schedule(dynamic)
+    for (auto i = 0; i < sorted_virtual_simplex_list.size(); ++i)
+    {
+        int threadid = omp_get_thread_num();
+        auto& thread_cofacets = thread_workspace[threadid];
+
+        const auto& simplex_pair = sorted_virtual_simplex_list[i];
+        const int64_t bindex = simplex_pair.first;
+        const double weight = simplex_pair.second;
+        auto simplex_vertices = SimplexUtility::getSimplexVertices(binomial_table_, bindex, npts, dim);
+
+        const size_t minfacetvt = simplex_vertices.back();
+        auto iter = std::find(active_vertices.begin(), active_vertices.end(), minfacetvt);
+        if (iter == active_vertices.end()) throw std::out_of_range("vertex not found in active vertex list");
+        auto vtpos = std::distance(active_vertices.begin(), iter);
+
+        bool hasvirtual = (simplex_vertices.front() >= originalvtnum) ? true : false;
+
+        for (auto j = 0; j < vtpos; ++j)
+        {
+            const size_t covt = active_vertices[j];
+
+            std::vector<size_t> cofacet_vertices = simplex_vertices;
+            cofacet_vertices.push_back(covt);
+
+            double cofacetweight = 0.0;
+
+            if (hasvirtual)
+            {
+                cofacetweight = getGeometricVirtualSimplexWeight(cofacet_vertices, virtual_vertex_indices, dim + 1);
+            }
+            else
+            {
+                //all real/regular vertices
+                //check distances from the new co-vertex to all vertices of the original facet
+                cofacetweight = weight;
+                for (const auto& vt: simplex_vertices)
+                {
+                    cofacetweight = std::max(cofacetweight, dist_mat_.getDistance(covt, vt));
+                }
+            }
+
+            if (cofacetweight > 0 && cofacetweight < maxeps)
+            {
+                int64_t cofacetbindex = SimplexUtility::getBinomialIndex(binomial_table_, cofacet_vertices, 0);
+                thread_cofacets.emplace_back(cofacetbindex, cofacetweight);
+            }
+        }
+    }
+
+    std::vector<std::pair<int64_t, double>> sorted_cofacets;
+    for (const auto& thread_cofacets : thread_workspace)
+    {
+        sorted_cofacets.insert(sorted_cofacets.end(), thread_cofacets.begin(), thread_cofacets.end());
+    }
+
+    SimplexUtility::sortSimplexByWeightThenIndex(sorted_cofacets);
+
+    return sorted_cofacets;
+}
+
 
 template<typename DistMatType>
 void QuotientAndExpand<DistMatType>::buildInterface(BipartiteGraph& bi_graph, const std::vector<std::pair<int64_t, double>>& sorted_cofacet_list,

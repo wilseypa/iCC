@@ -15,7 +15,9 @@ public:
 
     size_t matchWithPersistenceBackup(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
 
-    int64_t matchWithPersistenceAndReturnMinCriticalIndex(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
+    int64_t matchWithPersistenceReturnMinCriticalIndex(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
+
+    std::vector< std::vector<size_t> > matchWithPersistenceReturnAugPath(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
 
 private:
 
@@ -29,14 +31,15 @@ private:
     
     int64_t serialFacetAugPath(BipartiteGraph& graph, const size_t facetindex, std::vector<size_t>& aug_path, std::vector<size_t>& cofacet_stack);
 
-    size_t serialCofacetMorseMatch(BipartiteGraph& graph);
+    size_t serialCofacetMatch(BipartiteGraph& graph);
 
-    size_t serialFacetMorseMatch(BipartiteGraph& graph);
+    size_t serialFacetMatch(BipartiteGraph& graph);
 
-    size_t serialCofacetMorseMatchWithPersistence(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
+    size_t serialCofacetMatchWithPersistence(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
 
-    size_t serialFacetMorseMatchWithPersistence(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
+    size_t serialFacetMatchWithPersistence(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
 
-    int64_t serialFacetMorseMatchAndPersistenceReturnMinCriticalIndex(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
+    int64_t serialFacetMatchWithPersistenceReturnMinCriticalIndex(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
 
+    std::vector< std::vector<size_t> > serialFacetMatchWithPersistenceReturnAugPath(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
 };
