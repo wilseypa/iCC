@@ -545,10 +545,9 @@ std::vector< std::vector<size_t> > MaximumMorseMatching::serialFacetMatchWithPer
             aug_path_cofacets.push_back(aug_path[j]);
         }
 
-        aug_path_cofacet_vec.push_back(std::move(aug_path_cofacets));
-
         if (facetweight != cofacetweight)
         {
+            aug_path_cofacet_vec.push_back(std::move(aug_path_cofacets));
             dim_persistent_pair.push_back(std::make_pair(facetweight, cofacetweight));
             std::cout<<"maxdim pair:  facet weight = "<<facetweight<<"  cofacet weight = "<<cofacetweight<<'\n';
         }

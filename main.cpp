@@ -7,16 +7,16 @@
 
 int main()
 {   
-    std::string filename = "test_3d_90.csv";
+    std::string filename = "test_3d_60_double.csv";
     CritCells<VR, NormalDistMat> cc(filename);
 
     std::cout<<"started running...\n";
 
     auto st0 = std::chrono::high_resolution_clock::now();
 
-    // cc.runVRMorseTest(3, 2.0, 4);
+    // cc.runVRMorseTest(3, 2.7, 4);
     // cc.runAlphaMorseTest(1.5, 4);
-    cc.runQuotientAndExpand(3, 1.7, 2.0, 4);
+    cc.runQuotientAndExpand(3, 1.8, 2.7, 4);
 
     auto st1 = std::chrono::high_resolution_clock::now();
     auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
