@@ -179,9 +179,9 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getVirtu
 template <typename DistMatType>
 std::vector< std::vector<size_t> > QuotientAndExpand<DistMatType>::extractGradientPaths(const MatchingContext& matching_context, const double minfacetweight)
 {
-    auto bi_graph = matching_context.graph;
-    auto sorted_simplex = matching_context.sorted_facets;
-    auto sorted_cofacet = matching_context.sorted_cofacets;
+    auto& bi_graph = matching_context.graph;
+    auto& sorted_simplex = matching_context.sorted_facets;
+    auto& sorted_cofacet = matching_context.sorted_cofacets;
 
     const size_t u = bi_graph.unodes;
     const size_t v = bi_graph.vnodes;
@@ -271,7 +271,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getGradi
             auto simplex_vertices = SimplexUtility::getSimplexVertices(matching_context.binomial_table, bindex, npt, dim);
             vertex_set.insert(simplex_vertices.begin(), simplex_vertices.end());
         }
-        gradient_path_vertex_sets.push_back(std::move(vertex_set));
+        if (vertex_set.size() < MAX_SIZE_) gradient_path_vertex_sets.push_back(std::move(vertex_set));
     }
 
     return gradient_path_vertex_sets;
@@ -614,7 +614,7 @@ template<typename DistMatType>
 double QuotientAndExpand<DistMatType>::getGeometricVirtualSimplexWeight(const std::vector<size_t>& simplex_vertices, 
                                const std::vector<std::unordered_set<size_t>>& virtual_vertex_indices, size_t dim)
 {
-    const size_t MAXSIZE = 64;
+    // const size_t MAXSIZE = 64;
 
     const size_t UNCHOSEN = std::numeric_limits<size_t>::max();
 
@@ -635,7 +635,7 @@ double QuotientAndExpand<DistMatType>::getGeometricVirtualSimplexWeight(const st
         else    //virtual vertex vvt
         {
             const auto& idx_set = virtual_vertex_indices[vtidx - originalvtnum];
-            if (idx_set.size() > MAXSIZE) throw std::runtime_error("Virtual vertex set size exceeds the limit.");
+            // if (idx_set.size() > MAXSIZE) throw std::runtime_error("Virtual vertex set size exceeds the limit.");
             vvt_idx_vec[i].assign(idx_set.begin(), idx_set.end());
         }
     }

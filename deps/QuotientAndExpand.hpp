@@ -25,6 +25,8 @@ public:
 
 private:
 
+    static constexpr int MAX_SIZE_ = 64;    //virtual vertex size cap
+
     DistMatType& dist_mat_;
     std::vector<std::vector<int64_t>>& binomial_table_;
 
