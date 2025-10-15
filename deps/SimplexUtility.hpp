@@ -48,11 +48,7 @@ namespace SimplexUtility
 
     inline int64_t getEdgeBinomialIndex(const std::vector<std::vector<int64_t>> &binomial_table, size_t j, size_t i)
     {
-        // assume j > i
-        if (j < i)
-            std::swap(i, j);
-
-        return (binomial_table[j][2] + i);
+        return (i <= j) ? (binomial_table[i][2] + j) : (binomial_table[j][2] + i);
     }
 
     inline size_t getSimplexMaxVertex(const std::vector<std::vector<int64_t>> &binomial_table, const int64_t bindex, size_t vtnum, const size_t dim)

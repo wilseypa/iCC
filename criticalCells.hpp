@@ -87,7 +87,7 @@ public:
     {
         CritCells<ComplexType, DistMatType> &parent_cc;
 
-        explicit LegacyRunner(CritCells<ComplexType, DistMatType> &critical_cells) : parent_cc(critical_cells) {}
+        LegacyRunner(CritCells<ComplexType, DistMatType> &critical_cells) : parent_cc(critical_cells) {}
 
         void run_Compute(int maxDim, int batchsize = 0);
 

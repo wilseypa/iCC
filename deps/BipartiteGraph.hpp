@@ -2,10 +2,6 @@
 
 #include <vector>
 
-struct ImplicitConstructionTag
-{
-}; // tag for implicit bipartite graph
-
 /**
  * @struct BipartiteGraph
  * @brief A simple data structure to represent the bipartite graph interface.
@@ -23,15 +19,10 @@ struct BipartiteGraph
   // Stores the matching result. match_list[i] = j means i is matched with j.
   std::vector<int64_t> match_list;
 
-  explicit BipartiteGraph(size_t u, size_t v)
+  BipartiteGraph(size_t u, size_t v)
       : unodes(u),
         vnodes(v),
         adj_list(u + v),
-        match_list(u + v, -1) {}
-
-  BipartiteGraph(size_t u, size_t v, ImplicitConstructionTag /* tag */)
-      : unodes(u),
-        vnodes(v),
         match_list(u + v, -1) {}
 
   void updateDimension(size_t cofacetnum, size_t facetnum)

@@ -6,7 +6,7 @@
 class ApproximateMorseMatching : public MatchingStrategy
 {
 public:
-    explicit ApproximateMorseMatching(int threadnum) : threadnum_(threadnum) {};
+    ApproximateMorseMatching(int threadnum) : threadnum_(threadnum) {};
     size_t match(MatchingContext &matching_context) override;
 
 private:

@@ -6,7 +6,7 @@
 class MaximumMorseMatching : public MatchingStrategy
 {
 public:
-    explicit MaximumMorseMatching(int threadnum) : threadnum_(threadnum) {};
+    MaximumMorseMatching(int threadnum) : threadnum_(threadnum) {};
 
     size_t match(MatchingContext &matching_context) override;
 
