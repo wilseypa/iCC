@@ -13,7 +13,7 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSorte
 
     std::vector<std::pair<int64_t, double>> sorted_edge;
 
-    size_t npt = dist_mat_.dist_mat.size();
+    size_t npt = dist_mat_.getVertexNumber();
 
     for (size_t i = 0; i < npt - 1; i++)
     {
