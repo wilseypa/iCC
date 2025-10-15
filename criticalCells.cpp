@@ -17,7 +17,6 @@
 #include <type_traits>
 #include <stdexcept>
 
-
 #ifdef MPI_ENABLED
 #include "mpi.h"
 #endif
@@ -34,16 +33,18 @@ template class CritCells<Alpha, NormalDistMat>;
 // Delegating ctor: read once, then forward to the by-value ctor
 template <typename ComplexType, typename DistMatType>
 CritCells<ComplexType, DistMatType>::CritCells(const std::string &filename) : CritCells(readInput::readCSV(filename))
-{}
+{
+}
 
 // primaary ctor
 template <typename ComplexType, typename DistMatType>
 CritCells<ComplexType, DistMatType>::CritCells(std::vector<std::vector<double>> point_coordinates) : DistMatType(point_coordinates), point_cloud_(std::move(point_coordinates))
 {
-    if (point_cloud_.empty()) throw std::invalid_argument("Input point cloud is empty.");
+    if (point_cloud_.empty())
+        throw std::invalid_argument("Input point cloud is empty.");
 }
 
-#ifdef BUILD_LEGACY_ICC    //*******************need to use parent_cc to access the CritCells class members***********************//
+#ifdef BUILD_LEGACY_ICC //*******************need to use parent_cc to access the CritCells class members***********************//
 
 std::ostream &operator<<(std::ostream &os, const std::map<double, std::vector<std::vector<int>>> &bins)
 {
@@ -108,7 +109,6 @@ std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatTy
             binned_edges[this->distance(i, j)].push_back({i, j});
     return binned_edges;
 }
-
 
 template <typename ComplexType, typename DistMatType>
 void CritCells<ComplexType, DistMatType>::ICCLegacy::binByWeights(std::map<double, std::vector<std::vector<int>>> &weighted_simplicies, std::map<double, std::vector<std::vector<int>>> &bins) // Merged higher dim feature to bins
@@ -179,10 +179,9 @@ std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::ICCLegacy::di
 
 #endif
 
-
 template <typename ComplexType, typename DistMatType>
-void CritCells<ComplexType, DistMatType>::buildInterface(BipartiteGraph& bi_graph, const std::vector<std::pair<int64_t, double>>& cofacet_list, 
-                                                        const robin_hood::unordered_map<int64_t, size_t>& active_facet_index, const std::vector<std::vector<int64_t>>& binomial_table, const size_t dim)
+void CritCells<ComplexType, DistMatType>::buildInterface(BipartiteGraph &bi_graph, const std::vector<std::pair<int64_t, double>> &cofacet_list,
+                                                         const robin_hood::unordered_map<int64_t, size_t> &active_facet_index, const std::vector<std::vector<int64_t>> &binomial_table, const size_t dim)
 {
     // size_t npt = this->distMatrix.size();
     auto u = bi_graph.unodes;
@@ -195,12 +194,12 @@ void CritCells<ComplexType, DistMatType>::buildInterface(BipartiteGraph& bi_grap
         int64_t bindex = cofacet_list[i].first;
         std::vector<int64_t> facet_bindex = SimplexUtility::getFacetBinomialIndex(binomial_table, bindex, dim);
 
-        for (auto fbidx: facet_bindex)
+        for (auto fbidx : facet_bindex)
         {
             auto mapit = active_facet_index.find(fbidx);
             if (mapit != active_facet_index.end())
             {
-                size_t fidx = (*mapit).second;    //facet idx in facet bindex_weight_pair list
+                size_t fidx = (*mapit).second; // facet idx in facet bindex_weight_pair list
                 bi_graph.adj_list[i].push_back(u + fidx);
                 bi_graph.adj_list[u + fidx].push_back(i);
             }
@@ -211,18 +210,16 @@ void CritCells<ComplexType, DistMatType>::buildInterface(BipartiteGraph& bi_grap
     return;
 }
 
-
-
 template <typename ComplexType, typename DistMatType>
 void CritCells<ComplexType, DistMatType>::runVRMorseTest(size_t maxdim, double maxeps, int threadnumber)
 {
     size_t n = this->getVertexNumber();
 
-    std::cout<<"point number: "<<n<<std::endl;
+    std::cout << "point number: " << n << std::endl;
 
     auto binom_table = SimplexUtility::getBinomialTable(n, maxdim);
 
-    SimplexEnumerator<DistMatType> simplex_enumerator(static_cast<const DistMatType&>(*this), binom_table);
+    SimplexEnumerator<DistMatType> simplex_enumerator(static_cast<const DistMatType &>(*this), binom_table);
 
     auto sorted_simplex = simplex_enumerator.getSortedVREdges(maxeps);
 
@@ -230,20 +227,20 @@ void CritCells<ComplexType, DistMatType>::runVRMorseTest(size_t maxdim, double m
 
     auto sorted_cofacet = simplex_enumerator.getSortedVRCofacets(sorted_simplex, 1, maxeps, threadnumber);
 
-    std::vector< std::pair<double, double> >  dim_persistent_pairs;
-    
+    std::vector<std::pair<double, double>> dim_persistent_pairs;
+
     BipartiteGraph bi_graph(1, 1);
 
     for (size_t dim = 2; dim <= maxdim; dim++)
     {
         bi_graph.updateDimension(sorted_cofacet.size(), sorted_simplex.size());
         buildInterface(bi_graph, sorted_cofacet, active_index_hash_table, binom_table, dim);
-        
+
         MatchingContext matching_context(bi_graph, binom_table, sorted_simplex, sorted_cofacet);
-        
+
         MaximumMorseMatching morse_matching(threadnumber);
 
-        std::cout<<"Processing dim "<<dim<<", cofacet number: "<<sorted_cofacet.size()<<", facet number: "<<sorted_simplex.size()<<std::endl;
+        std::cout << "Processing dim " << dim << ", cofacet number: " << sorted_cofacet.size() << ", facet number: " << sorted_simplex.size() << std::endl;
 
         // auto critsimpnum = morse_matching.matchWithPersistenceBackup(matching_context, dim_persistent_pairs);
         auto critsimpnum = morse_matching.matchWithPersistence(matching_context, dim_persistent_pairs);
@@ -252,10 +249,10 @@ void CritCells<ComplexType, DistMatType>::runVRMorseTest(size_t maxdim, double m
 
         dim_persistent_pairs.clear();
 
-        //print DAG edges at the top dim
-        // if (dim == maxdim)
-        // {
-        //     std::ofstream out("dag_edges.csv");
+        // print DAG edges at the top dim
+        //  if (dim == maxdim)
+        //  {
+        //      std::ofstream out("dag_edges.csv");
 
         //     std::cout<<"DAG edges: \n";
         //     for (size_t i = bi_graph.u; i < (bi_graph.u + bi_graph.v); i++)
@@ -276,7 +273,6 @@ void CritCells<ComplexType, DistMatType>::runVRMorseTest(size_t maxdim, double m
         //     }
         // }
 
-
         if (dim != maxdim)
         {
             active_index_hash_table = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_cofacet);
@@ -285,13 +281,10 @@ void CritCells<ComplexType, DistMatType>::runVRMorseTest(size_t maxdim, double m
 
             std::swap(sorted_simplex, sorted_cofacet);
         }
-
     }
 
     return;
 }
-
-
 
 template <typename ComplexType, typename DistMatType>
 void CritCells<ComplexType, DistMatType>::runAlphaMorseTest(double maxeps, int threadnumber)
@@ -318,25 +311,25 @@ void CritCells<ComplexType, DistMatType>::runAlphaMorseTest(double maxeps, int t
 
     dt_points.clear();
 
-    //morse part
+    // morse part
     size_t n = point_cloud_.size();
     auto binom_table = SimplexUtility::getBinomialTable(n, maxdim);
 
-    SimplexEnumerator<DistMatType> simplex_enumerator(static_cast<const DistMatType&>(*this), binom_table);
+    SimplexEnumerator<DistMatType> simplex_enumerator(static_cast<const DistMatType &>(*this), binom_table);
 
-    //get edges
+    // get edges
     auto sorted_simplex = simplex_enumerator.getSortedAlphaCells(binom_table, vertex_handle_index, delaunay_d, 1, maxeps);
-    //remove mst edges
+    // remove mst edges
     auto active_facet_hash_table = SimplexUtility::getActiveEdgeIndexHashTable(binom_table, sorted_simplex, n);
 
-    //get triangles
+    // get triangles
     auto sorted_cofacet = simplex_enumerator.getSortedAlphaCells(binom_table, vertex_handle_index, delaunay_d, 2, maxeps);
 
-    std::vector< std::vector< std::pair<double, double> > > persistent_pairs;
-    persistent_pairs.push_back(std::vector< std::pair<double, double> >{std::make_pair(0.0, -1.0)});
+    std::vector<std::vector<std::pair<double, double>>> persistent_pairs;
+    persistent_pairs.push_back(std::vector<std::pair<double, double>>{std::make_pair(0.0, -1.0)});
 
     BipartiteGraph bi_graph(1, 1);
-    
+
     for (size_t dim = 2; dim <= maxdim; dim++)
     {
         bi_graph.updateDimension(sorted_cofacet.size(), sorted_simplex.size());
@@ -359,7 +352,6 @@ void CritCells<ComplexType, DistMatType>::runAlphaMorseTest(double maxeps, int t
     return;
 }
 
-
 template <typename ComplexType, typename DistMatType>
 void CritCells<ComplexType, DistMatType>::runQuotientAndExpand(size_t maxdim, double initeps, double maxeps, int threadnumber)
 {
@@ -371,11 +363,11 @@ void CritCells<ComplexType, DistMatType>::runQuotientAndExpand(size_t maxdim, do
     size_t npts = this->getVertexNumber();
     auto binomial_table = SimplexUtility::getBinomialTable(npts, maxdim);
 
-    QuotientAndExpand<DistMatType> quotient_and_expand(static_cast<DistMatType&>(*this), binomial_table, npts);
+    QuotientAndExpand<DistMatType> quotient_and_expand(static_cast<DistMatType &>(*this), binomial_table, npts);
 
     auto virtual_vertex_indices = quotient_and_expand.runQuotient(maxdim, initeps, threadnumber);
 
-    quotient_and_expand.runExpand(virtual_vertex_indices, maxdim,  maxeps, threadnumber);
+    quotient_and_expand.runExpand(virtual_vertex_indices, maxdim, maxeps, threadnumber);
 
     return;
 }

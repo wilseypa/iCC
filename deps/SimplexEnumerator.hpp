@@ -18,22 +18,22 @@ template <typename DistMatType>
 class SimplexEnumerator
 {
 public:
-    SimplexEnumerator(const DistMatType& dist_mat, const std::vector<std::vector<int64_t>>& binomial_table)
+    SimplexEnumerator(const DistMatType &dist_mat, const std::vector<std::vector<int64_t>> &binomial_table)
         : dist_mat_(dist_mat), binomial_table_(binomial_table) {}
 
     std::vector<std::pair<int64_t, double>> getSortedVREdges(const double maxeps);
 
-    std::vector<std::pair<int64_t, double>> getSortedVRCofacets(const std::vector<std::pair<int64_t, double>>& sorted_simplex, const size_t dim, const double maxeps, const int threadnum);
+    std::vector<std::pair<int64_t, double>> getSortedVRCofacets(const std::vector<std::pair<int64_t, double>> &sorted_simplex, const size_t dim, const double maxeps, const int threadnum);
 
-    std::vector<std::pair<int64_t, double>> getSortedAlphaCells(const std::vector<std::vector<int64_t>>& binomial_table, 
-                                                                std::unordered_map<CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>::Vertex_handle, size_t>& vertex_handle_index, 
-                                                                CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>& delaunay_d, const size_t dim, double maxeps);
+    std::vector<std::pair<int64_t, double>> getSortedAlphaCells(const std::vector<std::vector<int64_t>> &binomial_table,
+                                                                std::unordered_map<CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>::Vertex_handle, size_t> &vertex_handle_index,
+                                                                CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>> &delaunay_d, const size_t dim, double maxeps);
 
 private:
-    const DistMatType& dist_mat_;
-    const std::vector<std::vector<int64_t>>& binomial_table_;
+    const DistMatType &dist_mat_;
+    const std::vector<std::vector<int64_t>> &binomial_table_;
 
-    double getAlphaSimplexWeight(const std::vector<size_t>& alpha_simplex);
+    double getAlphaSimplexWeight(const std::vector<size_t> &alpha_simplex);
 };
 
 // Explicit template instantiations

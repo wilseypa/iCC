@@ -9,21 +9,19 @@
 
 struct MatchingContext
 {
-    BipartiteGraph& graph;
+  BipartiteGraph &graph;
 
-    // References to data needed by the algorithms
-    std::vector<std::vector<int64_t>>& binomial_table;
-    std::vector<std::pair<int64_t, double>>& sorted_facets;
-    std::vector<std::pair<int64_t, double>>& sorted_cofacets;
+  // References to data needed by the algorithms
+  std::vector<std::vector<int64_t>> &binomial_table;
+  std::vector<std::pair<int64_t, double>> &sorted_facets;
+  std::vector<std::pair<int64_t, double>> &sorted_cofacets;
 
-
-    MatchingContext (BipartiteGraph& bi_graph,
-                     std::vector<std::vector<int64_t>>& binomial_table,
-                     std::vector<std::pair<int64_t, double>>& sorted_facets,
-                     std::vector<std::pair<int64_t, double>>& sorted_cofacets)
-        : graph(bi_graph),
-          binomial_table(binomial_table),
-          sorted_facets(sorted_facets),
-          sorted_cofacets(sorted_cofacets) {}
-
+  MatchingContext(BipartiteGraph &bi_graph,
+                  std::vector<std::vector<int64_t>> &binomial_table,
+                  std::vector<std::pair<int64_t, double>> &sorted_facets,
+                  std::vector<std::pair<int64_t, double>> &sorted_cofacets)
+      : graph(bi_graph),
+        binomial_table(binomial_table),
+        sorted_facets(sorted_facets),
+        sorted_cofacets(sorted_cofacets) {}
 };
