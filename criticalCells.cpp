@@ -193,7 +193,7 @@ void CritCells<ComplexType, DistMatType>::buildInterface(BipartiteGraph& bi_grap
     for (size_t i = 0; i < cofacet_list.size(); i++)
     {
         int64_t bindex = cofacet_list[i].first;
-        std::vector<int64_t> facet_bindex = SimplexUtility::getFacetBinomialIndex(binomial_table, bindex, dim);
+        std::vector<int64_t> facet_bindex = SimplexUtility::getFacetBinomialIndices(binomial_table, bindex, dim);
 
         for (auto fbidx: facet_bindex)
         {
@@ -291,6 +291,65 @@ void CritCells<ComplexType, DistMatType>::runVRMorseTest(size_t maxdim, double m
     return;
 }
 
+template <typename ComplexType, typename DistMatType>
+void CritCells<ComplexType, DistMatType>::runVRMorseMatching(size_t maxdim, double maxeps, int threadnumber)
+{
+    size_t n = this->getVertexNumber();    //number of points
+
+    std::cout << "total point number: " << n << std::endl;
+
+    auto binom_table = SimplexUtility::getBinomialTable(n, maxdim);
+
+    SimplexEnumerator<DistMatType> simplex_enumerator(static_cast<const DistMatType&>(*this), binom_table);
+
+    //get 1-simplices
+    auto sorted_simplex = simplex_enumerator.getSortedVREdges(maxeps);
+    //get the hash table for active 1-simplices (facets for dim 2)
+    auto facet_hash = SimplexUtility::getActiveEdgeIndexHashTable(binom_table, sorted_simplex, n);
+
+    //get 2-simplices
+    auto sorted_cofacet = simplex_enumerator.getSortedVRCofacets(sorted_simplex, 1, maxeps, threadnumber);
+
+    std::vector<std::pair<double, double>> dim_persistent_pairs;
+    
+    //use the implicit graph constructor
+    BipartiteGraph bi_graph(1, 1, ImplicitConstructionTag{});
+
+    //matching object
+    MaximumMorseMatching morse_matching;
+
+    for (size_t dim = 2; dim <= maxdim; ++dim)
+    {
+        //create hash table for current cofacets (dim-simplices)
+        auto cofacet_hash = SimplexUtility::getSimplexIndexHashTable(sorted_cofacet);
+
+        //set graph size
+        bi_graph.updateDimensionImplicit(sorted_cofacet.size(), sorted_simplex.size());
+
+        MatchingContext matching_context(bi_graph, binom_table, sorted_simplex, sorted_cofacet, facet_hash, cofacet_hash, n, dim);
+
+        std::cout << "Processing dim " << dim << ", cofacet number: " << sorted_cofacet.size() << ", facet number: " << sorted_simplex.size() << std::endl;
+
+        //implicit morse matching
+        auto critsimpnum = morse_matching.implicitMatch(matching_context, dim_persistent_pairs);
+
+        std::cout << "critical simplex number: " << critsimpnum << std::endl;
+
+        dim_persistent_pairs.clear();
+
+        if (dim != maxdim)
+        {
+            //the facets for the next dimension are the unmatched cofacets from the current dimension
+            facet_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_cofacet);
+
+            //get cofacets for the next dimension, overwrite the current facets
+            sorted_simplex = simplex_enumerator.getSortedVRCofacets(sorted_cofacet, dim, maxeps, threadnumber);
+            std::swap(sorted_simplex, sorted_cofacet);
+        }
+    }
+
+    return;
+}
 
 
 template <typename ComplexType, typename DistMatType>

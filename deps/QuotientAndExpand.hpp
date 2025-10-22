@@ -75,8 +75,8 @@ private:
     struct EdgeRecord    // edge = (idx0, idx1). edge record for clique finding
     {
         double weight;
-        size_t virtualidx0, virtualidx1;
-        size_t localidx0, localidx1;
+        uint8_t virtualidx0, virtualidx1;
+        uint8_t localidx0, localidx1;
 
         bool operator < (const EdgeRecord& edge) const
         {

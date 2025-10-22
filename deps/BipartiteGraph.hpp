@@ -41,4 +41,11 @@ struct BipartiteGraph
       match_list.assign(unodes + vnodes, -1);
     }
 
+    void updateDimensionImplicit(size_t cofacetnum, size_t facetnum)
+    {
+      unodes = cofacetnum;
+      vnodes = facetnum;
+      match_list.assign(unodes + vnodes, -1);
+    }
+
 };

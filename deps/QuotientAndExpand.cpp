@@ -288,8 +288,17 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::trimVert
 
     std::unordered_set<size_t> claimed_vertices;
 
+    const size_t MAX_VERTICES_NUM = 63;    //max number of virtual vertex. the max value of uint8_t used in EdgeRecord
+
     for (auto& vertex_set : gradient_path_vertex_sets)
     {
+        // If we have already collected the maximum number of sets, stop.
+        if (trimmed_vertex_sets.size() >= MAX_VERTICES_NUM) 
+        {
+            std::cout << "Warning: Reached maximum number of virtual vertices (" << MAX_VERTICES_NUM << "). Discarding remaining candidates." << std::endl;
+            break;
+        }
+
         bool overlap = false;
 
         for (const auto& vertex : vertex_set)
@@ -642,13 +651,13 @@ double QuotientAndExpand<DistMatType>::getGeometricVirtualSimplexWeight(const st
 
     //collect and sort all the possible edges
     std::vector<EdgeRecord> sorted_edges;
-    for (size_t i = 0; i < K; ++i)
+    for (uint8_t i = 0; i < K; ++i)
     {
-        for (size_t j = i + 1; j < K; ++j)
+        for (uint8_t j = i + 1; j < K; ++j)
         {
-            for (size_t locali = 0; locali < vvt_idx_vec[i].size(); ++locali)
+            for (uint8_t locali = 0; locali < vvt_idx_vec[i].size(); ++locali)
             {
-                for (size_t localj = 0; localj < vvt_idx_vec[j].size(); ++localj)
+                for (uint8_t localj = 0; localj < vvt_idx_vec[j].size(); ++localj)
                 {
                     double weight = dist_mat_.getDistance(vvt_idx_vec[i][locali], vvt_idx_vec[j][localj]);
                     sorted_edges.push_back({weight, i, j, locali, localj});    //aggregate/list initialization
@@ -801,7 +810,7 @@ void QuotientAndExpand<DistMatType>::buildInterface(BipartiteGraph& bi_graph, co
     for (size_t i = 0; i < sorted_cofacet_list.size(); i++)
     {
         int64_t bindex = sorted_cofacet_list[i].first;
-        std::vector<int64_t> facet_bindex_list = SimplexUtility::getFacetBinomialIndex(binomial_table_, bindex, dim);
+        std::vector<int64_t> facet_bindex_list = SimplexUtility::getFacetBinomialIndices(binomial_table_, bindex, dim);
 
         for (auto fbidx: facet_bindex_list)
         {

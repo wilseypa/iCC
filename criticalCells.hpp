@@ -110,6 +110,7 @@ public:
     
     void runVRMorseTest(size_t maxdim, double maxeps, int threadnumber);
 
+    void runVRMorseMatching(size_t maxdim, double maxeps, int threadnumber);
     
     void runAlphaMorseTest(double maxeps, int threadnumber);
 
