@@ -10,9 +10,9 @@
 #include <set>
 #include <unordered_set>
 
-#include<cstdint>
+#include <cstdint>
 
-#include"robin_hood.h"
+#include "robin_hood.h"
 
 #include <CGAL/config.h>
 #include <CGAL/Epick_d.h>
@@ -21,13 +21,11 @@
 #include "BipartiteGraph.hpp"
 #include "DistanceMatrix.hpp"
 
-
 /****************************************************** */
-//temp dummy struct for alpha complex
+// temp dummy struct for alpha complex
 struct Alpha
-{};
-
-
+{
+};
 
 struct VR // Creates a constructor for combinatorial simplexes n_pts = n, dim = r
 {
@@ -76,9 +74,9 @@ template <typename ComplexType, typename DistMatType>
 class CritCells : public DistMatType
 {
 public:
-    CritCells(const std::string &filename);               // FileName to read InputData from
+    CritCells(const std::string &filename); // FileName to read InputData from
 
-    CritCells(std::vector<std::vector<double>> point_coordinates);    //primary ctor
+    CritCells(std::vector<std::vector<double>> point_coordinates); // primary ctor
 
     // CritCells(Eigen::SparseMatrix<double> &distMat);
 
@@ -87,9 +85,9 @@ public:
 
     struct ICCLegacy
     {
-        CritCells<ComplexType, DistMatType>& parent_cc;
+        CritCells<ComplexType, DistMatType> &parent_cc;
 
-        explicit LegacyRunner(CritCells<ComplexType, DistMatType>& critical_cells) : parent_cc(critical_cells) {}
+        LegacyRunner(CritCells<ComplexType, DistMatType> &critical_cells) : parent_cc(critical_cells) {}
 
         void run_Compute(int maxDim, int batchsize = 0);
 
@@ -101,27 +99,23 @@ public:
     };
 
     ICCLegacy icc_legacy_runner{*this};
-    
+
 #endif
     /*legacy end*/
 
-    void buildInterface(BipartiteGraph& bi_graph, const std::vector<std::pair<int64_t, double>>& cofacet_list, 
-                        const robin_hood::unordered_map<int64_t, size_t>& active_facet_index, const std::vector<std::vector<int64_t>>& binomial_table, const size_t dim);
-    
+    void buildInterface(BipartiteGraph &bi_graph, const std::vector<std::pair<int64_t, double>> &cofacet_list,
+                        const robin_hood::unordered_map<int64_t, size_t> &active_facet_index, const std::vector<std::vector<int64_t>> &binomial_table, const size_t dim);
+
     void runVRMorseTest(size_t maxdim, double maxeps, int threadnumber);
 
     void runVRMorseMatching(size_t maxdim, double maxeps, int threadnumber);
     
     void runAlphaMorseTest(double maxeps, int threadnumber);
 
-    
     void runQuotientAndExpand(size_t maxdim, double initeps, double maxeps, int threadnumber);
 
 private:
-    
-
-    std::vector< std::vector<double> > point_cloud_;
-
+    std::vector<std::vector<double>> point_cloud_;
 };
 
 extern template class CritCells<VR, NormalDistMat>;

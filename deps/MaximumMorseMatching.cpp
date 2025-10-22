@@ -21,27 +21,22 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context, st
     auto npts = matching_context.npts;    //number of points: original + virtual
 
     //init workspace
-    // cofacet_indices_.clear();
     cofacet_indices_.reserve(dim < 5 ? 32 : 64);
 
-    // facet_indices_.clear();
     facet_indices_.reserve(dim + 1);
 
-    // aug_path_.clear();
     aug_path_.reserve(u + v);
 
-    // cofacet_stack_.clear();
     cofacet_stack_.reserve(u);
 
-    // vertex_workspace_.clear();
     vertex_workspace_.reserve(dim + 1);
 
-    // pq_workspace.clear();
     pq_workspace_.reserve(u);
 
+    //counters
     size_t count = 0;    //critial/unmatched count
 
-    int k = 0;
+    size_t ct = 0;    //apparent pair count
 
     //process facet in reverse order
     for (int64_t i = v - 1; i >= 0; --i)
@@ -55,18 +50,6 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context, st
         if (fit == facet_hash.end()) continue;
 
         SimplexUtility::getCofacetListIndicesInPlace(binom_table, cofacet_hash, cofacet_indices_, vertex_workspace_, facetbindex, npts, dim-1);
-
-        // if (k < 10)
-        // {
-        //     k += 1;
-        //     std::cout<<"facet list idx = "<<i<<"   "<<"cofacet list size = "<<cofacet_indices_.size()<<'\n';
-        //     size_t mincofacetidx = *std::min_element(cofacet_indices_.begin(), cofacet_indices_.end());
-        //     SimplexUtility::getFacetListIndicesInPlace(binom_table, facet_hash, facet_indices_, vertex_workspace_, cofacet_list[mincofacetidx].first, npts, dim);
-        //     std::cout<<"mincofacet's facets idx =  ";
-        //     for (auto t : facet_indices_) std::cout<<t + u<<"  ";
-        //     std::cout<<'\n';
-
-        // }
 
         if (cofacet_indices_.empty())
         {
@@ -97,7 +80,7 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context, st
                         bi_graph.match_list[facetidx] = mincofacetidx;
                         bi_graph.match_list[mincofacetidx] = facetidx;
 
-                        k+=1;
+                        ct+=1;
 
                         continue;
                     }
@@ -137,7 +120,7 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context, st
         }
     }
 
-    std::cout<<"implicit apparent pair count = "<<k<<'\n';
+    std::cout<<"implicit apparent pair count = "<<ct<<'\n';
 
     return count;
 

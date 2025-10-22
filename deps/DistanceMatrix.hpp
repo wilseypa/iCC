@@ -2,29 +2,25 @@
 
 #include <vector>
 
-// #include <Eigen/Sparse>
-
+#include <Eigen/Sparse>
 
 struct NormalDistMat
 {
-    std::vector<std::vector<double>> dist_mat;
+public:
+    NormalDistMat(const std::vector<std::vector<double>> &point_cloud);
 
     inline std::size_t getVertexNumber() const { return dist_mat.size(); }
-
-    inline double getDistance(const size_t i, const size_t j) const 
+    inline double getDistance(const size_t i, const size_t j) const
     {
-        if (i < j) return this->dist_mat[i][j];
-        
-        return this->dist_mat[j][i];
+        return (i < j) ? this->dist_mat[i][j] : this->dist_mat[j][i];
     };
 
-    NormalDistMat() = default;
-
-    explicit NormalDistMat(const std::vector<std::vector<double>>& point_cloud, int threadnum = 4);
+private:
+    std::vector<std::vector<double>> dist_mat;
 };
 
-// struct SparseDistMat
-// {
-//     Eigen::SparseMatrix<double> distMatrix;
-//     inline double distance(size_t i, size_t j) const { return distMatrix.coeff(i, j); };
-// };
+struct SparseDistMat
+{
+    Eigen::SparseMatrix<double> distMatrix;
+    inline double distance(size_t i, size_t j) const { return distMatrix.coeff(i, j); };
+};

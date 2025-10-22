@@ -2,50 +2,36 @@
 #include <algorithm>
 #include <execution>
 #include <stdexcept>
-
 #include <omp.h>
-
-
 #include "DistanceMatrix.hpp"
 
-namespace    //static namespace
+inline double vectors_distance(const std::vector<double> &a, const std::vector<double> &b)
 {
-    inline double euclideanDistance(const std::vector<double>& vec_0, const std::vector<double>& vec_1)
+#ifdef _GLIBCXX_DEBUG
+    if (a.size() != b.size())
     {
-        if (vec_0.size() != vec_1.size()) 
-        {
-            throw std::invalid_argument("Vectors must be of the same length for distance calculation.");
-        }
-
-        double sum = 0.0;
-
-        for (size_t i = 0; i < vec_0.size(); i++)
-        {
-            double diff = vec_0[i] - vec_1[i];
-            sum += diff * diff;
-        }
-
-        return std::sqrt(sum);
+        throw std::invalid_argument("Vectors must be of the same length");
     }
+    if (a.empty())
+    {
+        throw std::invalid_argument("Vectors must not be empty");
+    }
+#endif
+    return sqrt(std::transform_reduce(std::execution::par, a.cbegin(), a.cend(), b.cbegin(), 0.0, std::plus<>(),
+                                      [](double e1, double e2)
+                                      { return (e1 - e2) * (e1 - e2); }));
 }
 
-
-NormalDistMat::NormalDistMat(const std::vector<std::vector<double>>& point_cloud, int threadnum)
+NormalDistMat::NormalDistMat(const std::vector<std::vector<double>> &point_cloud)
 {
-    const size_t n = point_cloud.size();
-    if (n == 0) return;
-
-    dist_mat.resize(n, std::vector<double>(n, 0.0));
-
-    omp_set_num_threads(threadnum);
-#pragma omp parallel for schedule(static)
-    for (size_t i = 0; i < n; i++)
+    this->dist_mat.resize(point_cloud.size(), std::vector<double>(point_cloud.size(), 0.0));
+#pragma omp parallel for
+    for (size_t i = 0; i < point_cloud.size() - 1; i++)
     {
-        for (size_t j = i + 1; j < n; j++)
+        for (size_t j = i + 1; j < point_cloud.size(); j++)
         {
-            const double dist = euclideanDistance(point_cloud[i], point_cloud[j]);
-            dist_mat[i][j] = dist;
-            // distMatrix[j][i] = dist; // Symmetric matrix
+            this->dist_mat[i][j] = vectors_distance(point_cloud[i], point_cloud[j]);
+            // distMatrix[j][i] = dist_mat[i][j] ; // Symmetric matrix
         }
     }
 }

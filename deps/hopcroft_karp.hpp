@@ -16,6 +16,7 @@ private:
 
     bool bfs();
     bool dfs(int u);
+
 public:
     HKGraph();
     HKGraph(int m, int n);

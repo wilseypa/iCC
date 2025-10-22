@@ -18,7 +18,7 @@ target_include_directories(readInput PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 # Library for the DistanceMatrix class and its constructors
 add_library(DistanceMatrix STATIC DistanceMatrix.cpp)
 target_include_directories(DistanceMatrix PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(DistanceMatrix PUBLIC OpenMP::OpenMP_CXX)
+target_link_libraries(DistanceMatrix PUBLIC Eigen3::Eigen OpenMP::OpenMP_CXX)
 
 add_library(SimplexEnumerator STATIC SimplexEnumerator.cpp)
 target_include_directories(SimplexEnumerator PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
