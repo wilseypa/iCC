@@ -93,23 +93,6 @@ namespace SimplexUtility
         return simplex_vt;
     }
 
-    //get simplex vertices in pre-allocated space
-    inline void getSimplexVerticesInPlace(const std::vector<std::vector<int64_t>>& binomial_table, std::vector<size_t>& output_workspace, int64_t bindex, size_t vtnum, const size_t dim)
-    {
-        output_workspace.clear();
-
-        for (size_t k = dim + 1; k > 0; k--)  //size_t is unsigned. cannot use it to check against negative number
-        {
-            vtnum = getSimplexMaxVertex(binomial_table, bindex, vtnum, k - 1);
-
-            bindex -= binomial_table[vtnum][k];
-
-            output_workspace.push_back(vtnum);
-        }
-
-        return;
-    }
-
 
     //get simplex vertices in pre-allocated space
     inline void getSimplexVerticesInPlace(const std::vector<std::vector<int64_t>>& binomial_table, std::vector<size_t>& output_workspace, int64_t bindex, size_t vtnum, const size_t dim)

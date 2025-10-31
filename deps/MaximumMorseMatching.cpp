@@ -240,16 +240,6 @@ size_t MaximumMorseMatching::matchWithPersistence(MatchingContext& matching_cont
     return serialFacetMatchWithPersistence(matching_context, dim_persistent_pair);
 }
 
-size_t MaximumMorseMatching::matchWithPersistenceBackup(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair)
-{
-    // homology
-    parallelMaxFacetInit(matching_context);
-    return serialCofacetMatchWithPersistence(matching_context, dim_persistent_pair);
-
-    // cohomology
-    // parallelMinCofacetInit(matching_context);
-    // return serialFacetMatchWithPersistence(matching_context, dim_persistent_pair);
-}
 
 int64_t MaximumMorseMatching::matchWithPersistenceReturnMinCriticalIndex(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair)
 {
@@ -266,38 +256,38 @@ std::vector< std::vector<size_t> > MaximumMorseMatching::matchWithPersistenceRet
 }
 
 
-void MaximumMorseMatching::parallelMaxFacetInit(MatchingContext& matching_context)
-{
-    auto graph = matching_context.graph;
-    //convert index
-    auto u = matching_context.graph.unodes;
-    auto v = matching_context.graph.vnodes;
+// void MaximumMorseMatching::parallelMaxFacetInit(MatchingContext& matching_context)
+// {
+//     auto graph = matching_context.graph;
+//     //convert index
+//     auto u = matching_context.graph.unodes;
+//     auto v = matching_context.graph.vnodes;
 
-    omp_set_num_threads(threadnum_);
+//     omp_set_num_threads(threadnum_);
 
-//apparent pair
-#pragma omp parallel for schedule(dynamic)
-    for (size_t i = u; i < u + v; i++)
-    {
-        for (const auto& uidx: graph.adj_list[i])    //uidx in v adj is in ascending order
-        {
-            auto vit = graph.adj_list[uidx].begin();    //vidx in u adj is in descending order
+// //apparent pair
+// #pragma omp parallel for schedule(dynamic)
+//     for (size_t i = u; i < u + v; i++)
+//     {
+//         for (const auto& uidx: graph.adj_list[i])    //uidx in v adj is in ascending order
+//         {
+//             auto vit = graph.adj_list[uidx].begin();    //vidx in u adj is in descending order
 
-            double cofacetweight = matching_context.sorted_cofacets[uidx].second;
-            double facetweight = matching_context.sorted_facets[*vit - u].second;
+//             double cofacetweight = matching_context.sorted_cofacets[uidx].second;
+//             double facetweight = matching_context.sorted_facets[*vit - u].second;
 
-            if (i == *vit)    //i == max facet of uidx
-            {
-                graph.match_list[i] = uidx;
-                graph.match_list[uidx] = i;
-                break;
-            }
-        }        
-    }
+//             if (i == *vit)    //i == max facet of uidx
+//             {
+//                 graph.match_list[i] = uidx;
+//                 graph.match_list[uidx] = i;
+//                 break;
+//             }
+//         }        
+//     }
 
-    return;
+//     return;
 
-}
+// }
 
 void MaximumMorseMatching::parallelMinCofacetInit(MatchingContext& matching_context)
 {
@@ -423,7 +413,7 @@ int64_t MaximumMorseMatching::serialCofacetAugPath(BipartiteGraph& graph, const 
     return -1;
 }
 
-
+//retired
 int64_t MaximumMorseMatching::serialFacetAugPath(BipartiteGraph& graph, const size_t facetindex, std::vector<size_t>& aug_path, std::vector<size_t>& cofacet_stack)
 {
     cofacet_stack.clear();
