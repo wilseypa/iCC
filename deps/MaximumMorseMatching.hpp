@@ -20,8 +20,6 @@ public:
 
     size_t matchWithPersistence(MatchingContext &matching_context, std::vector<std::pair<double, double>> &dim_persistent_pair);
 
-    // size_t matchWithPersistenceBackup(MatchingContext &matching_context, std::vector<std::pair<double, double>> &dim_persistent_pair);
-
     int64_t matchWithPersistenceReturnMinCriticalIndex(MatchingContext &matching_context, std::vector<std::pair<double, double>> &dim_persistent_pair);
 
     std::vector<std::vector<size_t>> matchWithPersistenceReturnAugPath(MatchingContext &matching_context, std::vector<std::pair<double, double>> &dim_persistent_pair);
