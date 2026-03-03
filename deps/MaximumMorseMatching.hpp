@@ -11,18 +11,16 @@ public:
 
     size_t implicitMatch(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
 
-    int64_t implicitMatchReturnMinCritialIndex(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);    //for the quotient
+    int64_t implicitMatchAndGetMinCritialIndex(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);    //for the quotient
 
     //legacy explicit graph representation  
     MaximumMorseMatching(int threadnum): threadnum_(threadnum) {};
 
     size_t match(MatchingContext& matching_context) override;
 
-    size_t matchWithPersistence(MatchingContext &matching_context, std::vector<std::pair<double, double>> &dim_persistent_pair);
+    int64_t matchAndGetMinCriticalIndex(MatchingContext &matching_context);
 
-    int64_t matchWithPersistenceReturnMinCriticalIndex(MatchingContext &matching_context, std::vector<std::pair<double, double>> &dim_persistent_pair);
-
-    std::vector<std::vector<size_t>> matchWithPersistenceReturnAugPath(MatchingContext &matching_context, std::vector<std::pair<double, double>> &dim_persistent_pair);
+    std::vector<std::vector<size_t>> matchAndGetAugPath(MatchingContext &matching_context, std::vector<std::pair<double, double>> &dim_persistent_pair);
 
 private:
     //helper strcut to allow moving the underlying container from a priority_queue
@@ -53,21 +51,11 @@ private:
 
     void parallelMinCofacetInit(MatchingContext &matching_context);
 
-    int64_t serialCofacetAugPath(BipartiteGraph &graph, const size_t cofacetindex, std::vector<size_t> &aug_path, std::vector<size_t> &facet_stack);
-
     int64_t serialFacetAugPath(BipartiteGraph &graph, const size_t facetindex, std::vector<size_t> &aug_path, std::vector<size_t> &cofacet_stack);
 
-    int64_t serialFacetAugPathTest(BipartiteGraph& graph, const size_t facetindex, std::vector<size_t>& aug_path, std::vector<size_t>& cofacet_stack);
+    size_t serialFacetMatch(MatchingContext &matching_context);
 
-    size_t serialCofacetMatch(BipartiteGraph& graph);
+    int64_t serialFacetMatchAndGetMinCriticalIndex(MatchingContext &matching_context);
 
-    size_t serialFacetMatch(BipartiteGraph &graph);
-
-    size_t serialCofacetMatchWithPersistence(MatchingContext &matching_context, std::vector<std::pair<double, double>> &dim_persistent_pair);
-
-    size_t serialFacetMatchWithPersistence(MatchingContext &matching_context, std::vector<std::pair<double, double>> &dim_persistent_pair);
-
-    int64_t serialFacetMatchWithPersistenceReturnMinCriticalIndex(MatchingContext &matching_context, std::vector<std::pair<double, double>> &dim_persistent_pair);
-
-    std::vector<std::vector<size_t>> serialFacetMatchWithPersistenceReturnAugPath(MatchingContext &matching_context, std::vector<std::pair<double, double>> &dim_persistent_pair);
+    std::vector<std::vector<size_t>> serialFacetMatchAndGetAugPath(MatchingContext &matching_context);
 };

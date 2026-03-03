@@ -31,7 +31,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runQuoti
 }
 
 template <typename DistMatType>
-void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_set<size_t>> &virtual_vertex_indices, const size_t maxdim, const double maxeps, const int threadnumber)
+void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_set<size_t>>& virtual_vertex_indices, const size_t maxdim, const double maxeps, const int threadnumber)
 {
     size_t originalvtnum = dist_mat_.getVertexNumber(); // number of original vertices
     size_t virtualvtnum = virtual_vertex_indices.size();
@@ -46,39 +46,46 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
 
     auto sorted_virtual_simplex = getVirtualSortedEdge(active_vertices, virtual_distance_hash_table, maxeps, threadnumber);
 
-    auto active_index_hash_table = getVirtualActiveEdgeIndexHashTable(sorted_virtual_simplex, virtualvtnum);
+    auto active_facet_hash = getVirtualActiveEdgeIndexHashTable(sorted_virtual_simplex, virtualvtnum);
 
     // auto sorted_virtual_cofacet = getVirtualCofacetList(sorted_virtual_simplex, active_vertices, virtual_distance_hash_table, 1, maxeps, threadnumber);
     auto sorted_virtual_cofacet = getGeometricVirtualCofacetList(sorted_virtual_simplex, active_vertices, virtual_vertex_indices, 1, maxeps, threadnumber);
 
-    BipartiteGraph bi_graph(1, 1);
+    // Implicit interface graph (no explicit adjacency lists)
+    BipartiteGraph bi_graph(1, 1, ImplicitConstructionTag{});
 
-    std::vector<std::pair<double, double>> dim_persistent_pair;
+    // Implicit matching object
+    MaximumMorseMatching morse_matching;
 
-    for (size_t dim = 2; dim <= maxdim; dim++)
+    std::vector<std::pair<double, double>> dim_persistent_pairs;
+
+    const size_t npts = binomial_table_.size() - 1; // original + virtual vertices
+
+    for (size_t dim = 2; dim <= maxdim; ++dim)
     {
-        bi_graph.updateDimension(sorted_virtual_cofacet.size(), sorted_virtual_simplex.size());
+        // Build cofacet hash for implicit adjacency queries
+        auto cofacet_hash = SimplexUtility::getSimplexIndexHashTable(sorted_virtual_cofacet);
 
-        buildInterface(bi_graph, sorted_virtual_cofacet, active_index_hash_table, dim);
+        bi_graph.updateDimensionImplicit(sorted_virtual_cofacet.size(), sorted_virtual_simplex.size());
 
-        MatchingContext matching_context(bi_graph, binomial_table_, sorted_virtual_simplex, sorted_virtual_cofacet);
+        MatchingContext matching_context(bi_graph, binomial_table_, sorted_virtual_simplex, sorted_virtual_cofacet,
+                                         active_facet_hash, cofacet_hash, npts, dim);
 
-        MaximumMorseMatching morse_matching(threadnumber);
+        std::cout << "in expand phase (implicit). dim = " << dim
+                  << "  cofacet num = " << sorted_virtual_cofacet.size()
+                  << "  facet num = " << sorted_virtual_simplex.size() << '\n';
 
-        std::cout << "in expand phase. dim = " << dim << "  cofacet num = " << sorted_virtual_cofacet.size() << "  facet num = " << sorted_virtual_simplex.size() << '\n';
+        auto critsimpnum = morse_matching.implicitMatch(matching_context, dim_persistent_pairs);
+        dim_persistent_pairs.clear();
 
-        // auto critsimpnum = morse_matching.matchWithPersistenceBackup(matching_context, dim_persistent_pair);
-        auto critsimpnum = morse_matching.matchWithPersistence(matching_context, dim_persistent_pair);
-
-        std::cout << "dim = " << dim << "  critical simplex number: " << critsimpnum << std::endl;
-        dim_persistent_pair.clear();
+        // std::cout << "dim = " << dim << "  critical simplex number: " << critsimpnum << std::endl;
 
         if (dim != maxdim)
         {
-            active_index_hash_table = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_virtual_cofacet);
+            // facets for the next dimension are the unmatched cofacets from the current dimension
+            active_facet_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_virtual_cofacet);
 
-            // sorted_virtual_simplex = getVirtualCofacetList(sorted_virtual_cofacet, active_vertices, virtual_distance_hash_table, dim, maxeps, threadnumber);
-
+            // enumerate next cofacet list (geometric PV clique filter)
             sorted_virtual_simplex = getGeometricVirtualCofacetList(sorted_virtual_cofacet, active_vertices, virtual_vertex_indices, dim, maxeps, threadnumber);
 
             std::swap(sorted_virtual_simplex, sorted_virtual_cofacet);
@@ -93,149 +100,177 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getVirtu
 {
     std::vector<std::unordered_set<size_t>> virtual_vertex_indices;
 
-    size_t originalvtnum = dist_mat_.getVertexNumber(); // number of original vertices
+    const size_t originalvtnum = dist_mat_.getVertexNumber(); // number of original vertices
 
     SimplexEnumerator<DistMatType> simplex_enumerator(dist_mat_, binomial_table_);
 
+    // 1-simplices (edges) at initeps
     auto sorted_simplex = simplex_enumerator.getSortedVREdges(initeps);
 
-    auto active_index_hash_table = SimplexUtility::getActiveEdgeIndexHashTable(binomial_table_, sorted_simplex, originalvtnum);
+    // active facets for dim=2 are edges not in the MST 
+    auto active_facet_hash = SimplexUtility::getActiveEdgeIndexHashTable(binomial_table_, sorted_simplex, originalvtnum);
 
+    // 2-simplices
     auto sorted_cofacet = simplex_enumerator.getSortedVRCofacets(sorted_simplex, 1, initeps, threadnumber);
 
-    BipartiteGraph bi_graph(1, 1);
+    // implicit interface graph (no adjacency list)
+    BipartiteGraph bi_graph(1, 1, ImplicitConstructionTag{});
 
-    for (size_t dim = 2; dim <= maxdim; dim++)
+    // matching object (implicit)
+    MaximumMorseMatching morse_matching;
+
+    // workspace for persistence pairs (optional)
+    std::vector<std::pair<double, double>> dim_persistent_pairs;
+
+    for (size_t dim = 2; dim <= maxdim; ++dim)
     {
-        bi_graph.updateDimension(sorted_cofacet.size(), sorted_simplex.size());
+        // build cofacet hash for implicit adjacency queries
+        auto cofacet_hash = SimplexUtility::getSimplexIndexHashTable(sorted_cofacet);
 
-        buildInterface(bi_graph, sorted_cofacet, active_index_hash_table, dim);
+        bi_graph.updateDimensionImplicit(sorted_cofacet.size(), sorted_simplex.size());
 
-        std::cout << "in quotient phase, graph is constructed at dim = " << dim << "\n";
-        MatchingContext matching_context(bi_graph, binomial_table_, sorted_simplex, sorted_cofacet);
+        MatchingContext matching_context(bi_graph, binomial_table_, sorted_simplex, sorted_cofacet,
+                                        active_facet_hash, cofacet_hash, originalvtnum, dim);
 
-        MaximumMorseMatching morse_matching(threadnumber);
-
-        std::vector<std::pair<double, double>> dim_persistent_pair;
+        std::cout << "in quotient phase (implicit), dim = " << dim
+                  << "  cofacet num = " << sorted_cofacet.size()
+                  << "  facet num = " << sorted_simplex.size() << "\n";
 
         if (dim != maxdim)
         {
-            std::cout << "Processing dim " << dim << ", cofacet number: " << sorted_cofacet.size() << ", facet number: " << sorted_simplex.size() << std::endl;
-
-            auto critsimpnum = morse_matching.matchWithPersistence(matching_context, dim_persistent_pair);
-            // auto critsimpnum = morse_matching.matchWithPersistenceBackup(matching_context, dim_persistent_pair);
-
-            std::cout << "critical simplex number: " << critsimpnum << std::endl;
-            dim_persistent_pair.clear();
+            auto critsimpnum = morse_matching.implicitMatch(matching_context, dim_persistent_pairs);
+            // std::cout << "critical simplex number: " << critsimpnum << std::endl;
+            dim_persistent_pairs.clear();
         }
         else
         {
-            std::cout << "Processing max dim " << dim << ", cofacet number: " << sorted_cofacet.size() << ", facet number: " << sorted_simplex.size() << std::endl;
-            dim_persistent_pair.clear();
-
-            auto critidx = morse_matching.matchWithPersistenceReturnMinCriticalIndex(matching_context, dim_persistent_pair);
-            // auto critidx = morse_matching.matchWithPersistenceBackup(matching_context, dim_persistent_pair);
-
-            // gradident path from augmenting path
-            //  auto gradient_paths = morse_matching.matchWithPersistenceReturnAugPath(matching_context, dim_persistent_pair);
-
-            // std::cout<<"min critial idx = "<<critidx<<'\n';
+            // do matching and record the minimal critical facet index for cutoff
+            const int64_t mincritfacet = morse_matching.implicitMatchAndGetMinCritialIndex(matching_context, dim_persistent_pairs);
+            dim_persistent_pairs.clear();
 
             double minfacetweight = initeps;
 
-            if (critidx >= 0)
+            if (mincritfacet >= 0)
             {
-                auto minfacetindex = static_cast<size_t>(critidx) - bi_graph.unodes;
+                const size_t minfacetindex = static_cast<size_t>(mincritfacet);
                 minfacetweight = sorted_simplex[minfacetindex].second;
-                std::cout << "minfacet weight = " << minfacetweight << '\n';
             }
 
-            // get gradient paths
+            // extract collapsible regions from the top-dimensional interface (implicit traversal)
             auto gradient_paths = extractGradientPaths(matching_context, minfacetweight);
 
             std::cout << "gradient path size = " << gradient_paths.size() << '\n';
 
-            // get gradient path vertex indices
             virtual_vertex_indices = getGradientPathVertexSets(matching_context, gradient_paths, dim);
         }
 
         if (dim != maxdim)
         {
-            active_index_hash_table = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_cofacet);
+            // facets for the next dimension are the unmatched cofacets from the current dimension
+            active_facet_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_cofacet);
 
+            // enumerate next cofacet list
             sorted_simplex = simplex_enumerator.getSortedVRCofacets(sorted_cofacet, dim, initeps, threadnumber);
             std::swap(sorted_simplex, sorted_cofacet);
         }
     }
 
-    /**************************************debug*********************************************************/
-    // virtual_vertex_indices.clear();
-
     return virtual_vertex_indices;
 }
 
 template <typename DistMatType>
-std::vector<std::vector<size_t>> QuotientAndExpand<DistMatType>::extractGradientPaths(const MatchingContext &matching_context, const double minfacetweight)
+std::vector<std::vector<size_t>> QuotientAndExpand<DistMatType>::extractGradientPaths(const MatchingContext& matching_context, const double minfacetweight)
 {
-    auto &bi_graph = matching_context.graph;
-    auto &sorted_simplex = matching_context.sorted_facets;
-    auto &sorted_cofacet = matching_context.sorted_cofacets;
+    auto& bi_graph = matching_context.graph;
+    auto& sorted_facets = matching_context.sorted_facets;
+    auto& sorted_cofacets = matching_context.sorted_cofacets;
+    auto& facet_hash = matching_context.facet_bindex_to_list_index;
+    auto& binom_table = matching_context.binomial_table;
 
     const size_t u = bi_graph.unodes;
     const size_t v = bi_graph.vnodes;
 
-    auto facetcutoff = std::lower_bound(sorted_simplex.begin(), sorted_simplex.end(), minfacetweight,
+    const size_t dim = matching_context.dim;   // cofacet dimension
+    const size_t npts = matching_context.npts; // total vertex number
+
+    // cutoff by weight
+    auto facetcutoff = std::lower_bound(sorted_facets.begin(), sorted_facets.end(), minfacetweight,
                                         [](const std::pair<int64_t, double> &pair, double weight)
                                         { return pair.second < weight; });
 
-    size_t maxfacetindex = std::distance(sorted_simplex.begin(), facetcutoff);
+    const size_t maxfacetindex = static_cast<size_t>(std::distance(sorted_facets.begin(), facetcutoff));
 
-    auto cofacetcutoff = std::lower_bound(sorted_cofacet.begin(), sorted_cofacet.end(), minfacetweight,
+    auto cofacetcutoff = std::lower_bound(sorted_cofacets.begin(), sorted_cofacets.end(), minfacetweight,
                                           [](const std::pair<int64_t, double> &pair, double weight)
                                           { return pair.second < weight; });
 
-    size_t maxcofacetindex = std::distance(sorted_cofacet.begin(), cofacetcutoff);
+    const size_t maxcofacetindex = static_cast<size_t>(std::distance(sorted_cofacets.begin(), cofacetcutoff));
 
-    UnionFind union_find(u);
+    if (maxfacetindex == 0 || maxcofacetindex == 0)
+        return {};
 
-    std::vector<bool> is_in_gradient_path(u, false);
+    // Union-find over cofacet indices in [0, maxcofacetindex)
+    UnionFind union_find(maxcofacetindex);
 
+    // mark cofacets that have been claimed into some gradient-path component
+    std::vector<uint8_t> is_in_gradient_path(maxcofacetindex, 0);
+
+    // workspaces
+    std::vector<size_t> facet_indices;
+    facet_indices.reserve(dim + 1);
+    std::vector<size_t> vertex_workspace;
+    vertex_workspace.reserve(dim + 1);
+
+    // scan facets (prefix under cutoff); connect matched cofacets that are linked through active facets
     for (size_t facetidx = 0; facetidx < maxfacetindex; ++facetidx)
     {
-        int64_t cofacetidx = bi_graph.match_list[facetidx + u];
+        const int64_t cofacetidxint = bi_graph.match_list[facetidx + u];
 
-        if (cofacetidx < 0 || static_cast<size_t>(cofacetidx) >= maxcofacetindex)
+        if (cofacetidxint < 0)
             continue;
 
-        is_in_gradient_path[cofacetidx] = true;
+        const size_t cofacetidx = static_cast<size_t>(cofacetidxint);
 
-        for (auto vidx : bi_graph.adj_list[cofacetidx])
+        if (cofacetidx >= maxcofacetindex)
+            continue;
+
+        is_in_gradient_path[cofacetidx] = 1;
+
+        // get active facet neighbors of this cofacet (implicit traversal)
+        SimplexUtility::getFacetListIndicesInPlace(binom_table, facet_hash, facet_indices, vertex_workspace,
+                                                   sorted_cofacets[cofacetidx].first, npts, dim);
+
+        for (const auto nextfacetidx : facet_indices)
         {
-            size_t nextfacetidx = vidx - u;
-
             if (nextfacetidx == facetidx || nextfacetidx >= maxfacetindex)
                 continue;
 
-            int64_t nextcofacetidx = bi_graph.match_list[vidx];
+            const int64_t nextcofacetidxint = bi_graph.match_list[u + nextfacetidx];
+            if (nextcofacetidxint < 0)
+                continue;
 
-            if (nextcofacetidx < 0 || static_cast<size_t>(nextcofacetidx) >= maxcofacetindex)
+            const size_t nextcofacetidx = static_cast<size_t>(nextcofacetidxint);
+
+            if (nextcofacetidx >= maxcofacetindex)
                 continue;
 
             if (is_in_gradient_path[nextcofacetidx])
-                continue; // skip already claimed path
+                continue; // keep components disjoint
 
-            is_in_gradient_path[nextcofacetidx] = true;
+            is_in_gradient_path[nextcofacetidx] = 1;
             union_find.unionSets(cofacetidx, nextcofacetidx);
         }
     }
 
+    // collect components
     std::unordered_map<size_t, std::vector<size_t>> component_map;
+    component_map.reserve(maxcofacetindex);
 
     for (size_t cofacetidx = 0; cofacetidx < maxcofacetindex; ++cofacetidx)
     {
         if (is_in_gradient_path[cofacetidx])
         {
-            size_t root = union_find.unionFind(cofacetidx);
+            const size_t root = union_find.unionFind(cofacetidx);
             component_map[root].push_back(cofacetidx);
         }
     }
@@ -243,7 +278,7 @@ std::vector<std::vector<size_t>> QuotientAndExpand<DistMatType>::extractGradient
     std::vector<std::vector<size_t>> gradient_paths;
     gradient_paths.reserve(component_map.size());
 
-    for (const auto &[root, path] : component_map) // structured binding requires C++17
+    for (auto& [root, path] : component_map) // structured binding requires C++17
     {
 
         // std::cout<<"in extract grad path function, path size = "<<path.size()<<'\n';

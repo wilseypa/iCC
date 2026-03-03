@@ -227,8 +227,6 @@ void CritCells<ComplexType, DistMatType>::runVRMorseTest(size_t maxdim, double m
 
     auto sorted_cofacet = simplex_enumerator.getSortedVRCofacets(sorted_simplex, 1, maxeps, threadnumber);
 
-    std::vector<std::pair<double, double>> dim_persistent_pairs;
-
     BipartiteGraph bi_graph(1, 1);
 
     for (size_t dim = 2; dim <= maxdim; dim++)
@@ -242,12 +240,9 @@ void CritCells<ComplexType, DistMatType>::runVRMorseTest(size_t maxdim, double m
 
         std::cout << "Processing dim " << dim << ", cofacet number: " << sorted_cofacet.size() << ", facet number: " << sorted_simplex.size() << std::endl;
 
-        // auto critsimpnum = morse_matching.matchWithPersistenceBackup(matching_context, dim_persistent_pairs);
-        auto critsimpnum = morse_matching.matchWithPersistence(matching_context, dim_persistent_pairs);
+        auto critsimpnum = morse_matching.match(matching_context);
 
         std::cout << "critical simplex number: " << critsimpnum << std::endl;
-
-        dim_persistent_pairs.clear();
 
         // print DAG edges at the top dim
         //  if (dim == maxdim)
