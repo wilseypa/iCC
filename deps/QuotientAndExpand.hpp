@@ -69,17 +69,17 @@ private:
         }
     };
 
-    struct EdgeRecord // edge = (idx0, idx1). edge record for clique finding
-    {
-        double weight;
-        uint8_t virtualidx0, virtualidx1;
-        uint8_t localidx0, localidx1;
+    // struct EdgeRecord // edge = (idx0, idx1). edge record for clique finding
+    // {
+    //     double weight;
+    //     uint8_t virtualidx0, virtualidx1;
+    //     uint8_t localidx0, localidx1;
 
-        bool operator<(const EdgeRecord &edge) const
-        {
-            return weight < edge.weight;
-        }
-    };
+    //     bool operator<(const EdgeRecord &edge) const
+    //     {
+    //         return weight < edge.weight;
+    //     }
+    // };
 
     std::vector<std::unordered_set<size_t>> getVirtualVertexIndices(const size_t maxdim, const double initeps, const int threadnumber);
 
@@ -97,30 +97,30 @@ private:
 
     double getVirtualDistance(size_t i, size_t j, const robin_hood::unordered_map<uint64_t, double> &virtual_distance_hash_table);
 
-    std::vector<std::pair<int64_t, double>> getVirtualSortedEdge(const std::vector<size_t> &active_vertices,
+    std::vector<std::pair<int64_t, double>> getSortedVirtualEdgeList(const std::vector<size_t> &active_vertices,
                                                                  const robin_hood::unordered_map<uint64_t, double> &virtual_distance_hash_table, const double maxeps, int threadnum);
 
     robin_hood::unordered_map<int64_t, size_t> getVirtualActiveEdgeIndexHashTable(const std::vector<std::pair<int64_t, double>> &sorted_virtual_edge, const size_t virtualvtnum);
 
-    std::vector<std::pair<int64_t, double>> getVirtualCofacetList(const std::vector<std::pair<int64_t, double>> &sorted_virtual_simplex_list,
-                                                                  const std::vector<size_t> &active_vertices, const robin_hood::unordered_map<uint64_t, double> &virtual_distance_hash_table,
-                                                                  const size_t dim, const double maxeps, int threadnum);
+    // std::vector<std::pair<int64_t, double>> getVirtualCofacetList(const std::vector<std::pair<int64_t, double>> &sorted_virtual_simplex_list,
+    //                                                               const std::vector<size_t> &active_vertices, const robin_hood::unordered_map<uint64_t, double> &virtual_distance_hash_table,
+    //                                                               const size_t dim, const double maxeps, int threadnum);
 
-    bool findCliqueRecursive(const std::vector<std::vector<std::vector<uint64_t>>> &adj_mask,
-                             std::vector<uint64_t> &candidate_mask,
-                             std::vector<size_t> &current_clique_local_indices, size_t depth);
+    // bool findCliqueRecursive(const std::vector<std::vector<std::vector<uint64_t>>> &adj_mask,
+    //                          std::vector<uint64_t> &candidate_mask,
+    //                          std::vector<size_t> &current_clique_local_indices, size_t depth);
 
-    double getGeometricVirtualSimplexWeight(const std::vector<size_t> &simplex_vertices,
-                                            const std::vector<std::unordered_set<size_t>> &virtual_vertex_indices,
-                                            size_t dim);
+    // double getGeometricVirtualSimplexWeight(const std::vector<size_t> &simplex_vertices,
+    //                                         const std::vector<std::unordered_set<size_t>> &virtual_vertex_indices,
+    //                                         size_t dim);
 
-    std::vector<std::pair<int64_t, double>> getGeometricVirtualCofacetList(const std::vector<std::pair<int64_t, double>> &sorted_virtual_simplex_list,
-                                                                           const std::vector<size_t> &active_vertices,
-                                                                           const std::vector<std::unordered_set<size_t>> &virtual_vertex_indices,
-                                                                           const size_t dim, const double maxeps, int threadnum);
+    // std::vector<std::pair<int64_t, double>> getGeometricVirtualCofacetList(const std::vector<std::pair<int64_t, double>> &sorted_virtual_simplex_list,
+    //                                                                        const std::vector<size_t> &active_vertices,
+    //                                                                        const std::vector<std::unordered_set<size_t>> &virtual_vertex_indices,
+    //                                                                        const size_t dim, const double maxeps, int threadnum);
 
-    void buildInterface(BipartiteGraph &bi_graph, const std::vector<std::pair<int64_t, double>> &sorted_cofacet_list,
-                        const robin_hood::unordered_map<int64_t, size_t> &active_facet_index_hash_table, const size_t dim);
+    // void buildInterface(BipartiteGraph &bi_graph, const std::vector<std::pair<int64_t, double>> &sorted_cofacet_list,
+    //                     const robin_hood::unordered_map<int64_t, size_t> &active_facet_index_hash_table, const size_t dim);
 };
 
 extern template class QuotientAndExpand<NormalDistMat>;

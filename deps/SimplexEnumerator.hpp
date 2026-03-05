@@ -29,11 +29,36 @@ public:
                                                                 std::unordered_map<CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>::Vertex_handle, size_t> &vertex_handle_index,
                                                                 CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>> &delaunay_d, const size_t dim, double maxeps);
 
+    // Geometric enumeration for complex with pseudo-vertices (virtual vertices).
+    // Each pv represents a set of original vertices, and simplex weight is the smallest
+    // clique realization weight among representative choices.
+    std::vector<std::pair<int64_t, double>> getGeometricVirtualCofacetList(const std::vector<std::pair<int64_t, double>> &sorted_virtual_simplex_list,
+                                                                           const std::vector<size_t> &active_vertices,
+                                                                           const std::vector<std::unordered_set<size_t>> &virtual_vertex_indices,
+                                                                           const size_t dim, const double maxeps, const int threadnum);
+
+
 private:
     const DistMatType &dist_mat_;
     const std::vector<std::vector<int64_t>> &binomial_table_;
 
     double getAlphaSimplexWeight(const std::vector<size_t> &alpha_simplex);
+
+    struct EdgeRecord
+    {
+        double weight;
+        uint8_t virtualidx0, virtualidx1;
+        uint8_t localidx0, localidx1;
+
+        bool operator<(const EdgeRecord &edge) const { return weight < edge.weight; }
+    };
+
+    bool findCliqueRecursive(const std::vector<std::vector<std::vector<uint64_t>>>& adj_mask,
+                             std::vector<uint64_t>& candidate_mask,
+                             std::vector<size_t>& current_clique_local_indices, size_t depth);
+
+    double getGeometricVirtualSimplexWeight(const std::vector<size_t>& simplex_vertices,
+                                            const std::vector<std::unordered_set<size_t>>& virtual_vertex_indices, size_t dim);
 };
 
 // Explicit template instantiations
