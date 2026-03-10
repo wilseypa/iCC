@@ -1,5 +1,8 @@
 #pragma once
 
+#include <functional>
+#include <queue>
+
 #include "MatchingStrategy.hpp"
 #include "BipartiteGraph.hpp"
 
@@ -13,6 +16,8 @@ public:
 
     int64_t implicitMatchAndGetMinCritialIndex(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);    //for the quotient
 
+    std::vector<std::vector<size_t>> implicitMatchAndCollectPVSupports(MatchingContext& matching_context);
+
     //legacy explicit graph representation  
     MaximumMorseMatching(int threadnum): threadnum_(threadnum) {};
 
@@ -24,9 +29,10 @@ public:
 
 private:
     //helper strcut to allow moving the underlying container from a priority_queue
-    struct QueueWorkspaceHelper : std::priority_queue<size_t, std::vector<size_t>, std::greater<size_t>> 
+    template <class StdComparator>
+    struct QueueWorkspaceHelper : std::priority_queue<size_t, std::vector<size_t>, StdComparator> 
     {
-        using Base = std::priority_queue<size_t, std::vector<size_t>, std::greater<size_t>>;
+        using Base = std::priority_queue<size_t, std::vector<size_t>, StdComparator>;
         using Base::Base;    //inherit base constructors
 
         //verbose form using std::priority_queue<size_t, std::vector<size_t>, std::greater<size_t>>::priority_queue;
@@ -34,6 +40,8 @@ private:
         std::vector<size_t>& getContainer() { return this->c; }
     };
 
+    using MinIndexQueue = QueueWorkspaceHelper<std::greater<size_t>>;
+    using MaxIndexQueue = QueueWorkspaceHelper<std::less<size_t>>;
 
     //workspaces for matching
     std::vector<size_t> aug_path_;
@@ -45,6 +53,9 @@ private:
 
     int64_t implicitFacetAugPath(const std::vector<std::vector<int64_t>>& binomial_table, BipartiteGraph& bi_graph, const std::vector<std::pair<int64_t, double>>& facet_list, 
                                  const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash_table, const size_t facetgraphindex, size_t npts, size_t interfacedimension);
+
+    std::vector<size_t> collectReducedColumnSupport(const MatchingContext& matching_context, size_t terminalcofacet);
+    
 
     //legacy explicit graph representation  
     int threadnum_ = 4;    //for explicit initialization phase
