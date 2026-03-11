@@ -54,8 +54,9 @@ private:
     int64_t implicitFacetAugPath(const std::vector<std::vector<int64_t>>& binomial_table, BipartiteGraph& bi_graph, const std::vector<std::pair<int64_t, double>>& facet_list, 
                                  const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash_table, const size_t facetgraphindex, size_t npts, size_t interfacedimension);
 
-    std::vector<size_t> collectReducedColumnSupport(const MatchingContext& matching_context, size_t terminalcofacet);
+    std::vector<size_t> collectReducedColumnSupport(const MatchingContext& matching_context, const size_t terminalcofacet, const size_t expectedfacet);
     
+
 
     //legacy explicit graph representation  
     int threadnum_ = 4;    //for explicit initialization phase

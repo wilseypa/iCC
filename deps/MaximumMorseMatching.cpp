@@ -1,6 +1,8 @@
 #include <execution>
 #include <iostream>
 
+#include <cassert>
+
 #include "omp.h"
 
 #include "MaximumMorseMatching.hpp"
@@ -212,7 +214,8 @@ std::vector<std::vector<size_t>> MaximumMorseMatching::implicitMatchAndCollectPV
         }
 
         const size_t terminalcofacetidx = aug_path_[0];
-        pv_support_cofacets.push_back(collectReducedColumnSupport(matching_context, terminalcofacetidx));
+        pv_support_cofacets.push_back(collectReducedColumnSupport(matching_context, terminalcofacetidx, facetgraphidx));
+
 
         const size_t uidx = aug_path_[0];
         const double cofacetweight = matching_context.sorted_cofacets[uidx].second;
@@ -335,14 +338,12 @@ int64_t MaximumMorseMatching::implicitFacetAugPath(const std::vector<std::vector
     return static_cast<int64_t>(aug_path_.size());
 }
 
-std::vector<size_t>
-MaximumMorseMatching::collectReducedColumnSupport(const MatchingContext& matching_context, size_t terminalcofacet)
+std::vector<size_t> MaximumMorseMatching::collectReducedColumnSupport(const MatchingContext& matching_context, const size_t terminalcofacet, const size_t expectedfacet)
 {
     auto& binom_table = matching_context.binomial_table;
     auto& cofacet_list = matching_context.sorted_cofacets;
     auto& facet_hash = matching_context.facet_bindex_to_list_index;
     auto& bi_graph = matching_context.graph;
-    const size_t u = bi_graph.unodes;
     const size_t dim = matching_context.dim;
     const size_t npts = matching_context.npts;
 
@@ -350,9 +351,9 @@ MaximumMorseMatching::collectReducedColumnSupport(const MatchingContext& matchin
 
     MaxIndexQueue facet_queue(std::less<size_t>{}, std::move(pq_workspace_));
 
-    std::vector<size_t> support_trace;
-    support_trace.reserve(8);
-    support_trace.push_back(terminalcofacet);
+    std::vector<size_t> cofacet_trace;
+    cofacet_trace.reserve(dim < 5 ? 16 : 32);
+    cofacet_trace.push_back(terminalcofacet);
 
     // initialize with boundary of terminal cofacet
     SimplexUtility::getFacetListIndicesInPlace(
@@ -363,24 +364,26 @@ MaximumMorseMatching::collectReducedColumnSupport(const MatchingContext& matchin
 
     while (!facet_queue.empty())
     {
-        size_t topfacet = facet_queue.top();
+        size_t topfacet = facet_queue.top();    //bipartite graph index 
         facet_queue.pop();
 
         if (!facet_queue.empty() && topfacet == facet_queue.top())
         {
-            facet_queue.pop();   // cancel duplicate pair mod 2
+            facet_queue.pop();   // cancel duplicates
             continue;
         }
 
-        const int64_t mate = bi_graph.match_list[topfacet + u];
-        if (mate < 0) break;
+        const int64_t nextcofacet = bi_graph.match_list[topfacet];
+        if (nextcofacet < 0) 
+        {
+            assert(expectedfacet == topfacet);    //debug purpose
+            break;
+        }
 
-        const size_t reducer = static_cast<size_t>(mate);
-        support_trace.push_back(reducer);
+        const size_t cfi = static_cast<size_t>(nextcofacet);
+        cofacet_trace.push_back(cfi);
 
-        SimplexUtility::getFacetListIndicesInPlace(
-            binom_table, facet_hash, facet_indices_, vertex_workspace_,
-            cofacet_list[reducer].first, npts, dim);
+        SimplexUtility::getFacetListIndicesInPlace(binom_table, facet_hash, facet_indices_, vertex_workspace_, cofacet_list[cfi].first, npts, dim);
 
         for (size_t fi : facet_indices_)
         {
@@ -392,7 +395,7 @@ MaximumMorseMatching::collectReducedColumnSupport(const MatchingContext& matchin
     pq_buffer.clear();
     pq_workspace_ = std::move(pq_buffer);
 
-    return support_trace;
+    return cofacet_trace;
 }
 
 

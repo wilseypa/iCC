@@ -144,22 +144,9 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getVirtu
         }
         else
         {
-            // do matching and record the minimal critical facet index for cutoff
-            const int64_t mincritfacet = morse_matching.implicitMatchAndGetMinCritialIndex(matching_context, dim_persistent_pairs);
-            dim_persistent_pairs.clear();
+            auto pv_support_cofacets = morse_matching.implicitMatchAndCollectPVSupports(matching_context);
 
-            double minfacetweight = initeps;
-
-            if (mincritfacet >= 0)
-            {
-                const size_t minfacetindex = static_cast<size_t>(mincritfacet);
-                minfacetweight = sorted_simplex[minfacetindex].second;
-            }
-
-            // extract collapsible regions from the top-dimensional interface (implicit traversal)
-            auto gradient_paths = extractGradientPaths(matching_context, minfacetweight);
-
-            std::cout << "gradient path size = " << gradient_paths.size() << '\n';
+            std::cout << "pv support set num = " << pv_support_cofacets.size() << '\n';
 
             virtual_vertex_indices = getGradientPathVertexSets(matching_context, gradient_paths, dim);
         }
