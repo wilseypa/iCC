@@ -16,7 +16,7 @@ int main()
 
     // cc.runVRMorseTest(3, 1.1, 1);
     // cc.runAlphaMorseTest(1.5, 4);
-    cc.runQuotientAndExpand(3, 0.9, 1.8, 4);
+    cc.runQuotientAndExpand(3, 1.1, 1.8, 4);
     // cc.runVRMorseMatching(3, 1.8, 4);
 
     auto st1 = std::chrono::high_resolution_clock::now();

@@ -280,18 +280,19 @@ std::vector<std::vector<size_t>> QuotientAndExpand<DistMatType>::extractGradient
 }
 
 template <typename DistMatType>
-std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getGradientPathVertexSets(const MatchingContext &matching_context, const std::vector<std::vector<size_t>> &gradient_paths, const size_t dim)
+std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getGradientPathVertexSets(const MatchingContext &matching_context, const std::vector<std::vector<size_t>>& pv_support_cofacets, const size_t dim)
 {
     std::vector<std::unordered_set<size_t>> gradient_path_vertex_sets;
-    gradient_path_vertex_sets.reserve(gradient_paths.size());
+    gradient_path_vertex_sets.reserve(pv_support_cofacets.size());
 
     auto npt = matching_context.binomial_table.size() - 1;
 
-    for (const auto &grad_path : gradient_paths)
+    for (const auto& pv_support : pv_support_cofacets)
     {
+        //need set for trimming
         std::unordered_set<size_t> vertex_set;
 
-        for (auto cofacetidx : grad_path)
+        for (auto cofacetidx : pv_support)
         {
             auto bindex = matching_context.sorted_cofacets[cofacetidx].first;
             auto simplex_vertices = SimplexUtility::getSimplexVertices(matching_context.binomial_table, bindex, npt, dim);
@@ -328,7 +329,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::trimInde
 
         bool overlap = false;
 
-        for (const auto &vertex : vertex_set)
+        for (const auto vertex : vertex_set)
         {
             if (claimed_vertices.count(vertex))
             {
@@ -348,15 +349,15 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::trimInde
 }
 
 template <typename DistMatType>
-std::vector<size_t> QuotientAndExpand<DistMatType>::getActiveVertexIndices(const std::vector<std::unordered_set<size_t>> &virtual_vertex_indices)
+std::vector<size_t> QuotientAndExpand<DistMatType>::getActiveVertexIndices(const std::vector<std::unordered_set<size_t>>& pv_index_sets)
 {
     const size_t originalvtnum = dist_mat_.getVertexNumber();
 
     std::vector<bool> is_virtualized(originalvtnum, false);
 
-    for (const auto &virtual_vt_set : virtual_vertex_indices)
+    for (const auto &pv_indices : pv_index_sets)
     {
-        for (const auto vt : virtual_vt_set)
+        for (const auto vt : pv_indices)
             is_virtualized[vt] = true;
     }
 
@@ -369,12 +370,12 @@ std::vector<size_t> QuotientAndExpand<DistMatType>::getActiveVertexIndices(const
             active_vertices.push_back(i);
     }
 
-    size_t initvirtualidx = originalvtnum;
-    for (size_t i = 0; i < virtual_vertex_indices.size(); ++i)
+    size_t initpvidx = originalvtnum;
+    for (size_t i = 0; i < pv_index_sets.size(); ++i)
     {
         // if (virtual_vt_set.empty()) continue;
-        active_vertices.push_back(initvirtualidx);
-        initvirtualidx++;
+        active_vertices.push_back(initpvidx);
+        initpvidx++;
     }
 
     // active vertices indices are sorted in ascending order
@@ -382,7 +383,7 @@ std::vector<size_t> QuotientAndExpand<DistMatType>::getActiveVertexIndices(const
 }
 
 template <typename DistMatType>
-double QuotientAndExpand<DistMatType>::computeVirtualDistance(const size_t i, const size_t j, const std::vector<std::unordered_set<size_t>> &virtual_vertex_indices)
+double QuotientAndExpand<DistMatType>::computeVirtualDistance(const size_t i, const size_t j, const std::vector<std::unordered_set<size_t>> &pv_index_sets)
 {
     const size_t originalvtnum = dist_mat_.getVertexNumber();
 
@@ -394,8 +395,8 @@ double QuotientAndExpand<DistMatType>::computeVirtualDistance(const size_t i, co
     const std::unordered_set<size_t> temp_i_set = (i < originalvtnum) ? std::unordered_set<size_t>{i} : std::unordered_set<size_t>();
     const std::unordered_set<size_t> temp_j_set = (j < originalvtnum) ? std::unordered_set<size_t>{j} : std::unordered_set<size_t>();
 
-    const std::unordered_set<size_t> &vtset_i = (i < originalvtnum) ? temp_i_set : virtual_vertex_indices[i - originalvtnum];
-    const std::unordered_set<size_t> &vtset_j = (j < originalvtnum) ? temp_j_set : virtual_vertex_indices[j - originalvtnum];
+    const std::unordered_set<size_t> &vtset_i = (i < originalvtnum) ? temp_i_set : pv_index_sets[i - originalvtnum];
+    const std::unordered_set<size_t> &vtset_j = (j < originalvtnum) ? temp_j_set : pv_index_sets[j - originalvtnum];
 
     double mindist = std::numeric_limits<double>::max();
     for (const auto &vi : vtset_i)
@@ -410,7 +411,7 @@ double QuotientAndExpand<DistMatType>::computeVirtualDistance(const size_t i, co
 }
 
 template <typename DistMatType>
-robin_hood::unordered_map<uint64_t, double> QuotientAndExpand<DistMatType>::getVirtualDistanceHashTable(const std::vector<size_t> &active_vertices, const std::vector<std::unordered_set<size_t>> &virtual_vertex_indices, int threadnum)
+robin_hood::unordered_map<uint64_t, double> QuotientAndExpand<DistMatType>::getVirtualDistanceHashTable(const std::vector<size_t> &active_vertices, const std::vector<std::unordered_set<size_t>> &pv_index_sets, int threadnum)
 {
     omp_set_num_threads(threadnum);
 
@@ -426,7 +427,7 @@ robin_hood::unordered_map<uint64_t, double> QuotientAndExpand<DistMatType>::getV
         for (size_t j = i + 1; j < active_vertices.size(); ++j)
         {
             uint64_t key = (static_cast<uint64_t>(active_vertices[i]) << 32) | static_cast<uint64_t>(active_vertices[j]);
-            double dist = computeVirtualDistance(active_vertices[i], active_vertices[j], virtual_vertex_indices);
+            double dist = computeVirtualDistance(active_vertices[i], active_vertices[j], pv_index_sets);
             thread_hash_table.emplace(key, dist);
         }
     }
@@ -496,14 +497,14 @@ std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getSorte
 }
 
 template <typename DistMatType>
-robin_hood::unordered_map<int64_t, size_t> QuotientAndExpand<DistMatType>::getVirtualActiveEdgeIndexHashTable(const std::vector<std::pair<int64_t, double>> &sorted_virtual_edge, const size_t virtualvtnum)
+robin_hood::unordered_map<int64_t, size_t> QuotientAndExpand<DistMatType>::getVirtualActiveEdgeIndexHashTable(const std::vector<std::pair<int64_t, double>> &sorted_virtual_edge, const size_t pvnum)
 {
     robin_hood::unordered_map<int64_t, size_t> active_edge_hash_table;
     active_edge_hash_table.reserve(sorted_virtual_edge.size());
 
     // size_t npts = binomial_table_.size() - 1;
     // original number of vertices + number of virtual vertices
-    const size_t npts = dist_mat_.getVertexNumber() + virtualvtnum;
+    const size_t npts = dist_mat_.getVertexNumber() + pvnum;
 
     UnionFind union_find(npts);
 

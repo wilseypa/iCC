@@ -85,22 +85,22 @@ private:
 
     std::vector<std::vector<size_t>> extractGradientPaths(const MatchingContext &matching_context, const double minfacetweight);
 
-    std::vector<std::unordered_set<size_t>> getGradientPathVertexSets(const MatchingContext &matching_context, const std::vector<std::vector<size_t>> &gradient_paths, const size_t dim);
+    std::vector<std::unordered_set<size_t>> getGradientPathVertexSets(const MatchingContext &matching_context, const std::vector<std::vector<size_t>>& pv_support_cofacets, const size_t dim);
 
     std::vector<std::unordered_set<size_t>> trimIndexSets(std::vector<std::unordered_set<size_t>> &gradient_path_vertex_sets);
 
-    std::vector<size_t> getActiveVertexIndices(const std::vector<std::unordered_set<size_t>> &virtual_vertex_indices); // list of active indices to construct edges and cofaces
+    std::vector<size_t> getActiveVertexIndices(const std::vector<std::unordered_set<size_t>>& pv_index_sets); // list of active indices to construct edges and cofaces
 
-    double computeVirtualDistance(const size_t i, const size_t j, const std::vector<std::unordered_set<size_t>> &virtual_vertex_indices);
+    double computeVirtualDistance(const size_t i, const size_t j, const std::vector<std::unordered_set<size_t>>& pv_index_sets);
 
-    robin_hood::unordered_map<uint64_t, double> getVirtualDistanceHashTable(const std::vector<size_t> &active_vertices, const std::vector<std::unordered_set<size_t>> &virtual_vertex_indices, int threadnum);
+    robin_hood::unordered_map<uint64_t, double> getVirtualDistanceHashTable(const std::vector<size_t> &active_vertices, const std::vector<std::unordered_set<size_t>>& pv_index_sets, int threadnum);
 
     double getVirtualDistance(size_t i, size_t j, const robin_hood::unordered_map<uint64_t, double> &virtual_distance_hash_table);
 
     std::vector<std::pair<int64_t, double>> getSortedVirtualEdgeList(const std::vector<size_t> &active_vertices,
                                                                  const robin_hood::unordered_map<uint64_t, double> &virtual_distance_hash_table, const double maxeps, int threadnum);
 
-    robin_hood::unordered_map<int64_t, size_t> getVirtualActiveEdgeIndexHashTable(const std::vector<std::pair<int64_t, double>> &sorted_virtual_edge, const size_t virtualvtnum);
+    robin_hood::unordered_map<int64_t, size_t> getVirtualActiveEdgeIndexHashTable(const std::vector<std::pair<int64_t, double>> &sorted_virtual_edge, const size_t pvnum);
 
     // std::vector<std::pair<int64_t, double>> getVirtualCofacetList(const std::vector<std::pair<int64_t, double>> &sorted_virtual_simplex_list,
     //                                                               const std::vector<size_t> &active_vertices, const robin_hood::unordered_map<uint64_t, double> &virtual_distance_hash_table,

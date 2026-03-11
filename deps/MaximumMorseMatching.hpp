@@ -14,7 +14,7 @@ public:
 
     size_t implicitMatch(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
 
-    int64_t implicitMatchAndGetMinCritialIndex(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);    //for the quotient
+    // int64_t implicitMatchAndGetMinCritialIndex(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);    //for the quotient
 
     std::vector<std::vector<size_t>> implicitMatchAndCollectPVSupports(MatchingContext& matching_context);
 
