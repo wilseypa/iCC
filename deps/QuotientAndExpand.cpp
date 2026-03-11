@@ -14,44 +14,44 @@ template class QuotientAndExpand<NormalDistMat>;
 template <typename DistMatType>
 std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runQuotient(const size_t maxdim, const double initeps, const int threadnumber)
 {
-    std::vector<std::unordered_set<size_t>> untrimed_virtual_vertex_indices = getVirtualVertexIndices(maxdim, initeps, threadnumber);
+    std::vector<std::unordered_set<size_t>> untrimed_pv_index_sets = getPVIndexSets(maxdim, initeps, threadnumber);
 
-    std::vector<std::unordered_set<size_t>> virtual_vertex_indices = trimVertexSets(untrimed_virtual_vertex_indices);
+    std::vector<std::unordered_set<size_t>> pv_index_sets = trimIndexSets(untrimed_pv_index_sets);
 
-    for (auto& virtual_vt : virtual_vertex_indices)
+    for (auto& pv_vts : pv_index_sets)
     {
-        std::cout << "size of the vt = " << virtual_vt.size() << "  contents :  ";
-        for (auto &vt : virtual_vt)
+        std::cout << "size of the vt = " << pv_vts.size() << "  contents :  ";
+        for (auto &vt : pv_vts)
             std::cout << vt << "  ";
         std::cout << '\n';
     }
 
-    return virtual_vertex_indices;
+    return pv_index_sets;
 }
 
 template <typename DistMatType>
-void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_set<size_t>>& virtual_vertex_indices, const size_t maxdim, const double maxeps, const int threadnumber)
+void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_set<size_t>>& pv_index_sets, const size_t maxdim, const double maxeps, const int threadnumber)
 {
     const size_t originalvtnum = dist_mat_.getVertexNumber(); // number of original vertices
-    const size_t virtualvtnum = virtual_vertex_indices.size();
-    const size_t npts = originalvtnum + virtualvtnum; // original + virtual vertices
+    const size_t pvnum = pv_index_sets.size();
+    const size_t npts = originalvtnum + pvnum; // original + virtual vertices
 
-    std::cout << "***********virtual vertex num = " << virtualvtnum << "*****************" << '\n';
+    std::cout << "***********virtual vertex num = " << pvnum << "*****************" << '\n';
 
-    SimplexUtility::updateBinomialTable(binomial_table_, originalvtnum, virtualvtnum, maxdim);
+    SimplexUtility::updateBinomialTable(binomial_table_, originalvtnum, pvnum, maxdim);
 
     SimplexEnumerator<DistMatType> simplex_enumerator(dist_mat_, binomial_table_);
 
-    auto active_vertices = getActiveVertexIndices(virtual_vertex_indices);
+    auto active_vertices = getActiveVertexIndices(pv_index_sets);
 
-    auto virtual_distance_hash_table = getVirtualDistanceHashTable(active_vertices, virtual_vertex_indices, threadnumber);
+    auto virtual_distance_hash_table = getVirtualDistanceHashTable(active_vertices, pv_index_sets, threadnumber);
 
     auto sorted_virtual_simplex = getSortedVirtualEdgeList(active_vertices, virtual_distance_hash_table, maxeps, threadnumber);
 
-    auto active_facet_hash = getVirtualActiveEdgeIndexHashTable(sorted_virtual_simplex, virtualvtnum);
+    auto active_facet_hash = getVirtualActiveEdgeIndexHashTable(sorted_virtual_simplex, pvnum);
 
     // auto sorted_virtual_cofacet = getVirtualCofacetList(sorted_virtual_simplex, active_vertices, virtual_distance_hash_table, 1, maxeps, threadnumber);
-    auto sorted_virtual_cofacet = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_simplex, active_vertices, virtual_vertex_indices, 1, maxeps, threadnumber);
+    auto sorted_virtual_cofacet = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_simplex, active_vertices, pv_index_sets, 1, maxeps, threadnumber);
 
     // Implicit interface graph (no explicit adjacency lists)
     BipartiteGraph bi_graph(1, 1, ImplicitConstructionTag{});
@@ -86,7 +86,7 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
             active_facet_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_virtual_cofacet);
 
             // enumerate next cofacet list (geometric PV clique filter)
-            sorted_virtual_simplex = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_cofacet, active_vertices, virtual_vertex_indices, dim, maxeps, threadnumber);
+            sorted_virtual_simplex = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_cofacet, active_vertices, pv_index_sets, dim, maxeps, threadnumber);
 
             std::swap(sorted_virtual_simplex, sorted_virtual_cofacet);
         }
@@ -96,7 +96,7 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
 }
 
 template <typename DistMatType>
-std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getVirtualVertexIndices(const size_t maxdim, const double initeps, const int threadnumber)
+std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getPVIndexSets(const size_t maxdim, const double initeps, const int threadnumber)
 {
     std::vector<std::unordered_set<size_t>> virtual_vertex_indices;
 
@@ -148,7 +148,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getVirtu
 
             std::cout << "pv support set num = " << pv_support_cofacets.size() << '\n';
 
-            virtual_vertex_indices = getGradientPathVertexSets(matching_context, gradient_paths, dim);
+            virtual_vertex_indices = getGradientPathVertexSets(matching_context, pv_support_cofacets, dim);
         }
 
         if (dim != maxdim)
@@ -305,7 +305,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getGradi
 }
 
 template <typename DistMatType>
-std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::trimVertexSets(std::vector<std::unordered_set<size_t>> &gradient_path_vertex_sets)
+std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::trimIndexSets(std::vector<std::unordered_set<size_t>> &gradient_path_vertex_sets)
 {
     std::sort(gradient_path_vertex_sets.begin(), gradient_path_vertex_sets.end(),
               [](const std::unordered_set<size_t> &lhs, const std::unordered_set<size_t> &rhs)

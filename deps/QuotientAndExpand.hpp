@@ -14,11 +14,11 @@ template <typename DistMatType>
 class QuotientAndExpand
 {
 public:
-    QuotientAndExpand(DistMatType &dist_mat, std::vector<std::vector<int64_t>> &binomial_table, const size_t originalvertexnumber) : dist_mat_(dist_mat), binomial_table_(binomial_table) {}
+    QuotientAndExpand(DistMatType &dist_mat, std::vector<std::vector<int64_t>>& binomial_table, const size_t originalvertexnumber) : dist_mat_(dist_mat), binomial_table_(binomial_table) {}
 
     std::vector<std::unordered_set<size_t>> runQuotient(const size_t maxdim, const double initeps, const int threadnumber);
 
-    void runExpand(const std::vector<std::unordered_set<size_t>> &virtual_vertex_indices, const size_t maxdim, const double maxeps, const int threadnumber);
+    void runExpand(const std::vector<std::unordered_set<size_t>>& pv_index_sets, const size_t maxdim, const double maxeps, const int threadnumber);
 
 private:
     static constexpr int MAX_SIZE_ = 64; // virtual vertex size cap
@@ -81,13 +81,13 @@ private:
     //     }
     // };
 
-    std::vector<std::unordered_set<size_t>> getVirtualVertexIndices(const size_t maxdim, const double initeps, const int threadnumber);
+    std::vector<std::unordered_set<size_t>> getPVIndexSets(const size_t maxdim, const double initeps, const int threadnumber);
 
     std::vector<std::vector<size_t>> extractGradientPaths(const MatchingContext &matching_context, const double minfacetweight);
 
     std::vector<std::unordered_set<size_t>> getGradientPathVertexSets(const MatchingContext &matching_context, const std::vector<std::vector<size_t>> &gradient_paths, const size_t dim);
 
-    std::vector<std::unordered_set<size_t>> trimVertexSets(std::vector<std::unordered_set<size_t>> &gradient_path_vertex_sets);
+    std::vector<std::unordered_set<size_t>> trimIndexSets(std::vector<std::unordered_set<size_t>> &gradient_path_vertex_sets);
 
     std::vector<size_t> getActiveVertexIndices(const std::vector<std::unordered_set<size_t>> &virtual_vertex_indices); // list of active indices to construct edges and cofaces
 
