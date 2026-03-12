@@ -18,9 +18,31 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runQuoti
 
     std::vector<std::unordered_set<size_t>> pv_index_sets = trimIndexSets(untrimed_pv_index_sets);
 
+    /********************************debug*******************************/
+    const auto getMaxPairwiseDistance = [this](const std::unordered_set<size_t>& vertex_set)
+    {
+        if (vertex_set.size() < 2)
+            return 0.0;
+
+        double maxdist = 0.0;
+        for (auto first = vertex_set.begin(); first != vertex_set.end(); ++first)
+        {
+            auto second = first;
+            ++second;
+            for (; second != vertex_set.end(); ++second)
+            {
+                maxdist = std::max(maxdist, dist_mat_.getDistance(*first, *second));
+            }
+        }
+
+        return maxdist;
+    };
+
     for (auto& pv_vts : pv_index_sets)
     {
-        std::cout << "size of the vt = " << pv_vts.size() << "  contents :  ";
+        std::cout << "size of the vt = " << pv_vts.size()
+                  << "  max pairwise distance = " << getMaxPairwiseDistance(pv_vts)
+                  << "  contents :  ";
         for (auto &vt : pv_vts)
             std::cout << vt << "  ";
         std::cout << '\n';
@@ -147,6 +169,14 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getPVInd
             auto pv_support_cofacets = morse_matching.implicitMatchAndCollectPVSupports(matching_context);
 
             std::cout << "pv support set num = " << pv_support_cofacets.size() << '\n';
+
+            for (auto& support : pv_support_cofacets)
+            {
+                std::cout << "support cofacet indices: ";
+                for (auto& idx : support)
+                    std::cout << idx << "  ";
+                std::cout << '\n';
+            }
 
             virtual_vertex_indices = getGradientPathVertexSets(matching_context, pv_support_cofacets, dim);
         }
