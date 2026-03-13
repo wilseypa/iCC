@@ -338,9 +338,9 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getGradi
 template <typename DistMatType>
 std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::trimIndexSets(std::vector<std::unordered_set<size_t>> &gradient_path_vertex_sets)
 {
-    std::sort(gradient_path_vertex_sets.begin(), gradient_path_vertex_sets.end(),
-              [](const std::unordered_set<size_t> &lhs, const std::unordered_set<size_t> &rhs)
-              { return lhs.size() > rhs.size(); });
+    // std::sort(gradient_path_vertex_sets.begin(), gradient_path_vertex_sets.end(),
+    //           [](const std::unordered_set<size_t> &lhs, const std::unordered_set<size_t> &rhs)
+    //           { return lhs.size() > rhs.size(); });
 
     std::vector<std::unordered_set<size_t>> trimmed_vertex_sets;
 
@@ -348,15 +348,9 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::trimInde
 
     // const size_t MAX_VERTICES_NUM = MAX_SIZE_ - 1;    //max number of virtual vertex. the max value of uint8_t used in EdgeRecord
 
-    for (auto& vertex_set : gradient_path_vertex_sets)
+    for (auto it = gradient_path_vertex_sets.rbegin(); it != gradient_path_vertex_sets.rend(); ++it)
     {
-        // not necessary
-        // if (trimmed_vertex_sets.size() >= MAX_VERTICES_NUM) 
-        // {
-        //     std::cout << "Warning: Reached maximum number of virtual vertices (" << MAX_VERTICES_NUM << "). Discarding remaining candidates." << std::endl;
-        //     break;
-        // }
-
+        auto& vertex_set = *it;
         bool overlap = false;
 
         for (const auto vertex : vertex_set)
