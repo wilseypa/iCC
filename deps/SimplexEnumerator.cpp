@@ -417,11 +417,11 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getGeome
 
         const size_t minfacetvt = simplex_vertices.back();
 
-        // *************replace it with a hash table later****************
-        auto iter = std::find(active_vertices.begin(), active_vertices.end(), minfacetvt);
+        const auto iter = std::lower_bound(active_vertices.begin(), active_vertices.end(), minfacetvt);
 
-        if (iter == active_vertices.end())
+        if (iter == active_vertices.end() || *iter != minfacetvt)
             throw std::out_of_range("vertex not found in active vertex list");
+
         const size_t vtpos = static_cast<size_t>(std::distance(active_vertices.begin(), iter));
 
         const bool hasvirtual = (simplex_vertices.front() >= originalvtnum);

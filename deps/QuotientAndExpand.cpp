@@ -16,7 +16,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runQuoti
 {
     std::vector<std::unordered_set<size_t>> untrimed_pv_index_sets = getPVIndexSets(maxdim, initeps, threadnumber);
 
-    std::vector<std::unordered_set<size_t>> pv_index_sets = trimIndexSets(untrimed_pv_index_sets);
+    std::vector<std::unordered_set<size_t>> pv_index_sets = trimIndexSets(untrimed_pv_index_sets, initeps);
 
     /********************************debug*******************************/
     const auto getMaxPairwiseDistance = [this](const std::unordered_set<size_t>& vertex_set)
@@ -336,11 +336,30 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getGradi
 }
 
 template <typename DistMatType>
-std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::trimIndexSets(std::vector<std::unordered_set<size_t>> &gradient_path_vertex_sets)
+std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::trimIndexSets(std::vector<std::unordered_set<size_t>>& gradient_path_vertex_sets, const double initeps)
 {
     // std::sort(gradient_path_vertex_sets.begin(), gradient_path_vertex_sets.end(),
     //           [](const std::unordered_set<size_t> &lhs, const std::unordered_set<size_t> &rhs)
     //           { return lhs.size() > rhs.size(); });
+
+    const auto getMaxPairwiseDistance = [this](const std::unordered_set<size_t>& vertex_set)
+    {
+        if (vertex_set.size() < 2)
+            return 0.0;
+
+        double maxdist = 0.0;
+        for (auto first = vertex_set.begin(); first != vertex_set.end(); ++first)
+        {
+            auto second = first;
+            ++second;
+            for (; second != vertex_set.end(); ++second)
+            {
+                maxdist = std::max(maxdist, dist_mat_.getDistance(*first, *second));
+            }
+        }
+
+        return maxdist;
+    };
 
     std::vector<std::unordered_set<size_t>> trimmed_vertex_sets;
 
@@ -364,6 +383,9 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::trimInde
 
         if (!overlap)
         {
+            if (getMaxPairwiseDistance(vertex_set) > initeps)
+                continue;
+
             claimed_vertices.insert(vertex_set.begin(), vertex_set.end());
             trimmed_vertex_sets.push_back(std::move(vertex_set));
         }

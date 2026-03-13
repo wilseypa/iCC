@@ -87,7 +87,7 @@ private:
 
     std::vector<std::unordered_set<size_t>> getGradientPathVertexSets(const MatchingContext &matching_context, const std::vector<std::vector<size_t>>& pv_support_cofacets, const size_t dim);
 
-    std::vector<std::unordered_set<size_t>> trimIndexSets(std::vector<std::unordered_set<size_t>> &gradient_path_vertex_sets);
+    std::vector<std::unordered_set<size_t>> trimIndexSets(std::vector<std::unordered_set<size_t>>& gradient_path_vertex_sets, const double initeps);
 
     std::vector<size_t> getActiveVertexIndices(const std::vector<std::unordered_set<size_t>>& pv_index_sets); // list of active indices to construct edges and cofaces
 
