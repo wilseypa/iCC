@@ -12,6 +12,36 @@ template class QuotientAndExpand<NormalDistMat>;
 // template class QuotientAndExpand<SparseDistMat>;
 
 template <typename DistMatType>
+void QuotientAndExpand<DistMatType>::runPiecewisePH(const std::vector<double>& eps_breaks, const size_t maxdim, const int threadnumber)
+{
+    WindowState win_state(dist_mat_.getVertexNumber());
+
+    // from eps_0 = 0 to eps_max
+    std::vector<double> full_eps_list;
+    full_eps_list.reserve(eps_breaks.size() + 1);
+    full_eps_list.push_back(0.0);
+    full_eps_list.insert(full_eps_list.end(), eps_breaks.begin(), eps_breaks.end());
+
+    for (size_t i = 1; i < full_eps_list.size(); ++i)
+    {
+        const double eps_lo = full_eps_list[i - 1];
+        const double eps_hi = full_eps_list[i];
+
+        const bool collect_pv = (i + 1 < full_eps_list.size());
+
+        auto raw_pv_label_sets = runWindow(win_state, maxdim, eps_lo, eps_hi, threadnumber, collect_pv);
+
+        if (!collect_pv) break;
+
+        auto new_pv_list = trimPVCandidates(win_state, raw_pv_label_sets, eps_hi);
+
+        rebuildWindowState(win_state, new_pv_list);
+    }
+
+    return;
+}
+
+template <typename DistMatType>
 std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runQuotient(const size_t maxdim, const double initeps, const int threadnumber)
 {
     std::vector<std::unordered_set<size_t>> untrimed_pv_index_sets = getPVIndexSets(maxdim, initeps, threadnumber);
@@ -117,10 +147,226 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
     return;
 }
 
+/* private helpers */
+
+template <typename DistMatType>
+std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindow(const WindowState& win_state, const size_t maxdim, const double eps_lo, const double eps_hi,
+                                                                                  const int threadnumber, const bool collect_pv)
+{
+    const size_t original_vt_num = win_state.original_vertex_number;
+    const size_t pv_num = win_state.pv_flat_index_set_list.size();
+    const size_t npts = original_vt_num + pv_num;
+
+    SimplexUtility::updateBinomialTable(binomial_table_, original_vt_num, pv_num, maxdim);
+
+    SimplexEnumerator<DistMatType> simplex_enumerator(dist_mat_, binomial_table_);
+
+    auto& pv_index_sets = win_state.pv_flat_index_set_list;
+    auto& active_labels = win_state.active_label_list;
+
+    auto virtual_distance_hash = getVirtualDistanceHashTable(active_labels, pv_index_sets, threadnumber);
+
+    auto sorted_virtual_simplex = getSortedVirtualEdgeList(active_labels, virtual_distance_hash, eps_hi, threadnumber);
+
+    auto active_simplex_hash = getVirtualActiveEdgeIndexHashTable(sorted_virtual_simplex, pv_num);
+
+    auto sorted_virtual_cofacet = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_simplex, 
+                                                                                    active_labels, pv_index_sets, 1, eps_hi, threadnumber);
+    
+    BipartiteGraph bi_graph(1, 1, ImplicitConstructionTag{});
+
+    std::vector<std::pair<double, double>> dim_persistent_pairs;
+
+    std::vector<std::unordered_set<size_t>> raw_pv_label_sets;
+
+    MaximumMorseMatching morse_matching;
+
+    for (size_t dim = 2; dim <= maxdim; ++dim)
+    {
+        bi_graph.updateDimensionImplicit(sorted_virtual_cofacet.size(), sorted_virtual_simplex.size());
+
+        auto cofacet_hash = SimplexUtility::getSimplexIndexHashTable(sorted_virtual_cofacet);
+
+        MatchingContext matching_context(bi_graph, binomial_table_, sorted_virtual_simplex, sorted_virtual_cofacet,
+                                         active_simplex_hash, cofacet_hash, npts, dim);
+
+
+        if (dim != maxdim)
+        {
+            auto crit_simp_num = morse_matching.implicitMatch(matching_context, dim_persistent_pairs);
+
+            dim_persistent_pairs.clear();
+
+            // facets for the next dimension are the unmatched cofacets from the current dimension
+            active_simplex_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_virtual_cofacet);
+
+            // enumerate next cofacet list
+            sorted_virtual_simplex = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_cofacet, active_labels, pv_index_sets, dim, eps_hi, threadnumber);
+            std::swap(sorted_virtual_simplex, sorted_virtual_cofacet);
+        }
+        else if (collect_pv)
+        {
+            auto pv_support_cofacets = morse_matching.implicitMatchAndCollectPVSupports(matching_context);
+
+            raw_pv_label_sets = getPVSupportLabelSets(matching_context, pv_support_cofacets, npts, dim);
+        }
+        else
+        {
+            auto crit_simp_num = morse_matching.implicitMatch(matching_context, dim_persistent_pairs);
+
+            dim_persistent_pairs.clear();
+        }
+    }
+
+    return raw_pv_label_sets;
+}
+
+template <typename DistMatType>
+std::vector<typename QuotientAndExpand<DistMatType>::PVCandidate> 
+QuotientAndExpand<DistMatType>::trimPVCandidates(const WindowState& win_state, const std::vector<std::unordered_set<size_t>>& raw_label_sets, const double eps_hi)
+{
+    const auto getMaxPairwiseDistance = [this](const std::unordered_set<size_t>& index_set)
+    {
+        if (index_set.size() < 2)
+            return 0.0;
+
+        double maxdist = 0.0;
+        for (auto first = index_set.begin(); first != index_set.end(); ++first)
+        {
+            auto second = first;
+            ++second;
+            for (; second != index_set.end(); ++second)
+            {
+                maxdist = std::max(maxdist, dist_mat_.getDistance(*first, *second));
+            }
+        }
+
+        return maxdist;
+    };
+
+    std::vector<PVCandidate> accepted_pv_list;
+
+    std::unordered_set<size_t> claimed_labels;
+
+    for (auto rit = raw_label_sets.rbegin(); rit != raw_label_sets.rend(); ++rit)
+    {
+        auto& label_set = *rit;
+        bool overlap = false;
+
+        for (const auto label: label_set)
+        {
+            if (claimed_labels.count(label))
+            {
+                overlap = true;
+                break;
+            }
+        }
+
+        if (!overlap)
+        {
+            auto flat_index_set = flattenLabelSet(win_state, label_set);
+
+            if (flat_index_set.size() >= MAX_SIZE_) continue;
+
+            if (getMaxPairwiseDistance(flat_index_set) > eps_hi) continue;
+
+            claimed_labels.insert(label_set.begin(), label_set.end());
+
+            accepted_pv_list.push_back(PVCandidate{label_set, std::move(flat_index_set)});
+        }
+    }
+
+    return accepted_pv_list;
+}
+
+template <typename DistMatType>
+std::unordered_set<size_t> QuotientAndExpand<DistMatType>::flattenLabelSet(const WindowState& win_state, const std::unordered_set<size_t>& raw_label_set)
+{
+    const auto origin_vt_num = win_state.original_vertex_number;
+
+    std::unordered_set<size_t> flat_index_set;
+
+    for (const auto label : raw_label_set)
+    {
+        if (label < origin_vt_num)    //regular vertex index
+        {
+            flat_index_set.insert(label);
+        }
+        else
+        {
+            const auto& pv_indices = win_state.pv_flat_index_set_list[label - origin_vt_num];
+            flat_index_set.insert(pv_indices.begin(), pv_indices.end());
+        }
+    }
+
+    return flat_index_set;
+}
+
+template <typename DistMatType>
+void QuotientAndExpand<DistMatType>::rebuildWindowState(WindowState& win_state, const std::vector<PVCandidate>& new_pv_list)
+{
+    const size_t origin_vt_num = win_state.original_vertex_number;
+    const size_t old_pv_num = win_state.pv_flat_index_set_list.size();
+
+    auto old_pv_index_sets = std::move(win_state.pv_flat_index_set_list);
+
+    std::vector<bool> absorbed_old_pv(old_pv_num, false);
+
+    for (const auto& new_pv : new_pv_list)
+    {
+        for (const auto label : new_pv.label_set)
+        {
+            if (label >= origin_vt_num)
+                absorbed_old_pv[label - origin_vt_num] = true;
+        }
+    }
+
+    std::vector<std::unordered_set<size_t>> updated_pv_index_sets;
+
+    // old unmerged PVs first
+    for (size_t i = 0; i < old_pv_num; ++i)
+    {
+        if (!absorbed_old_pv[i])
+            updated_pv_index_sets.push_back(std::move(old_pv_index_sets[i]));
+    }
+
+    // then new PVs
+    for (const auto& new_pv : new_pv_list)
+    {
+        updated_pv_index_sets.push_back(new_pv.flat_index_set);
+    }
+
+    // rebuild active original labels from final coverage
+    std::vector<bool> is_covered(origin_vt_num, false);
+    for (const auto& pv_indices : updated_pv_index_sets)
+    {
+        for (const auto idx : pv_indices)
+            is_covered[idx] = true;
+    }
+
+    std::vector<size_t> active_label_list;
+    active_label_list.reserve(origin_vt_num + updated_pv_index_sets.size());
+
+    for (size_t i = 0; i < origin_vt_num; ++i)
+    {
+        if (!is_covered[i]) active_label_list.push_back(i);
+    }
+
+    for (size_t i = 0; i < updated_pv_index_sets.size(); ++i)
+    {
+        active_label_list.push_back(origin_vt_num + i);
+    }
+
+    win_state.active_label_list = std::move(active_label_list);
+    win_state.pv_flat_index_set_list = std::move(updated_pv_index_sets);
+
+    return;
+}
+
 template <typename DistMatType>
 std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getPVIndexSets(const size_t maxdim, const double initeps, const int threadnumber)
 {
-    std::vector<std::unordered_set<size_t>> virtual_vertex_indices;
+    std::vector<std::unordered_set<size_t>> raw_pv_index_sets;
 
     const size_t originalvtnum = dist_mat_.getVertexNumber(); // number of original vertices
 
@@ -178,7 +424,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getPVInd
                 std::cout << '\n';
             }
 
-            virtual_vertex_indices = getGradientPathVertexSets(matching_context, pv_support_cofacets, dim);
+            raw_pv_index_sets = getPVSupportLabelSets(matching_context, pv_support_cofacets, originalvtnum, dim);
         }
 
         if (dim != maxdim)
@@ -192,130 +438,17 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getPVInd
         }
     }
 
-    return virtual_vertex_indices;
+    return raw_pv_index_sets;
 }
 
 template <typename DistMatType>
-std::vector<std::vector<size_t>> QuotientAndExpand<DistMatType>::extractGradientPaths(const MatchingContext& matching_context, const double minfacetweight)
+std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getPVSupportLabelSets(const MatchingContext &matching_context, const std::vector<std::vector<size_t>>& pv_support_cofacets,
+                                                                                              const size_t npts, const size_t dim)
 {
-    auto& bi_graph = matching_context.graph;
-    auto& sorted_facets = matching_context.sorted_facets;
-    auto& sorted_cofacets = matching_context.sorted_cofacets;
-    auto& facet_hash = matching_context.facet_bindex_to_list_index;
-    auto& binom_table = matching_context.binomial_table;
+    std::vector<std::unordered_set<size_t>> pv_support_vertex_sets;
+    pv_support_vertex_sets.reserve(pv_support_cofacets.size());
 
-    const size_t u = bi_graph.unodes;
-    const size_t v = bi_graph.vnodes;
-
-    const size_t dim = matching_context.dim;   // cofacet dimension
-    const size_t npts = matching_context.npts; // total vertex number
-
-    // cutoff by weight
-    auto facetcutoff = std::lower_bound(sorted_facets.begin(), sorted_facets.end(), minfacetweight,
-                                        [](const std::pair<int64_t, double> &pair, double weight)
-                                        { return pair.second < weight; });
-
-    const size_t maxfacetindex = static_cast<size_t>(std::distance(sorted_facets.begin(), facetcutoff));
-
-    auto cofacetcutoff = std::lower_bound(sorted_cofacets.begin(), sorted_cofacets.end(), minfacetweight,
-                                          [](const std::pair<int64_t, double> &pair, double weight)
-                                          { return pair.second < weight; });
-
-    const size_t maxcofacetindex = static_cast<size_t>(std::distance(sorted_cofacets.begin(), cofacetcutoff));
-
-    if (maxfacetindex == 0 || maxcofacetindex == 0)
-        return {};
-
-    // Union-find over cofacet indices in [0, maxcofacetindex)
-    UnionFind union_find(maxcofacetindex);
-
-    // mark cofacets that have been claimed into some gradient-path component
-    std::vector<uint8_t> is_in_gradient_path(maxcofacetindex, 0);
-
-    // workspaces
-    std::vector<size_t> facet_indices;
-    facet_indices.reserve(dim + 1);
-    std::vector<size_t> vertex_workspace;
-    vertex_workspace.reserve(dim + 1);
-
-    // scan facets (prefix under cutoff); connect matched cofacets that are linked through active facets
-    for (size_t facetidx = 0; facetidx < maxfacetindex; ++facetidx)
-    {
-        const int64_t cofacetidxint = bi_graph.match_list[facetidx + u];
-
-        if (cofacetidxint < 0)
-            continue;
-
-        const size_t cofacetidx = static_cast<size_t>(cofacetidxint);
-
-        if (cofacetidx >= maxcofacetindex)
-            continue;
-
-        is_in_gradient_path[cofacetidx] = 1;
-
-        // get active facet neighbors of this cofacet (implicit traversal)
-        SimplexUtility::getFacetListIndicesInPlace(binom_table, facet_hash, facet_indices, vertex_workspace,
-                                                   sorted_cofacets[cofacetidx].first, npts, dim);
-
-        for (const auto nextfacetidx : facet_indices)
-        {
-            if (nextfacetidx == facetidx || nextfacetidx >= maxfacetindex)
-                continue;
-
-            const int64_t nextcofacetidxint = bi_graph.match_list[u + nextfacetidx];
-            if (nextcofacetidxint < 0)
-                continue;
-
-            const size_t nextcofacetidx = static_cast<size_t>(nextcofacetidxint);
-
-            if (nextcofacetidx >= maxcofacetindex)
-                continue;
-
-            if (is_in_gradient_path[nextcofacetidx])
-                continue; // keep components disjoint
-
-            is_in_gradient_path[nextcofacetidx] = 1;
-            union_find.unionSets(cofacetidx, nextcofacetidx);
-        }
-    }
-
-    // collect components
-    std::unordered_map<size_t, std::vector<size_t>> component_map;
-    component_map.reserve(maxcofacetindex);
-
-    for (size_t cofacetidx = 0; cofacetidx < maxcofacetindex; ++cofacetidx)
-    {
-        if (is_in_gradient_path[cofacetidx])
-        {
-            const size_t root = union_find.unionFind(cofacetidx);
-            component_map[root].push_back(cofacetidx);
-        }
-    }
-
-    std::vector<std::vector<size_t>> gradient_paths;
-    gradient_paths.reserve(component_map.size());
-
-    for (auto& [root, path] : component_map) // structured binding requires C++17
-    {
-
-        // std::cout<<"in extract grad path function, path size = "<<path.size()<<'\n';
-
-        if (path.size() > 1) // minimum number of cofacets in the path
-        {
-            gradient_paths.push_back(std::move(path));
-        }
-    }
-
-    return gradient_paths;
-}
-
-template <typename DistMatType>
-std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getGradientPathVertexSets(const MatchingContext &matching_context, const std::vector<std::vector<size_t>>& pv_support_cofacets, const size_t dim)
-{
-    std::vector<std::unordered_set<size_t>> gradient_path_vertex_sets;
-    gradient_path_vertex_sets.reserve(pv_support_cofacets.size());
-
-    auto npt = matching_context.binomial_table.size() - 1;
+    // auto npt = matching_context.binomial_table.size() - 1;
 
     for (const auto& pv_support : pv_support_cofacets)
     {
@@ -325,34 +458,34 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getGradi
         for (auto cofacetidx : pv_support)
         {
             auto bindex = matching_context.sorted_cofacets[cofacetidx].first;
-            auto simplex_vertices = SimplexUtility::getSimplexVertices(matching_context.binomial_table, bindex, npt, dim);
+            auto simplex_vertices = SimplexUtility::getSimplexVertices(matching_context.binomial_table, bindex, npts, dim);
             vertex_set.insert(simplex_vertices.begin(), simplex_vertices.end());
         }
         if (vertex_set.size() < MAX_SIZE_)
-            gradient_path_vertex_sets.push_back(std::move(vertex_set));
+            pv_support_vertex_sets.push_back(std::move(vertex_set));
     }
 
-    return gradient_path_vertex_sets;
+    return pv_support_vertex_sets;
 }
 
 template <typename DistMatType>
-std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::trimIndexSets(std::vector<std::unordered_set<size_t>>& gradient_path_vertex_sets, const double initeps)
+std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::trimIndexSets(std::vector<std::unordered_set<size_t>>& pv_support_vertex_sets, const double initeps)
 {
     // std::sort(gradient_path_vertex_sets.begin(), gradient_path_vertex_sets.end(),
     //           [](const std::unordered_set<size_t> &lhs, const std::unordered_set<size_t> &rhs)
     //           { return lhs.size() > rhs.size(); });
 
-    const auto getMaxPairwiseDistance = [this](const std::unordered_set<size_t>& vertex_set)
+    const auto getMaxPairwiseDistance = [this](const std::unordered_set<size_t>& index_set)
     {
-        if (vertex_set.size() < 2)
+        if (index_set.size() < 2)
             return 0.0;
 
         double maxdist = 0.0;
-        for (auto first = vertex_set.begin(); first != vertex_set.end(); ++first)
+        for (auto first = index_set.begin(); first != index_set.end(); ++first)
         {
             auto second = first;
             ++second;
-            for (; second != vertex_set.end(); ++second)
+            for (; second != index_set.end(); ++second)
             {
                 maxdist = std::max(maxdist, dist_mat_.getDistance(*first, *second));
             }
@@ -367,7 +500,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::trimInde
 
     // const size_t MAX_VERTICES_NUM = MAX_SIZE_ - 1;    //max number of virtual vertex. the max value of uint8_t used in EdgeRecord
 
-    for (auto it = gradient_path_vertex_sets.rbegin(); it != gradient_path_vertex_sets.rend(); ++it)
+    for (auto it = pv_support_vertex_sets.rbegin(); it != pv_support_vertex_sets.rend(); ++it)
     {
         auto& vertex_set = *it;
         bool overlap = false;
@@ -575,344 +708,4 @@ robin_hood::unordered_map<int64_t, size_t> QuotientAndExpand<DistMatType>::getVi
     return active_edge_hash_table;
 }
 
-// template <typename DistMatType>
-// std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getVirtualCofacetList(const std::vector<std::pair<int64_t, double>> &sorted_virtual_simplex_list,
-//                                                                                               const std::vector<size_t> &active_vertices, const robin_hood::unordered_map<uint64_t, double> &virtual_distance_hash_table,
-//                                                                                               const size_t dim, const double maxeps, int threadnum)
-// {
-//     std::vector<std::vector<std::pair<int64_t, double>>> thread_workspace(threadnum);
 
-//     const size_t npts = binomial_table_.size() - 1;
-
-//     omp_set_num_threads(threadnum);
-
-// #pragma omp parallel for schedule(dynamic)
-//     for (size_t i = 0; i < sorted_virtual_simplex_list.size(); ++i)
-//     {
-//         int threadid = omp_get_thread_num();
-//         auto &thread_cofacets = thread_workspace[threadid];
-
-//         const auto &simplex_pair = sorted_virtual_simplex_list[i];
-//         const int64_t bindex = simplex_pair.first;
-//         const double weight = simplex_pair.second;
-
-//         auto simplex_vertices = SimplexUtility::getSimplexVertices(binomial_table_, bindex, npts, dim);
-
-//         auto iter = std::find(active_vertices.begin(), active_vertices.end(), simplex_vertices.back());
-
-//         if (iter == active_vertices.end())
-//             throw std::out_of_range("vertex not found in active vertex list");
-
-//         auto vtpos = std::distance(active_vertices.begin(), iter);
-
-//         for (size_t j = 0; j < vtpos; ++j)
-//         {
-//             const size_t covt = active_vertices[j];
-
-//             double newweight = 0.0;
-//             for (const auto &vt : simplex_vertices)
-//             {
-//                 newweight = std::max(newweight, getVirtualDistance(covt, vt, virtual_distance_hash_table));
-//             }
-
-//             double cofacetweight = std::max(newweight, weight);
-//             // std::cout<<"potiential cofacet weight = "<<cofacetweight<<'\n';
-
-//             if (cofacetweight < maxeps)
-//             {
-//                 int64_t shiftedbindex = SimplexUtility::getBinomialIndex(binomial_table_, simplex_vertices, 1);
-//                 int64_t cofacetbindex = shiftedbindex + covt;
-//                 thread_cofacets.emplace_back(cofacetbindex, cofacetweight);
-//             }
-//         }
-//     }
-
-//     std::vector<std::pair<int64_t, double>> sorted_cofacets;
-//     for (const auto &thread_cofacets : thread_workspace)
-//     {
-//         sorted_cofacets.insert(sorted_cofacets.end(), thread_cofacets.begin(), thread_cofacets.end());
-//     }
-
-//     SimplexUtility::sortSimplexByWeightThenIndex(sorted_cofacets);
-
-//     return sorted_cofacets;
-// }
-
-// template <typename DistMatType>
-// bool QuotientAndExpand<DistMatType>::findCliqueRecursive(const std::vector<std::vector<std::vector<uint64_t>>> &adj_mask,
-//                                                          std::vector<uint64_t> &candidate_mask,
-//                                                          std::vector<size_t> &current_clique_local_indices, size_t depth)
-// {
-//     const size_t K = candidate_mask.size(); // clique size
-
-//     if (depth == K)
-//         return true; // Successfully found a clique of the target size
-
-//     // heuristic: pick the set with the fewest remaining candidates to branch on next.
-//     size_t pivot = std::numeric_limits<size_t>::max();
-//     size_t mincandidates = std::numeric_limits<size_t>::max(); // size cap of virtual vertex = 64
-
-//     const size_t UNCHOSEN = std::numeric_limits<size_t>::max();
-
-//     for (auto i = 0; i < K; ++i)
-//     {
-//         if (current_clique_local_indices[i] == UNCHOSEN)
-//         {
-//             int candnum = __builtin_popcountll(candidate_mask[i]); // popcount returns int
-
-//             if (candnum > 0 && candnum < mincandidates)
-//             {
-//                 mincandidates = candnum;
-//                 pivot = i;
-//             }
-//         }
-//     }
-
-//     if (pivot == std::numeric_limits<size_t>::max())
-//         return false; // no valid candidates left
-
-//     uint64_t opts = candidate_mask[pivot];
-//     while (opts)
-//     {
-//         int localidx = __builtin_ctzll(opts); // local index of the vertex represented by the lowest bit. <64
-//         opts &= (opts - 1);                   // pop the lowest bit
-
-//         current_clique_local_indices[pivot] = static_cast<size_t>(localidx);
-//         std::vector<uint64_t> next_candidate_mask = candidate_mask;
-//         bool feasible = true;
-
-//         // early prune the candidates
-//         for (auto j = 0; j < K; ++j)
-//         {
-//             if (j == pivot || current_clique_local_indices[j] != UNCHOSEN)
-//                 continue;
-
-//             next_candidate_mask[j] &= adj_mask[pivot][j][static_cast<size_t>(localidx)];
-//             if (next_candidate_mask[j] == 0ULL)
-//             {
-//                 feasible = false;
-//                 break;
-//             }
-//         }
-
-//         if (feasible && findCliqueRecursive(adj_mask, next_candidate_mask, current_clique_local_indices, depth + 1))
-//             return true;
-//     }
-
-//     // unfeasible with current options, backtrack
-//     current_clique_local_indices[pivot] = UNCHOSEN;
-//     return false;
-// }
-
-// template <typename DistMatType>
-// double QuotientAndExpand<DistMatType>::getGeometricVirtualSimplexWeight(const std::vector<size_t> &simplex_vertices,
-//                                                                         const std::vector<std::unordered_set<size_t>> &virtual_vertex_indices, size_t dim)
-// {
-//     // const size_t MAXSIZE = 64;
-
-//     const size_t UNCHOSEN = std::numeric_limits<size_t>::max();
-
-//     const size_t originalvtnum = dist_mat_.getVertexNumber();
-//     const size_t K = dim + 1;
-//     if (K < 3)
-//         return 0;
-
-//     // prepare the indices
-//     std::vector<std::vector<size_t>> vvt_idx_vec(K);
-//     for (auto i = 0; i < K; ++i)
-//     {
-//         size_t vtidx = simplex_vertices[i];
-
-//         if (vtidx < originalvtnum) // regular vertex
-//         {
-//             vvt_idx_vec[i] = {vtidx};
-//         }
-//         else // virtual vertex vvt
-//         {
-//             const auto &idx_set = virtual_vertex_indices[vtidx - originalvtnum];
-//             // if (idx_set.size() > MAXSIZE) throw std::runtime_error("Virtual vertex set size exceeds the limit.");
-//             vvt_idx_vec[i].assign(idx_set.begin(), idx_set.end());
-//         }
-//     }
-
-//     // collect and sort all the possible edges
-//     std::vector<EdgeRecord> sorted_edges;
-//     for (uint8_t i = 0; i < K; ++i)
-//     {
-//         for (uint8_t j = i + 1; j < K; ++j)
-//         {
-//             for (uint8_t locali = 0; locali < vvt_idx_vec[i].size(); ++locali)
-//             {
-//                 for (uint8_t localj = 0; localj < vvt_idx_vec[j].size(); ++localj)
-//                 {
-//                     double weight = dist_mat_.getDistance(vvt_idx_vec[i][locali], vvt_idx_vec[j][localj]);
-//                     sorted_edges.push_back({weight, i, j, locali, localj}); // aggregate/list initialization
-//                 }
-//             }
-//         }
-//     }
-//     std::sort(sorted_edges.begin(), sorted_edges.end());
-
-//     if (sorted_edges.empty())
-//         return std::numeric_limits<double>::infinity();
-
-//     // incrementally check for a clique
-//     // adj mask size == K * K * VT_SIZE_MAX * uint64_t
-//     std::vector<std::vector<std::vector<uint64_t>>> adj_mask(K, std::vector<std::vector<uint64_t>>(K));
-//     for (auto i = 0; i < K; ++i)
-//     {
-//         for (auto j = 0; j < K; ++j)
-//         {
-//             if (i != j)
-//                 adj_mask[i][j].resize(vvt_idx_vec[i].size(), 0);
-//         }
-//     }
-
-//     // coverage mask to delay the recursive search
-//     uint64_t coverage = 0;
-//     bool covered = false;
-
-//     auto tempsize = sorted_edges.size();
-
-//     for (const auto &edge : sorted_edges)
-//     {
-//         // update adj mask with new edge
-//         adj_mask[edge.virtualidx0][edge.virtualidx1][edge.localidx0] |= (1ULL << edge.localidx1);
-//         adj_mask[edge.virtualidx1][edge.virtualidx0][edge.localidx1] |= (1ULL << edge.localidx0);
-
-//         // coverage check
-//         if (!covered)
-//         {
-//             coverage |= (1ULL << edge.virtualidx0) | (1ULL << edge.virtualidx1);
-//             if (static_cast<size_t>(__builtin_popcountll(coverage)) == K)
-//             {
-//                 covered = true;
-//             }
-//             else
-//             {
-//                 continue;
-//             }
-//         }
-
-//         std::vector<uint64_t> candidate_mask(K);
-//         for (auto i = 0; i < K; ++i)
-//         {
-//             candidate_mask[i] = (1ULL << vvt_idx_vec[i].size()) - 1; // init mask, all available
-//         }
-
-//         std::vector<size_t> current_clique_local_indices(K, UNCHOSEN);
-
-//         // std::cout<<"at dim = "<<dim<<"  virtual simp weight recursive call will start with sorted_edges size = "<<tempsize<<'\n';
-
-//         if (findCliqueRecursive(adj_mask, candidate_mask, current_clique_local_indices, 0))
-//             return edge.weight;
-//     }
-
-//     return std::numeric_limits<double>::infinity(); // no clique found
-// }
-
-// template <typename DistMatType>
-// std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getGeometricVirtualCofacetList(const std::vector<std::pair<int64_t, double>> &sorted_virtual_simplex_list,
-//                                                                                                        const std::vector<size_t> &active_vertices,
-//                                                                                                        const std::vector<std::unordered_set<size_t>> &virtual_vertex_indices,
-//                                                                                                        const size_t dim, const double maxeps, int threadnum)
-// {
-//     std::vector<std::vector<std::pair<int64_t, double>>> thread_workspace(threadnum);
-
-//     const size_t npts = binomial_table_.size() - 1; // original vertex number + virtual vertex number
-
-//     const size_t originalvtnum = dist_mat_.getVertexNumber();
-
-//     omp_set_num_threads(threadnum);
-
-// #pragma omp parallel for schedule(dynamic)
-//     for (auto i = 0; i < sorted_virtual_simplex_list.size(); ++i)
-//     {
-//         int threadid = omp_get_thread_num();
-//         auto &thread_cofacets = thread_workspace[threadid];
-
-//         const auto &simplex_pair = sorted_virtual_simplex_list[i];
-//         const int64_t bindex = simplex_pair.first;
-//         const double weight = simplex_pair.second;
-//         auto simplex_vertices = SimplexUtility::getSimplexVertices(binomial_table_, bindex, npts, dim);
-
-//         const size_t minfacetvt = simplex_vertices.back();
-//         auto iter = std::find(active_vertices.begin(), active_vertices.end(), minfacetvt);
-//         if (iter == active_vertices.end())
-//             throw std::out_of_range("vertex not found in active vertex list");
-//         auto vtpos = std::distance(active_vertices.begin(), iter);
-
-//         bool hasvirtual = (simplex_vertices.front() >= originalvtnum) ? true : false;
-
-//         for (auto j = 0; j < vtpos; ++j)
-//         {
-//             const size_t covt = active_vertices[j];
-
-//             std::vector<size_t> cofacet_vertices = simplex_vertices;
-//             cofacet_vertices.push_back(covt);
-
-//             double cofacetweight = 0.0;
-
-//             if (hasvirtual)
-//             {
-//                 cofacetweight = getGeometricVirtualSimplexWeight(cofacet_vertices, virtual_vertex_indices, dim + 1);
-//             }
-//             else
-//             {
-//                 // all real/regular vertices
-//                 // check distances from the new co-vertex to all vertices of the original facet
-//                 cofacetweight = weight;
-//                 for (const auto &vt : simplex_vertices)
-//                 {
-//                     cofacetweight = std::max(cofacetweight, dist_mat_.getDistance(covt, vt));
-//                 }
-//             }
-
-//             if (cofacetweight > 0 && cofacetweight < maxeps)
-//             {
-//                 int64_t cofacetbindex = SimplexUtility::getBinomialIndex(binomial_table_, cofacet_vertices, 0);
-//                 thread_cofacets.emplace_back(cofacetbindex, cofacetweight);
-//             }
-//         }
-//     }
-
-//     std::vector<std::pair<int64_t, double>> sorted_cofacets;
-//     for (const auto &thread_cofacets : thread_workspace)
-//     {
-//         sorted_cofacets.insert(sorted_cofacets.end(), thread_cofacets.begin(), thread_cofacets.end());
-//     }
-
-//     SimplexUtility::sortSimplexByWeightThenIndex(sorted_cofacets);
-
-//     return sorted_cofacets;
-// }
-
-// template <typename DistMatType>
-// void QuotientAndExpand<DistMatType>::buildInterface(BipartiteGraph &bi_graph, const std::vector<std::pair<int64_t, double>> &sorted_cofacet_list,
-//                                                     const robin_hood::unordered_map<int64_t, size_t> &active_facet_index_hash_table, const size_t dim)
-// {
-//     auto u = bi_graph.unodes;
-//     auto v = bi_graph.vnodes;
-
-//     // std::cout<<u<<"    "<<v<<'\n';
-
-//     for (size_t i = 0; i < sorted_cofacet_list.size(); i++)
-//     {
-//         int64_t bindex = sorted_cofacet_list[i].first;
-//         std::vector<int64_t> facet_bindex_list = SimplexUtility::getFacetBinomialIndices(binomial_table_, bindex, dim);
-
-//         for (auto fbidx : facet_bindex_list)
-//         {
-//             auto mapit = active_facet_index_hash_table.find(fbidx);
-//             if (mapit != active_facet_index_hash_table.end())
-//             {
-//                 size_t fidx = (*mapit).second; // facet idx in facet bindex_weight_pair list
-//                 bi_graph.adj_list[i].push_back(u + fidx);
-//                 bi_graph.adj_list[u + fidx].push_back(i);
-//             }
-//         }
-//         std::sort(bi_graph.adj_list[i].begin(), bi_graph.adj_list[i].end(), std::greater<size_t>());
-//     }
-
-//     return;
-// }

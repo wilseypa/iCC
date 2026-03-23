@@ -106,13 +106,15 @@ public:
     void buildInterface(BipartiteGraph &bi_graph, const std::vector<std::pair<int64_t, double>> &cofacet_list,
                         const robin_hood::unordered_map<int64_t, size_t> &active_facet_index, const std::vector<std::vector<int64_t>> &binomial_table, const size_t dim);
 
-    void runVRMorseTest(size_t maxdim, double maxeps, int threadnumber);
+    void morseVRTest(size_t maxdim, double maxeps, int threadnumber);
 
-    void runVRMorseMatching(size_t maxdim, double maxeps, int threadnumber);
+    void morseVRPH(size_t maxdim, double maxeps, int threadnumber);
     
-    void runAlphaMorseTest(double maxeps, int threadnumber);
+    void morseAlphaTest(double maxeps, int threadnumber);
 
-    void runQuotientAndExpand(size_t maxdim, double initeps, double maxeps, int threadnumber);
+    void morseQuotientAndExpand(const size_t maxdim, const double initeps, const double maxeps, const int threadnumber);
+
+    void morsePiecewisePH(const size_t maxdim, const std::vector<double>& eps_breaks, const int thread_number);
 
 private:
     std::vector<std::vector<double>> point_cloud_;

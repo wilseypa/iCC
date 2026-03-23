@@ -14,11 +14,13 @@ template <typename DistMatType>
 class QuotientAndExpand
 {
 public:
-    QuotientAndExpand(DistMatType &dist_mat, std::vector<std::vector<int64_t>>& binomial_table, const size_t originalvertexnumber) : dist_mat_(dist_mat), binomial_table_(binomial_table) {}
+    QuotientAndExpand(DistMatType& dist_mat, std::vector<std::vector<int64_t>>& binomial_table, const size_t originalvertexnumber) : dist_mat_(dist_mat), binomial_table_(binomial_table) {}
 
-    std::vector<std::unordered_set<size_t>> runQuotient(const size_t maxdim, const double initeps, const int threadnumber);
+    void runPiecewisePH(const std::vector<double>& eps_breaks, const size_t maxdim, const int thread_number);
 
-    void runExpand(const std::vector<std::unordered_set<size_t>>& pv_index_sets, const size_t maxdim, const double maxeps, const int threadnumber);
+    std::vector<std::unordered_set<size_t>> runQuotient(const size_t maxdim, const double initeps, const int thread_number);
+
+    void runExpand(const std::vector<std::unordered_set<size_t>>& pv_index_sets, const size_t maxdim, const double maxeps, const int thread_number);
 
 private:
     static constexpr int MAX_SIZE_ = 64; // virtual vertex size cap
@@ -69,25 +71,48 @@ private:
         }
     };
 
-    // struct EdgeRecord // edge = (idx0, idx1). edge record for clique finding
-    // {
-    //     double weight;
-    //     uint8_t virtualidx0, virtualidx1;
-    //     uint8_t localidx0, localidx1;
+    struct WindowState
+    {
+        size_t original_vertex_number = 0;
 
-    //     bool operator<(const EdgeRecord &edge) const
-    //     {
-    //         return weight < edge.weight;
-    //     }
-    // };
+        std::vector<std::unordered_set<size_t>> pv_flat_index_set_list;
 
-    std::vector<std::unordered_set<size_t>> getPVIndexSets(const size_t maxdim, const double initeps, const int threadnumber);
+        // active labels in the current window:
+        // original vertices: 0 .. original_vertex_number-1
+        // PV labels: original_vertex_number + i
+        std::vector<size_t> active_label_list;
 
-    std::vector<std::vector<size_t>> extractGradientPaths(const MatchingContext &matching_context, const double minfacetweight);
+        WindowState() = default;
 
-    std::vector<std::unordered_set<size_t>> getGradientPathVertexSets(const MatchingContext &matching_context, const std::vector<std::vector<size_t>>& pv_support_cofacets, const size_t dim);
+        explicit WindowState(size_t npts): original_vertex_number(npts), pv_flat_index_set_list(), active_label_list(npts)
+        {
+            std::iota(active_label_list.begin(), active_label_list.end(), 0);
+        }
+    };
 
-    std::vector<std::unordered_set<size_t>> trimIndexSets(std::vector<std::unordered_set<size_t>>& gradient_path_vertex_sets, const double initeps);
+    struct PVCandidate
+    {
+        // current labels found in this window; may include old PV labels
+        std::unordered_set<size_t> label_set;
+
+        // flattened to original vertex indices
+        std::unordered_set<size_t> flat_index_set;
+    };
+
+    std::vector<std::unordered_set<size_t>> runWindow(const WindowState& win_state, const size_t maxdim, const double eps_lo, const double eps_hi,
+                                                      const int thread_number, const bool collect_pv);
+
+    std::vector<PVCandidate> trimPVCandidates(const WindowState& win_state, const std::vector<std::unordered_set<size_t>>& raw_label_sets, const double eps_hi);
+
+    std::unordered_set<size_t> flattenLabelSet(const WindowState& win_state, const std::unordered_set<size_t>& raw_label_set);
+
+    void rebuildWindowState(WindowState& win_state, const std::vector<PVCandidate>& new_pv_list);
+
+    std::vector<std::unordered_set<size_t>> getPVIndexSets(const size_t maxdim, const double initeps, const int thread_number);
+
+    std::vector<std::unordered_set<size_t>> getPVSupportLabelSets(const MatchingContext &matching_context, const std::vector<std::vector<size_t>>& pv_support_cofacets, const size_t npts, const size_t dim);
+
+    std::vector<std::unordered_set<size_t>> trimIndexSets(std::vector<std::unordered_set<size_t>>& pv_support_vertex_sets, const double initeps);
 
     std::vector<size_t> getActiveVertexIndices(const std::vector<std::unordered_set<size_t>>& pv_index_sets); // list of active indices to construct edges and cofaces
 
@@ -101,26 +126,6 @@ private:
                                                                  const robin_hood::unordered_map<uint64_t, double> &virtual_distance_hash_table, const double maxeps, int threadnum);
 
     robin_hood::unordered_map<int64_t, size_t> getVirtualActiveEdgeIndexHashTable(const std::vector<std::pair<int64_t, double>> &sorted_virtual_edge, const size_t pvnum);
-
-    // std::vector<std::pair<int64_t, double>> getVirtualCofacetList(const std::vector<std::pair<int64_t, double>> &sorted_virtual_simplex_list,
-    //                                                               const std::vector<size_t> &active_vertices, const robin_hood::unordered_map<uint64_t, double> &virtual_distance_hash_table,
-    //                                                               const size_t dim, const double maxeps, int threadnum);
-
-    // bool findCliqueRecursive(const std::vector<std::vector<std::vector<uint64_t>>> &adj_mask,
-    //                          std::vector<uint64_t> &candidate_mask,
-    //                          std::vector<size_t> &current_clique_local_indices, size_t depth);
-
-    // double getGeometricVirtualSimplexWeight(const std::vector<size_t> &simplex_vertices,
-    //                                         const std::vector<std::unordered_set<size_t>> &virtual_vertex_indices,
-    //                                         size_t dim);
-
-    // std::vector<std::pair<int64_t, double>> getGeometricVirtualCofacetList(const std::vector<std::pair<int64_t, double>> &sorted_virtual_simplex_list,
-    //                                                                        const std::vector<size_t> &active_vertices,
-    //                                                                        const std::vector<std::unordered_set<size_t>> &virtual_vertex_indices,
-    //                                                                        const size_t dim, const double maxeps, int threadnum);
-
-    // void buildInterface(BipartiteGraph &bi_graph, const std::vector<std::pair<int64_t, double>> &sorted_cofacet_list,
-    //                     const robin_hood::unordered_map<int64_t, size_t> &active_facet_index_hash_table, const size_t dim);
 };
 
 extern template class QuotientAndExpand<NormalDistMat>;

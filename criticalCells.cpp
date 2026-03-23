@@ -211,7 +211,7 @@ void CritCells<ComplexType, DistMatType>::buildInterface(BipartiteGraph &bi_grap
 }
 
 template <typename ComplexType, typename DistMatType>
-void CritCells<ComplexType, DistMatType>::runVRMorseTest(size_t maxdim, double maxeps, int threadnumber)
+void CritCells<ComplexType, DistMatType>::morseVRTest(size_t maxdim, double maxeps, int threadnumber)
 {
     size_t n = this->getVertexNumber();
 
@@ -282,7 +282,7 @@ void CritCells<ComplexType, DistMatType>::runVRMorseTest(size_t maxdim, double m
 }
 
 template <typename ComplexType, typename DistMatType>
-void CritCells<ComplexType, DistMatType>::runVRMorseMatching(size_t maxdim, double maxeps, int threadnumber)
+void CritCells<ComplexType, DistMatType>::morseVRPH(size_t maxdim, double maxeps, int threadnumber)
 {
     size_t n = this->getVertexNumber();    //number of points
 
@@ -343,7 +343,7 @@ void CritCells<ComplexType, DistMatType>::runVRMorseMatching(size_t maxdim, doub
 
 
 template <typename ComplexType, typename DistMatType>
-void CritCells<ComplexType, DistMatType>::runAlphaMorseTest(double maxeps, int threadnumber)
+void CritCells<ComplexType, DistMatType>::morseAlphaTest(double maxeps, int threadnumber)
 {
     // int threadnumber = 1;
 
@@ -409,7 +409,7 @@ void CritCells<ComplexType, DistMatType>::runAlphaMorseTest(double maxeps, int t
 }
 
 template <typename ComplexType, typename DistMatType>
-void CritCells<ComplexType, DistMatType>::runQuotientAndExpand(size_t maxdim, double initeps, double maxeps, int threadnumber)
+void CritCells<ComplexType, DistMatType>::morseQuotientAndExpand(const size_t maxdim, const double initeps, const double maxeps, const int threadnumber)
 {
     if constexpr (std::is_same_v<ComplexType, Alpha>)
     {
@@ -424,6 +424,21 @@ void CritCells<ComplexType, DistMatType>::runQuotientAndExpand(size_t maxdim, do
     auto virtual_vertex_indices = quotient_and_expand.runQuotient(maxdim, initeps, threadnumber);
 
     quotient_and_expand.runExpand(virtual_vertex_indices, maxdim, maxeps, threadnumber);
+
+    return;
+}
+
+template <typename ComplexType, typename DistMatType>
+void CritCells<ComplexType, DistMatType>::morsePiecewisePH(const size_t maxdim, const std::vector<double>& eps_breaks, const int thread_number)
+{
+    if constexpr (std::is_same_v<ComplexType, Alpha>)
+        throw std::invalid_argument("Piece-wise PH currently only supports VR complex.");
+
+    size_t npts = this->getVertexNumber();
+    auto binomial_table = SimplexUtility::getBinomialTable(npts, maxdim);
+
+    QuotientAndExpand<DistMatType> qe(static_cast<DistMatType&>(*this), binomial_table, npts);
+    qe.runPiecewisePH(eps_breaks, maxdim, thread_number);
 
     return;
 }
