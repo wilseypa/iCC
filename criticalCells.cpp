@@ -321,9 +321,20 @@ void CritCells<ComplexType, DistMatType>::morseVRPH(size_t maxdim, double maxeps
         std::cout << "Processing dim " << dim << ", cofacet number: " << sorted_cofacet.size() << ", facet number: " << sorted_simplex.size() << std::endl;
 
         //implicit morse matching
-        auto critsimpnum = morse_matching.implicitMatch(matching_context, dim_persistent_pairs);
+        auto crit_simp_num = morse_matching.implicitMatch(matching_context, dim_persistent_pairs);
 
-        std::cout << "critical simplex number: " << critsimpnum << std::endl;
+        std::cout << "dimensional persistent pairs:" << std::endl;
+        if (dim_persistent_pairs.empty())
+        {
+            std::cout << "  (empty)" << std::endl;
+        }
+        else
+        {
+            for (const auto& [facetweight, cofacetweight] : dim_persistent_pairs)
+            {
+                std::cout << "  (" << facetweight << ", " << cofacetweight << ")" << std::endl;
+            }
+        }
 
         dim_persistent_pairs.clear();
 

@@ -16,7 +16,7 @@ public:
 
     // int64_t implicitMatchAndGetMinCritialIndex(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);    //for the quotient
 
-    std::vector<std::vector<size_t>> implicitMatchAndCollectPVSupports(MatchingContext& matching_context);
+    std::vector<std::vector<size_t>> implicitMatchAndCollectPVSupports(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
 
     //legacy explicit graph representation  
     MaximumMorseMatching(int threadnum): threadnum_(threadnum) {};

@@ -56,7 +56,8 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context, st
         if (cofacet_indices_.empty())
         {
             const double facetweight = matching_context.sorted_facets[static_cast<size_t>(i)].second;
-            std::cout <<"interface dim = "<<dim<< "  facet weight = " << facetweight << "  cofacet weight = -1 "<<'\n';
+            // std::cout <<"interface dim = "<<dim<< "  facet weight = " << facetweight << "  cofacet weight = -1 "<<'\n';
+            dim_persistent_pair.push_back(std::make_pair(facetweight, -1.0));
             count += 1;
             continue;
         }
@@ -100,7 +101,8 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context, st
         if (pathlen <= 0)
         {
             const double facetweight = matching_context.sorted_facets[static_cast<size_t>(i)].second;
-            std::cout <<"interface dim = "<<dim<< "  facet weight = " << facetweight << "  cofacet weight = -1 "<<'\n';
+            // std::cout <<"interface dim = "<<dim<< "  facet weight = " << facetweight << "  cofacet weight = -1 "<<'\n';
+            dim_persistent_pair.push_back(std::make_pair(facetweight, -1.0));
             count += 1;
             continue;
         }
@@ -118,18 +120,18 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context, st
 
         if (facetweight != cofacetweight)
         {
-            // dim_persistent_pair.push_back(std::make_pair(facetweight, cofacetweight));
-            std::cout <<"interface dim = "<<dim<< "  facet weight = " << facetweight << "  cofacet weight = " << cofacetweight << '\n';
+            dim_persistent_pair.push_back(std::make_pair(facetweight, cofacetweight));
+            // std::cout <<"interface dim = "<<dim<< "  facet weight = " << facetweight << "  cofacet weight = " << cofacetweight << '\n';
         }
 
     }
 
-    std::cout<<"interface dim = "<<dim<<" implicit apparent pair count = "<<ct<<'\n';
+    // std::cout<<"interface dim = "<<dim<<" implicit apparent pair count = "<<ct<<'\n';
 
     return count;
 }
 
-std::vector<std::vector<size_t>> MaximumMorseMatching::implicitMatchAndCollectPVSupports(MatchingContext& matching_context)
+std::vector<std::vector<size_t>> MaximumMorseMatching::implicitMatchAndCollectPVSupports(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair)
 {
     auto& binom_table = matching_context.binomial_table;
     auto& cofacet_list = matching_context.sorted_cofacets;
@@ -174,7 +176,8 @@ std::vector<std::vector<size_t>> MaximumMorseMatching::implicitMatchAndCollectPV
         if (cofacet_indices_.empty())
         {
             const double facetweight = matching_context.sorted_facets[static_cast<size_t>(i)].second;
-            std::cout <<"interface dim = "<<dim<< "  facet weight = " << facetweight << "  cofacet weight = -1 "<<'\n';
+            dim_persistent_pair.push_back(std::make_pair(facetweight, -1.0));
+            // std::cout <<"interface dim = "<<dim<< "  facet weight = " << facetweight << "  cofacet weight = -1 "<<'\n';
             continue;
         }
 
@@ -214,7 +217,8 @@ std::vector<std::vector<size_t>> MaximumMorseMatching::implicitMatchAndCollectPV
         if (pathlen <= 0)
         {
             const double facetweight = matching_context.sorted_facets[static_cast<size_t>(i)].second;
-            std::cout <<"interface dim = "<<dim<< "  facet weight = " << facetweight << "  cofacet weight = -1 "<<'\n';
+            // std::cout <<"interface dim = "<<dim<< "  facet weight = " << facetweight << "  cofacet weight = -1 "<<'\n';
+            dim_persistent_pair.push_back(std::make_pair(facetweight, -1.0));
             continue;
         }
 
@@ -235,13 +239,13 @@ std::vector<std::vector<size_t>> MaximumMorseMatching::implicitMatchAndCollectPV
 
         if (facetweight != cofacetweight)
         {
-            // dim_persistent_pair.push_back(std::make_pair(facetweight, cofacetweight));
-            std::cout <<"interface dim = "<<dim<< "  facet weight = " << facetweight << "  cofacet weight = " << cofacetweight << '\n';
+            dim_persistent_pair.push_back(std::make_pair(facetweight, cofacetweight));
+            // std::cout <<"interface dim = "<<dim<< "  facet weight = " << facetweight << "  cofacet weight = " << cofacetweight << '\n';
         }
 
     }
 
-    std::cout<<"interface dim = "<<dim<<" implicit apparent pair count = "<<ct<<'\n';
+    // std::cout<<"interface dim = "<<dim<<" implicit apparent pair count = "<<ct<<'\n';
     
     return pv_support_cofacets;
 }
