@@ -35,7 +35,7 @@ void QuotientAndExpand<DistMatType>::runPiecewisePH(const std::vector<double>& e
 
         auto new_pv_list = trimPVCandidates(win_state, raw_pv_label_sets, eps_hi);
 
-        rebuildWindowState(win_state, new_pv_list);
+        rebuildWindowState(win_state, std::move(new_pv_list));
 
         /********************************debug*******************************/
         const auto getMaxPairwiseDistance = [this](const std::unordered_set<size_t>& index_set)
@@ -383,9 +383,11 @@ QuotientAndExpand<DistMatType>::trimPVCandidates(const WindowState& win_state, c
         {
             auto flat_index_set = flattenLabelSet(win_state, label_set);
 
-            if (flat_index_set.size() >= MAX_SIZE_) continue;
+            /********************************** no old pv absorption at this time, diameter cap is removed **********************************/
 
-            if (getMaxPairwiseDistance(flat_index_set) > eps_hi) continue;
+            // if (flat_index_set.size() >= MAX_SIZE_) continue;
+
+            // if (getMaxPairwiseDistance(flat_index_set) > eps_hi) continue;
 
             claimed_labels.insert(label_set.begin(), label_set.end());
 
@@ -420,62 +422,48 @@ std::unordered_set<size_t> QuotientAndExpand<DistMatType>::flattenLabelSet(const
 }
 
 template <typename DistMatType>
-void QuotientAndExpand<DistMatType>::rebuildWindowState(WindowState& win_state, const std::vector<PVCandidate>& new_pv_list)
+void QuotientAndExpand<DistMatType>::rebuildWindowState(WindowState& win_state, std::vector<PVCandidate>&& new_pv_list)
 {
+
+    /********************************** no old pv absorption **********************************/
+
+    if (new_pv_list.empty())
+        return;
+
     const size_t origin_vt_num = win_state.original_vertex_number;
     const size_t old_pv_num = win_state.pv_flat_index_set_list.size();
 
-    auto old_pv_index_sets = std::move(win_state.pv_flat_index_set_list);
-
-    std::vector<bool> absorbed_old_pv(old_pv_num, false);
-
+    std::vector<bool> is_newly_covered(origin_vt_num, false);
     for (const auto& new_pv : new_pv_list)
     {
-        for (const auto label : new_pv.label_set)
-        {
-            if (label >= origin_vt_num)
-                absorbed_old_pv[label - origin_vt_num] = true;
-        }
-    }
-
-    std::vector<std::unordered_set<size_t>> updated_pv_index_sets;
-
-    // old unmerged PVs first
-    for (size_t i = 0; i < old_pv_num; ++i)
-    {
-        if (!absorbed_old_pv[i])
-            updated_pv_index_sets.push_back(std::move(old_pv_index_sets[i]));
-    }
-
-    // then new PVs
-    for (const auto& new_pv : new_pv_list)
-    {
-        updated_pv_index_sets.push_back(new_pv.flat_index_set);
-    }
-
-    // rebuild active original labels from final coverage
-    std::vector<bool> is_covered(origin_vt_num, false);
-    for (const auto& pv_indices : updated_pv_index_sets)
-    {
-        for (const auto idx : pv_indices)
-            is_covered[idx] = true;
+        for (const auto idx : new_pv.flat_index_set)
+            is_newly_covered[idx] = true;
     }
 
     std::vector<size_t> active_label_list;
-    active_label_list.reserve(origin_vt_num + updated_pv_index_sets.size());
+    active_label_list.reserve(win_state.active_label_list.size() + new_pv_list.size());
 
-    for (size_t i = 0; i < origin_vt_num; ++i)
+    for (const auto label : win_state.active_label_list)
     {
-        if (!is_covered[i]) active_label_list.push_back(i);
+        if (label < origin_vt_num && !is_newly_covered[label])
+            active_label_list.push_back(label);
     }
 
-    for (size_t i = 0; i < updated_pv_index_sets.size(); ++i)
+    for (const auto label : win_state.active_label_list)
     {
-        active_label_list.push_back(origin_vt_num + i);
+        if (label >= origin_vt_num)
+            active_label_list.push_back(label);
+    }
+
+    size_t next_pv_label = origin_vt_num + old_pv_num;
+    win_state.pv_flat_index_set_list.reserve(old_pv_num + new_pv_list.size());
+    for (auto& new_pv : new_pv_list)
+    {
+        win_state.pv_flat_index_set_list.push_back(std::move(new_pv.flat_index_set));
+        active_label_list.push_back(next_pv_label++);
     }
 
     win_state.active_label_list = std::move(active_label_list);
-    win_state.pv_flat_index_set_list = std::move(updated_pv_index_sets);
 
     return;
 }
@@ -590,27 +578,39 @@ template <typename DistMatType>
 std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getPVSupportLabelSets(const MatchingContext &matching_context, const std::vector<std::vector<size_t>>& pv_support_cofacets,
                                                                                               const size_t npts, const size_t dim)
 {
-    std::vector<std::unordered_set<size_t>> pv_support_vertex_sets;
-    pv_support_vertex_sets.reserve(pv_support_cofacets.size());
+    std::vector<std::unordered_set<size_t>> pv_support_label_sets;
+    pv_support_label_sets.reserve(pv_support_cofacets.size());
 
-    // auto npt = matching_context.binomial_table.size() - 1;
+    size_t origin_vt_num = dist_mat_.getVertexNumber();
 
     for (const auto& pv_support : pv_support_cofacets)
     {
         //need set for trimming
-        std::unordered_set<size_t> vertex_set;
+        std::unordered_set<size_t> label_set;
+
+        //do not merge the previous PVs
+        bool has_pv = false;
 
         for (auto cofacetidx : pv_support)
         {
             auto bindex = matching_context.sorted_cofacets[cofacetidx].first;
             auto simplex_vertices = SimplexUtility::getSimplexVertices(matching_context.binomial_table, bindex, npts, dim);
-            vertex_set.insert(simplex_vertices.begin(), simplex_vertices.end());
-        }
-        if (vertex_set.size() < MAX_SIZE_)
-            pv_support_vertex_sets.push_back(std::move(vertex_set));
-    }
 
-    return pv_support_vertex_sets;
+            if (simplex_vertices.front() >= origin_vt_num)
+            {
+                has_pv = true;
+                break;
+            }
+
+            label_set.insert(simplex_vertices.begin(), simplex_vertices.end());
+        }
+        if (!has_pv && label_set.size() < MAX_SIZE_)
+            pv_support_label_sets.push_back(std::move(label_set));
+    }
+    std::cout << "pv support cofacets size = " << pv_support_cofacets.size() << '\n';
+    std::cout << "pv support label sets with no pv contents size = " << pv_support_label_sets.size() << '\n';
+
+    return pv_support_label_sets;
 }
 
 template <typename DistMatType>

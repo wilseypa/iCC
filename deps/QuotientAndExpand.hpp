@@ -106,7 +106,7 @@ private:
 
     std::unordered_set<size_t> flattenLabelSet(const WindowState& win_state, const std::unordered_set<size_t>& raw_label_set);
 
-    void rebuildWindowState(WindowState& win_state, const std::vector<PVCandidate>& new_pv_list);
+    void rebuildWindowState(WindowState& win_state, std::vector<PVCandidate>&& new_pv_list);
 
     std::vector<std::unordered_set<size_t>> getPVIndexSets(const size_t maxdim, const double initeps, const int thread_number);
 
