@@ -383,11 +383,11 @@ QuotientAndExpand<DistMatType>::trimPVCandidates(const WindowState& win_state, c
         {
             auto flat_index_set = flattenLabelSet(win_state, label_set);
 
-            /********************************** no old pv absorption at this time, diameter cap is removed **********************************/
+            /********************************** no old pv absorption at this time **********************************/
 
-            // if (flat_index_set.size() >= MAX_SIZE_) continue;
+            if (flat_index_set.size() >= MAX_SIZE_) continue;
 
-            // if (getMaxPairwiseDistance(flat_index_set) > eps_hi) continue;
+            if (getMaxPairwiseDistance(flat_index_set) > eps_hi) continue;
 
             claimed_labels.insert(label_set.begin(), label_set.end());
 
@@ -604,7 +604,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getPVSup
 
             label_set.insert(simplex_vertices.begin(), simplex_vertices.end());
         }
-        if (!has_pv && label_set.size() < MAX_SIZE_)
+        if (!has_pv)
             pv_support_label_sets.push_back(std::move(label_set));
     }
     std::cout << "pv support cofacets size = " << pv_support_cofacets.size() << '\n';
@@ -661,8 +661,8 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::trimInde
 
         if (!overlap)
         {
-            if (getMaxPairwiseDistance(vertex_set) > initeps)
-                continue;
+            if (vertex_set.size() >= MAX_SIZE_) continue;
+            if (getMaxPairwiseDistance(vertex_set) > initeps) continue;
 
             claimed_vertices.insert(vertex_set.begin(), vertex_set.end());
             trimmed_vertex_sets.push_back(std::move(vertex_set));
