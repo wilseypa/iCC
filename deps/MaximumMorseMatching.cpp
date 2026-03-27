@@ -95,7 +95,10 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context, st
 
         //not an apparent pair, need to find augmenting path
         // std::cout<<"will start aug path"<<'\n';
-        int64_t pathlen = implicitFacetAugPath(binom_table, bi_graph, facet_list, cofacet_hash, facetgraphidx, npts, dim);
+        // int64_t pathlen = implicitFacetAugPath(binom_table, bi_graph, facet_list, cofacet_hash, facetgraphidx, npts, dim);
+
+        int64_t pathlen = implicitFacetAugPathDebug(binom_table, bi_graph, facet_list, cofacet_hash, facetgraphidx, npts, dim);
+
         // std::cout<<"aug path done, path len = "<<pathlen<<'\n';
 
         if (pathlen <= 0)
@@ -739,4 +742,239 @@ std::vector< std::vector<size_t> > MaximumMorseMatching::serialFacetMatchAndGetA
     }
 
     return aug_path_cofacet_vec;
+}
+
+
+int64_t MaximumMorseMatching::implicitFacetAugPathDebug(
+    const std::vector<std::vector<int64_t>>& binomial_table,
+    BipartiteGraph& bi_graph,
+    const std::vector<std::pair<int64_t, double>>& facet_list,
+    const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash_table,
+    const size_t facetgraphindex,
+    size_t npts,
+    size_t interfacedimension)
+{
+    aug_path_.clear();
+    cofacet_stack_.clear();
+    pq_workspace_.clear();
+
+    MinIndexQueue cofacet_queue(std::greater<size_t>{}, std::move(pq_workspace_));
+
+    int64_t unmatchedcofacet = -1;
+
+    // set to false when you want to silence the debug prints
+    constexpr bool debug_multiplicity = true;
+
+    const size_t start_facet_list_idx = facetgraphindex - bi_graph.unodes;
+    const int64_t start_facet_bindex = facet_list[start_facet_list_idx].first;
+    const double start_facet_weight = facet_list[start_facet_list_idx].second;
+
+    // histogram for this call
+    size_t mult1_count = 0;
+    size_t mult2_count = 0;
+    size_t mult3_count = 0;
+    size_t mult4plus_count = 0;
+
+    auto printSimplexVertices = [&](int64_t bindex, size_t simplex_dim)
+    {
+        if (bindex < 0)
+        {
+            std::cerr << "{?}";
+            return;
+        }
+
+        const auto simplex_vertices =
+            SimplexUtility::getSimplexVertices(binomial_table, bindex, npts, simplex_dim);
+
+        std::cerr << '{';
+        for (size_t i = 0; i < simplex_vertices.size(); ++i)
+        {
+            if (i > 0) std::cerr << ',';
+            std::cerr << simplex_vertices[i];
+        }
+        std::cerr << '}';
+    };
+
+    // reverse lookup only for debug printing; O(n), but used only on rare events
+    auto findCofacetBindex = [&](size_t target_list_idx) -> int64_t
+    {
+        for (const auto& kv : cofacet_hash_table)
+        {
+            if (kv.second == target_list_idx) return kv.first;
+        }
+        return -1;
+    };
+
+    auto printMultiplicitySummary = [&](bool path_found)
+    {
+        if (!debug_multiplicity) return;
+        if (mult3_count == 0 && mult4plus_count == 0) return;
+
+        std::cerr << "\n[DMT debug] implicitFacetAugPath summary\n"
+                  << "  interface dim = " << interfacedimension << '\n'
+                  << "  start facet list idx = " << start_facet_list_idx
+                  << ", graph idx = " << facetgraphindex
+                  << ", bindex = " << start_facet_bindex
+                  << ", weight = " << start_facet_weight
+                  << ", vertices = ";
+        printSimplexVertices(start_facet_bindex, interfacedimension - 1);
+        std::cerr << '\n'
+                  << "  multiplicity histogram: "
+                  << "1->" << mult1_count
+                  << ", 2->" << mult2_count
+                  << ", 3->" << mult3_count
+                  << ", >=4->" << mult4plus_count << '\n'
+                  << "  augmenting path found = " << (path_found ? "yes" : "no") << '\n';
+    };
+
+    // reuse the immediate cofacets computed for apparent pair check
+    for (auto cofidx : cofacet_indices_)
+    {
+        cofacet_queue.push(cofidx);
+    }
+
+    while (!cofacet_queue.empty())
+    {
+        size_t topcofacet = cofacet_queue.top();  // cofacet graph index == list index
+        cofacet_queue.pop();
+
+        // count multiplicity of the same cofacet at the top of the queue
+        size_t multiplicity = 1;
+        while (!cofacet_queue.empty() && cofacet_queue.top() == topcofacet)
+        {
+            cofacet_queue.pop();
+            ++multiplicity;
+        }
+
+        if (multiplicity == 1) ++mult1_count;
+        else if (multiplicity == 2) ++mult2_count;
+        else if (multiplicity == 3) ++mult3_count;
+        else ++mult4plus_count;
+
+        if (debug_multiplicity && multiplicity >= 3)
+        {
+            const int64_t topcofacet_bindex = findCofacetBindex(topcofacet);
+
+            std::cerr << "\n[DMT debug] implicitFacetAugPath saw repeated cofacet\n"
+                      << "  interface dim = " << interfacedimension << '\n'
+                      << "  multiplicity = " << multiplicity << '\n'
+                      << "  start facet list idx = " << start_facet_list_idx
+                      << ", graph idx = " << facetgraphindex
+                      << ", bindex = " << start_facet_bindex
+                      << ", weight = " << start_facet_weight
+                      << ", vertices = ";
+            printSimplexVertices(start_facet_bindex, interfacedimension - 1);
+            std::cerr << '\n'
+                      << "  repeated cofacet list idx = " << topcofacet
+                      << ", bindex = " << topcofacet_bindex
+                      << ", vertices = ";
+            printSimplexVertices(topcofacet_bindex, interfacedimension);
+            std::cerr << '\n'
+                      << "  current match(topcofacet) = " << bi_graph.match_list[topcofacet] << '\n';
+
+            if (bi_graph.match_list[topcofacet] >= 0)
+            {
+                const size_t matchedfacet_graph_idx =
+                    static_cast<size_t>(bi_graph.match_list[topcofacet]);
+                const size_t matchedfacet_list_idx =
+                    matchedfacet_graph_idx - bi_graph.unodes;
+
+                std::cerr << "  matched facet list idx = " << matchedfacet_list_idx
+                          << ", graph idx = " << matchedfacet_graph_idx
+                          << ", bindex = " << facet_list[matchedfacet_list_idx].first
+                          << ", weight = " << facet_list[matchedfacet_list_idx].second
+                          << ", vertices = ";
+                printSimplexVertices(facet_list[matchedfacet_list_idx].first,
+                                     interfacedimension - 1);
+                std::cerr << '\n';
+            }
+
+            std::cerr << "  queue size after consolidation = "
+                      << cofacet_queue.size() << '\n';
+        }
+
+        // current behavior: skip all duplicates to preserve single-path traversal
+        if (multiplicity > 1) continue;
+
+        // parity-test alternative:
+        // if ((multiplicity & 1ULL) == 0ULL) continue;
+
+        if (bi_graph.match_list[topcofacet] < 0)
+        {
+            unmatchedcofacet = static_cast<int64_t>(topcofacet);
+            break;
+        }
+
+        size_t nextfacet = static_cast<size_t>(bi_graph.match_list[topcofacet]);  // graph index
+
+        // get cofacets of the nextfacet
+        int64_t facetbindex = facet_list[nextfacet - bi_graph.unodes].first;
+        SimplexUtility::getCofacetListIndicesInPlace(
+            binomial_table,
+            cofacet_hash_table,
+            cofacet_indices_,
+            vertex_workspace_,
+            facetbindex,
+            npts,
+            interfacedimension - 1);
+
+        for (auto cofidx : cofacet_indices_)
+        {
+            if (cofidx != topcofacet) cofacet_queue.push(cofidx);
+        }
+
+        cofacet_stack_.push_back(topcofacet);
+    }
+
+    // no aug path found
+    if (unmatchedcofacet < 0)
+    {
+        printMultiplicitySummary(false);
+
+        auto& pq_buffer = cofacet_queue.getContainer();
+        pq_buffer.clear();
+        pq_workspace_ = std::move(pq_buffer);
+        return -1;
+    }
+
+    // reconstruct the actual path
+    aug_path_.push_back(static_cast<size_t>(unmatchedcofacet));
+
+    size_t currenttopcofacet = aug_path_.front();
+
+    // backtrack through the cofacet stack
+    for (auto it = cofacet_stack_.rbegin(); it != cofacet_stack_.rend(); ++it)
+    {
+        size_t matchedfacet = static_cast<size_t>(bi_graph.match_list[*it]);
+
+        // check if the matchedfacet is adjacent to the current top cofacet on the path
+        int64_t facetbindex = facet_list[matchedfacet - bi_graph.unodes].first;
+        SimplexUtility::getCofacetListIndicesInPlace(
+            binomial_table,
+            cofacet_hash_table,
+            cofacet_indices_,
+            vertex_workspace_,
+            facetbindex,
+            npts,
+            interfacedimension - 1);
+
+        if (std::find(cofacet_indices_.begin(), cofacet_indices_.end(), currenttopcofacet)
+            != cofacet_indices_.end())
+        {
+            aug_path_.push_back(matchedfacet);
+            aug_path_.push_back(*it);
+            currenttopcofacet = *it;
+        }
+    }
+
+    aug_path_.push_back(facetgraphindex);    // initial facet index
+
+    printMultiplicitySummary(true);
+
+    // move the container back
+    auto& pq_buffer = cofacet_queue.getContainer();
+    pq_buffer.clear();
+    pq_workspace_ = std::move(pq_buffer);
+
+    return static_cast<int64_t>(aug_path_.size());
 }
