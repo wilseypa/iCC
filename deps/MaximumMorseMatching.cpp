@@ -763,7 +763,8 @@ int64_t MaximumMorseMatching::implicitFacetAugPathDebug(
     int64_t unmatchedcofacet = -1;
 
     // set to false when you want to silence the debug prints
-    constexpr bool debug_multiplicity = true;
+    // bool debug_multiplicity = (interfacedimension == 4);
+    bool debug_multiplicity = true;
 
     const size_t start_facet_list_idx = facetgraphindex - bi_graph.unodes;
     const int64_t start_facet_bindex = facet_list[start_facet_list_idx].first;
@@ -894,10 +895,10 @@ int64_t MaximumMorseMatching::implicitFacetAugPathDebug(
         }
 
         // current behavior: skip all duplicates to preserve single-path traversal
-        if (multiplicity > 1) continue;
+        // if (multiplicity > 1) continue;
 
         // parity-test alternative:
-        // if ((multiplicity & 1ULL) == 0ULL) continue;
+        if ((multiplicity & 1ULL) == 0ULL) continue;
 
         if (bi_graph.match_list[topcofacet] < 0)
         {

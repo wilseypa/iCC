@@ -7,14 +7,14 @@
 
 int main()
 {   
-    std::string filename = "test_4dsphere_100.csv";
+    std::string filename = "test_4dsphere_75.csv";
     CritCells<VR, NormalDistMat> cc(filename);
 
     std::cout<<"started running...\n";
 
     auto st0 = std::chrono::high_resolution_clock::now();
 
-    // cc.morseQuotientAndExpand(4, 1.3, 1.7, 4);
+    // cc.morseQuotientAndExpand(3, 1.0, 1.7, 4);
     cc.morseVRPH(4, 1.7, 4);
 
     // std::vector<double> eps_breaks = {1.0, 1.4, 1.7};
