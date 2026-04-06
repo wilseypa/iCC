@@ -7,7 +7,7 @@
 
 int main()
 {   
-    std::string filename = "test_4dsphere_75.csv";
+    std::string filename = "test_3dsphere_400.csv";
     CritCells<VR, NormalDistMat> cc(filename);
 
     std::cout<<"started running...\n";
@@ -15,10 +15,10 @@ int main()
     auto st0 = std::chrono::high_resolution_clock::now();
 
     // cc.morseQuotientAndExpand(3, 1.0, 1.7, 4);
-    cc.morseVRPH(4, 1.7, 4);
+    cc.morseVRPH(3, 1.7, 4);
 
     // std::vector<double> eps_breaks = {1.0, 1.4, 1.7};
-    // cc.morsePiecewisePH(4, eps_breaks, 4);
+    // cc.morsePiecewisePH(3, eps_breaks, 4);
 
     auto st1 = std::chrono::high_resolution_clock::now();
     auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);

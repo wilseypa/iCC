@@ -97,7 +97,7 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context, st
         // std::cout<<"will start aug path"<<'\n';
         // int64_t pathlen = implicitFacetAugPath(binom_table, bi_graph, facet_list, cofacet_hash, facetgraphidx, npts, dim);
 
-        int64_t pathlen = implicitFacetAugPathDebug(binom_table, bi_graph, facet_list, cofacet_hash, facetgraphidx, npts, dim);
+        int64_t pathlen = implicitFacetAugPath(binom_table, bi_graph, facet_list, cofacet_hash, facetgraphidx, npts, dim);
 
         // std::cout<<"aug path done, path len = "<<pathlen<<'\n';
 
@@ -278,15 +278,16 @@ int64_t MaximumMorseMatching::implicitFacetAugPath(const std::vector<std::vector
 
         // std::cout<<"current top cofacet of queue = "<<topcofacet<<'\n';
 
-        //skip duplicates
-        bool duplicate = false;
+        // count multiplicity of the same cofacet at the top of the queue
+        size_t multiplicity = 1;
+
         while (!cofacet_queue.empty() && cofacet_queue.top() == topcofacet)
         {
             cofacet_queue.pop();
-            duplicate = true;
+            ++multiplicity;
         }
 
-        if (duplicate) continue;
+        if ((multiplicity & 1ULL) == 0ULL) continue;
 
         if (bi_graph.match_list[topcofacet] < 0)
         {
@@ -382,11 +383,14 @@ std::vector<size_t> MaximumMorseMatching::collectReducedColumnSupport(const Matc
         size_t topfacet = facet_queue.top();  //list index
         facet_queue.pop();
 
+        size_t multiplicity = 1;
         if (!facet_queue.empty() && topfacet == facet_queue.top())
         {
-            facet_queue.pop();   // cancel duplicates
-            continue;
+            facet_queue.pop();
+            ++multiplicity;
         }
+
+        if ((multiplicity & 1ULL) == 0ULL) continue;
 
         const int64_t nextcofacet = bi_graph.match_list[topfacet + u];
         if (nextcofacet < 0) 
@@ -763,8 +767,8 @@ int64_t MaximumMorseMatching::implicitFacetAugPathDebug(
     int64_t unmatchedcofacet = -1;
 
     // set to false when you want to silence the debug prints
-    // bool debug_multiplicity = (interfacedimension == 4);
-    bool debug_multiplicity = true;
+    // bool debug_multiplicity = (interfacedimension == 3); 
+    bool debug_multiplicity = false;
 
     const size_t start_facet_list_idx = facetgraphindex - bi_graph.unodes;
     const int64_t start_facet_bindex = facet_list[start_facet_list_idx].first;
