@@ -5,7 +5,7 @@
 #include <map>
 #include <iostream>
 #include <chrono>
-// #include <Eigen/Sparse>
+#include <numeric>
 
 #include <set>
 #include <unordered_set>
@@ -14,9 +14,11 @@
 
 #include "robin_hood.h"
 
+#ifdef BUILD_ALPHA_COMPLEX
 #include <CGAL/config.h>
 #include <CGAL/Epick_d.h>
 #include <CGAL/Delaunay_triangulation.h>
+#endif
 
 #include "BipartiteGraph.hpp"
 #include "DistanceMatrix.hpp"
@@ -109,8 +111,10 @@ public:
     void morseVRTest(size_t maxdim, double maxeps, int threadnumber);
 
     void morseVRPH(size_t maxdim, double maxeps, int threadnumber);
-    
+
+#ifdef BUILD_ALPHA_COMPLEX
     void morseAlphaTest(double maxeps, int threadnumber);
+#endif
 
     void morseQuotientAndExpand(const size_t maxdim, const double initeps, const double maxeps, const int threadnumber);
 
@@ -121,4 +125,6 @@ private:
 };
 
 extern template class CritCells<VR, NormalDistMat>;
+#ifdef BUILD_ALPHA_COMPLEX
 extern template class CritCells<Alpha, NormalDistMat>;
+#endif

@@ -2,10 +2,14 @@
 
 #include <vector>
 #include <utility>
+#include <unordered_map>
+#include <unordered_set>
 
+#ifdef BUILD_ALPHA_COMPLEX
 #include <CGAL/config.h>
 #include <CGAL/Epick_d.h>
 #include <CGAL/Delaunay_triangulation.h>
+#endif
 
 #include "SimplexUtility.hpp"
 #include "DistanceMatrix.hpp"
@@ -25,9 +29,11 @@ public:
 
     std::vector<std::pair<int64_t, double>> getSortedVRCofacets(const std::vector<std::pair<int64_t, double>> &sorted_simplex, const size_t dim, const double maxeps, const int threadnum);
 
+#ifdef BUILD_ALPHA_COMPLEX
     std::vector<std::pair<int64_t, double>> getSortedAlphaCells(const std::vector<std::vector<int64_t>> &binomial_table,
                                                                 std::unordered_map<CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>::Vertex_handle, size_t> &vertex_handle_index,
                                                                 CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>> &delaunay_d, const size_t dim, double maxeps);
+#endif
 
     // Geometric enumeration for complex with pseudo-vertices (virtual vertices).
     // Each pv represents a set of original vertices, and simplex weight is the smallest
@@ -42,7 +48,9 @@ private:
     const DistMatType &dist_mat_;
     const std::vector<std::vector<int64_t>> &binomial_table_;
 
+#ifdef BUILD_ALPHA_COMPLEX
     double getAlphaSimplexWeight(const std::vector<size_t> &alpha_simplex);
+#endif
 
     struct EdgeRecord
     {

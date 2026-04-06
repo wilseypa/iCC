@@ -22,7 +22,9 @@
 #endif
 
 template class CritCells<VR, NormalDistMat>;
+#ifdef BUILD_ALPHA_COMPLEX
 template class CritCells<Alpha, NormalDistMat>;
+#endif
 
 // template <>
 // CritCells<VR, SparseDistMat>::CritCells(Eigen::SparseMatrix<double> &distMat)
@@ -352,7 +354,7 @@ void CritCells<ComplexType, DistMatType>::morseVRPH(size_t maxdim, double maxeps
     return;
 }
 
-
+#ifdef BUILD_ALPHA_COMPLEX
 template <typename ComplexType, typename DistMatType>
 void CritCells<ComplexType, DistMatType>::morseAlphaTest(double maxeps, int threadnumber)
 {
@@ -418,6 +420,7 @@ void CritCells<ComplexType, DistMatType>::morseAlphaTest(double maxeps, int thre
 
     return;
 }
+#endif
 
 template <typename ComplexType, typename DistMatType>
 void CritCells<ComplexType, DistMatType>::morseQuotientAndExpand(const size_t maxdim, const double initeps, const double maxeps, const int threadnumber)

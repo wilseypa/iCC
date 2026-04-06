@@ -5,13 +5,19 @@ project("Critical Cells")
 set (CMAKE_CXX_STANDARD 23)
 
 find_package(OpenMP REQUIRED)
-# for later use
-find_package(Eigen3 REQUIRED)
-# find_package(MPI)
-find_package(CGAL REQUIRED)
 
+# Option for alpha-complex support
+option(BUILD_ALPHA_COMPLEX "Build alpha-complex support (requires CGAL and Eigen3)" OFF)
 # Option for legacy ICC
 option(BUILD_LEGACY_ICC "Build with legacy ICC code" OFF)
+
+if (BUILD_ALPHA_COMPLEX)
+    add_compile_definitions(BUILD_ALPHA_COMPLEX)
+endif()
+
+if (BUILD_LEGACY_ICC)
+    add_compile_definitions(BUILD_LEGACY_ICC)
+endif()
 
 #Subdirectory
 add_subdirectory(deps)
@@ -21,7 +27,6 @@ add_library(CriticalCells STATIC criticalCells.cpp)
 
 target_include_directories(CriticalCells PUBLIC ${CMAKE_SOURCE_DIR}/deps)
 
-# target_link_libraries(CriticalCells PUBLIC Eigen3::Eigen hopcroft_karp readInput distMat OpenMP::OpenMP_CXX biGraphMorseMatch CGAL::CGAL)
 target_link_libraries(CriticalCells PUBLIC
     readInput
     DistanceMatrix
@@ -29,15 +34,11 @@ target_link_libraries(CriticalCells PUBLIC
     ApproximateMorseMatching
     MaximumMorseMatching
     QuotientAndExpand
-    # External libraries
     OpenMP::OpenMP_CXX
-    Eigen3::Eigen
-    CGAL::CGAL
 )
 
 # Link legacy ICC library if option is enabled
 if (BUILD_LEGACY_ICC)
-    target_compile_definitions(CriticalCells PUBLIC BUILD_ICC_LEGACY)
     target_link_libraries(CriticalCells PUBLIC hopcroft_karp)
 endif()
 

@@ -86,6 +86,7 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSorte
     return cofacet_list;
 }
 
+#ifdef BUILD_ALPHA_COMPLEX
 template <typename DistMatType>
 std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSortedAlphaCells(const std::vector<std::vector<int64_t>> &binomial_table,
                                                                                             std::unordered_map<CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>::Vertex_handle, size_t> &vertex_handle_index,
@@ -221,6 +222,7 @@ double SimplexEnumerator<DistMatType>::getAlphaSimplexWeight(const std::vector<s
     }
     return weight;
 }
+#endif
 
 // ======================= Geometric virtual enumeration (pseudo-vertex) =======================
 

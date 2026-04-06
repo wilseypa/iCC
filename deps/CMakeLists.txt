@@ -3,8 +3,10 @@ cmake_minimum_required(VERSION 3.22)
 set (CMAKE_CXX_STANDARD 23)
 
 find_package(OpenMP REQUIRED)
-find_package(Eigen3 REQUIRED)
-find_package(CGAL REQUIRED)
+if (BUILD_ALPHA_COMPLEX)
+    find_package(Eigen3 REQUIRED)
+    find_package(CGAL REQUIRED)
+endif()
 
 
 if (BUILD_LEGACY_ICC)
@@ -18,11 +20,17 @@ target_include_directories(readInput PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 # Library for the DistanceMatrix class and its constructors
 add_library(DistanceMatrix STATIC DistanceMatrix.cpp)
 target_include_directories(DistanceMatrix PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(DistanceMatrix PUBLIC Eigen3::Eigen OpenMP::OpenMP_CXX)
+target_link_libraries(DistanceMatrix PUBLIC OpenMP::OpenMP_CXX)
+if (BUILD_ALPHA_COMPLEX)
+    target_link_libraries(DistanceMatrix PUBLIC Eigen3::Eigen)
+endif()
 
 add_library(SimplexEnumerator STATIC SimplexEnumerator.cpp)
 target_include_directories(SimplexEnumerator PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(SimplexEnumerator PUBLIC OpenMP::OpenMP_CXX Eigen3::Eigen CGAL::CGAL DistanceMatrix)
+target_link_libraries(SimplexEnumerator PUBLIC OpenMP::OpenMP_CXX DistanceMatrix)
+if (BUILD_ALPHA_COMPLEX)
+    target_link_libraries(SimplexEnumerator PUBLIC CGAL::CGAL)
+endif()
 
 add_library(ApproximateMorseMatching STATIC ApproximateMorseMatching.cpp)
 target_include_directories(ApproximateMorseMatching PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

@@ -2,7 +2,9 @@
 
 #include <vector>
 
+#ifdef BUILD_ALPHA_COMPLEX
 #include <Eigen/Sparse>
+#endif
 
 struct NormalDistMat
 {
@@ -21,6 +23,8 @@ private:
 
 struct SparseDistMat
 {
+#ifdef BUILD_ALPHA_COMPLEX
     Eigen::SparseMatrix<double> distMatrix;
     inline double distance(size_t i, size_t j) const { return distMatrix.coeff(i, j); };
+#endif
 };

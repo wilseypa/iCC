@@ -7,7 +7,7 @@
 
 int main()
 {   
-    std::string filename = "test_3dsphere_400.csv";
+    std::string filename = "test_3dsphere_200.csv";
     CritCells<VR, NormalDistMat> cc(filename);
 
     std::cout<<"started running...\n";

@@ -1,5 +1,6 @@
 #include <unordered_map>
 #include <stdexcept>
+#include <iostream>
 
 #include "omp.h"
 
@@ -852,5 +853,4 @@ robin_hood::unordered_map<int64_t, size_t> QuotientAndExpand<DistMatType>::getVi
 
     return active_edge_hash_table;
 }
-
 
