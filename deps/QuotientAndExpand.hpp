@@ -90,7 +90,7 @@ private:
         }
     };
 
-    struct PVCandidate
+    struct SelectedPV
     {
         // current labels found in this window; may include old PV labels
         std::unordered_set<size_t> label_set;
@@ -102,15 +102,15 @@ private:
     std::vector<std::unordered_set<size_t>> runWindow(const WindowState& win_state, const size_t maxdim, const double eps_lo, const double eps_hi,
                                                       const int thread_number, const bool collect_pv);
 
-    std::vector<PVCandidate> trimPVCandidates(const WindowState& win_state, const std::vector<std::unordered_set<size_t>>& raw_label_sets, const double eps_hi);
+    std::vector<SelectedPV> trimPVCandidates(const WindowState& win_state, const std::vector<std::unordered_set<size_t>>& raw_label_sets, const double eps_hi);
 
     std::unordered_set<size_t> flattenLabelSet(const WindowState& win_state, const std::unordered_set<size_t>& raw_label_set);
 
-    void rebuildWindowState(WindowState& win_state, std::vector<PVCandidate>&& new_pv_list);
+    void rebuildWindowState(WindowState& win_state, std::vector<SelectedPV>&& new_pv_list);
 
     std::vector<std::unordered_set<size_t>> getPVIndexSets(const size_t maxdim, const double initeps, const int thread_number);
 
-    std::vector<std::unordered_set<size_t>> getPVSupportLabelSets(const MatchingContext &matching_context, const std::vector<std::vector<size_t>>& pv_support_cofacets, const size_t npts, const size_t dim);
+    std::vector<std::unordered_set<size_t>> getNonMergingPVSupport(const MatchingContext& matching_context, const MaximumMorseMatching::PVSupportInfo& pv_support_info, const size_t npts, const size_t dim);
 
     std::vector<std::unordered_set<size_t>> trimIndexSets(std::vector<std::unordered_set<size_t>>& pv_support_vertex_sets, const double initeps);
 

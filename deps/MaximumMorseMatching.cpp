@@ -134,7 +134,7 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context, st
     return count;
 }
 
-std::vector<std::vector<size_t>> MaximumMorseMatching::implicitMatchAndCollectPVSupports(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair)
+MaximumMorseMatching::PVSupportInfo MaximumMorseMatching::implicitMatchAndCollectPVInfo(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair)
 {
     auto& binom_table = matching_context.binomial_table;
     auto& cofacet_list = matching_context.sorted_cofacets;
@@ -155,8 +155,9 @@ std::vector<std::vector<size_t>> MaximumMorseMatching::implicitMatchAndCollectPV
     vertex_workspace_.reserve(dim + 1);
     pq_workspace_.reserve(u);
 
-    std::vector<std::vector<size_t>> pv_support_cofacets;
-    pv_support_cofacets.reserve(dim < 5 ? 64 : 128);    //estimated numbers
+    PVSupportInfo pv_support_info;
+    pv_support_info.raw_pv_support_cofacet_indices.reserve(dim < 5 ? 64 : 128);    //estimated numbers
+    pv_support_info.critical_facet_list_indices.reserve(dim < 5 ? 32 : 64);
 
     size_t ct = 0;    //apparent pair count
     
@@ -180,7 +181,10 @@ std::vector<std::vector<size_t>> MaximumMorseMatching::implicitMatchAndCollectPV
         {
             const double facetweight = matching_context.sorted_facets[static_cast<size_t>(i)].second;
             dim_persistent_pair.push_back(std::make_pair(facetweight, -1.0));
-            // std::cout <<"interface dim = "<<dim<< "  facet weight = " << facetweight << "  cofacet weight = -1 "<<'\n';
+
+            // save critical facet list index
+            pv_support_info.critical_facet_list_indices.push_back(static_cast<size_t>(i));
+
             continue;
         }
 
@@ -220,14 +224,17 @@ std::vector<std::vector<size_t>> MaximumMorseMatching::implicitMatchAndCollectPV
         if (pathlen <= 0)
         {
             const double facetweight = matching_context.sorted_facets[static_cast<size_t>(i)].second;
-            // std::cout <<"interface dim = "<<dim<< "  facet weight = " << facetweight << "  cofacet weight = -1 "<<'\n';
             dim_persistent_pair.push_back(std::make_pair(facetweight, -1.0));
+
+            // save critical facet list index
+            pv_support_info.critical_facet_list_indices.push_back(static_cast<size_t>(i));
+
             continue;
         }
 
         const size_t terminalcofacetidx = aug_path_[0];
-        pv_support_cofacets.push_back(collectReducedColumnSupport(matching_context, terminalcofacetidx, facetgraphidx));
-
+        pv_support_info.raw_pv_support_cofacet_indices.push_back(collectReducedColumnSupport(matching_context, terminalcofacetidx, facetgraphidx));
+        
 
         const size_t uidx = aug_path_[0];
         const double cofacetweight = matching_context.sorted_cofacets[uidx].second;
@@ -250,7 +257,7 @@ std::vector<std::vector<size_t>> MaximumMorseMatching::implicitMatchAndCollectPV
 
     // std::cout<<"interface dim = "<<dim<<" implicit apparent pair count = "<<ct<<'\n';
     
-    return pv_support_cofacets;
+    return pv_support_info;
 }
 
 
@@ -353,7 +360,7 @@ int64_t MaximumMorseMatching::implicitFacetAugPath(const std::vector<std::vector
     return static_cast<int64_t>(aug_path_.size());
 }
 
-std::vector<size_t> MaximumMorseMatching::collectReducedColumnSupport(const MatchingContext& matching_context, const size_t terminalcofacet, const size_t expectedfacet)
+std::vector<size_t> MaximumMorseMatching::collectReducedColumnSupport(const MatchingContext& matching_context, const size_t terminalcofacet, const size_t expected_facet_graph_idx)
 {
     auto& binom_table = matching_context.binomial_table;
     auto& cofacet_list = matching_context.sorted_cofacets;
@@ -380,11 +387,11 @@ std::vector<size_t> MaximumMorseMatching::collectReducedColumnSupport(const Matc
 
     while (!facet_queue.empty())
     {
-        size_t topfacet = facet_queue.top();  //list index
+        size_t top_facet_list_idx = facet_queue.top();  //list index
         facet_queue.pop();
 
         size_t multiplicity = 1;
-        if (!facet_queue.empty() && topfacet == facet_queue.top())
+        if (!facet_queue.empty() && top_facet_list_idx == facet_queue.top())
         {
             facet_queue.pop();
             ++multiplicity;
@@ -392,10 +399,10 @@ std::vector<size_t> MaximumMorseMatching::collectReducedColumnSupport(const Matc
 
         if ((multiplicity & 1ULL) == 0ULL) continue;
 
-        const int64_t nextcofacet = bi_graph.match_list[topfacet + u];
+        const int64_t nextcofacet = bi_graph.match_list[top_facet_list_idx + u];
         if (nextcofacet < 0) 
         {
-            assert(expectedfacet == (topfacet + u));    //debug purpose
+            assert(expected_facet_graph_idx == (top_facet_list_idx + u));    //debug purpose
             break;
         }
 
@@ -406,7 +413,7 @@ std::vector<size_t> MaximumMorseMatching::collectReducedColumnSupport(const Matc
 
         for (size_t fi : facet_indices_)
         {
-            if (fi != topfacet) facet_queue.push(fi);
+            if (fi != top_facet_list_idx) facet_queue.push(fi);
         }
     }
 

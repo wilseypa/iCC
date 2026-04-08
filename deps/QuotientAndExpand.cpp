@@ -30,11 +30,11 @@ void QuotientAndExpand<DistMatType>::runPiecewisePH(const std::vector<double>& e
 
         const bool collect_pv = (i + 1 < full_eps_list.size());
 
-        auto raw_pv_label_sets = runWindow(win_state, maxdim, eps_lo, eps_hi, threadnumber, collect_pv);
+        auto untrimmed_pv_label_sets = runWindow(win_state, maxdim, eps_lo, eps_hi, threadnumber, collect_pv);
 
         if (!collect_pv) break;
 
-        auto new_pv_list = trimPVCandidates(win_state, raw_pv_label_sets, eps_hi);
+        auto new_pv_list = trimPVCandidates(win_state, untrimmed_pv_label_sets, eps_hi);
 
         rebuildWindowState(win_state, std::move(new_pv_list));
 
@@ -243,7 +243,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
 
     std::vector<std::pair<double, double>> dim_persistent_pairs;
 
-    std::vector<std::unordered_set<size_t>> raw_pv_label_sets;
+    std::vector<std::unordered_set<size_t>> untrimmed_pv_label_sets;
 
     MaximumMorseMatching morse_matching;
 
@@ -290,7 +290,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
         }
         else if (collect_pv)
         {
-            auto pv_support_cofacets = morse_matching.implicitMatchAndCollectPVSupports(matching_context, dim_persistent_pairs);
+            auto pv_support_info = morse_matching.implicitMatchAndCollectPVInfo(matching_context, dim_persistent_pairs);
 
             std::cout << "in eps range "<<eps_lo<< "  " <<eps_hi<< "    dimension = " <<dim
                       << "  cofacet num = " << sorted_virtual_cofacet.size()
@@ -309,7 +309,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
                 }
             }
 
-            raw_pv_label_sets = getPVSupportLabelSets(matching_context, pv_support_cofacets, npts, dim);
+            untrimmed_pv_label_sets = getNonMergingPVSupport(matching_context, pv_support_info, npts, dim);
         }
         else
         {
@@ -336,11 +336,11 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
         }
     }
 
-    return raw_pv_label_sets;
+    return untrimmed_pv_label_sets;
 }
 
 template <typename DistMatType>
-std::vector<typename QuotientAndExpand<DistMatType>::PVCandidate> 
+std::vector<typename QuotientAndExpand<DistMatType>::SelectedPV> 
 QuotientAndExpand<DistMatType>::trimPVCandidates(const WindowState& win_state, const std::vector<std::unordered_set<size_t>>& raw_label_sets, const double eps_hi)
 {
     const auto getMaxPairwiseDistance = [this](const std::unordered_set<size_t>& index_set)
@@ -362,7 +362,7 @@ QuotientAndExpand<DistMatType>::trimPVCandidates(const WindowState& win_state, c
         return maxdist;
     };
 
-    std::vector<PVCandidate> accepted_pv_list;
+    std::vector<SelectedPV> accepted_pv_list;
 
     std::unordered_set<size_t> claimed_labels;
 
@@ -392,7 +392,7 @@ QuotientAndExpand<DistMatType>::trimPVCandidates(const WindowState& win_state, c
 
             claimed_labels.insert(label_set.begin(), label_set.end());
 
-            accepted_pv_list.push_back(PVCandidate{label_set, std::move(flat_index_set)});
+            accepted_pv_list.push_back(SelectedPV{label_set, std::move(flat_index_set)});
         }
     }
 
@@ -423,7 +423,7 @@ std::unordered_set<size_t> QuotientAndExpand<DistMatType>::flattenLabelSet(const
 }
 
 template <typename DistMatType>
-void QuotientAndExpand<DistMatType>::rebuildWindowState(WindowState& win_state, std::vector<PVCandidate>&& new_pv_list)
+void QuotientAndExpand<DistMatType>::rebuildWindowState(WindowState& win_state, std::vector<SelectedPV>&& new_pv_list)
 {
 
     /********************************** no old pv absorption **********************************/
@@ -531,9 +531,9 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getPVInd
         }
         else
         {
-            auto pv_support_cofacets = morse_matching.implicitMatchAndCollectPVSupports(matching_context, dim_persistent_pairs);
+            auto pv_support_info = morse_matching.implicitMatchAndCollectPVInfo(matching_context, dim_persistent_pairs);
 
-            std::cout << "pv support set num = " << pv_support_cofacets.size() << '\n';
+            std::cout << "pv support set num = " << pv_support_info.raw_pv_support_cofacet_indices.size() << '\n';
 
             std::cout << "dimensional persistent pairs:" << std::endl;
             if (dim_persistent_pairs.empty())
@@ -558,7 +558,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getPVInd
             //     std::cout << '\n';
             // }
 
-            raw_pv_index_sets = getPVSupportLabelSets(matching_context, pv_support_cofacets, originalvtnum, dim);
+            raw_pv_index_sets = getNonMergingPVSupport(matching_context, pv_support_info, originalvtnum, dim);
         }
 
         if (dim != maxdim)
@@ -576,15 +576,27 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getPVInd
 }
 
 template <typename DistMatType>
-std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getPVSupportLabelSets(const MatchingContext &matching_context, const std::vector<std::vector<size_t>>& pv_support_cofacets,
-                                                                                              const size_t npts, const size_t dim)
+std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getNonMergingPVSupport(const MatchingContext& matching_context, const MaximumMorseMatching::PVSupportInfo& pv_support_info,
+                                                                                               const size_t npts, const size_t dim)
 {
     std::vector<std::unordered_set<size_t>> pv_support_label_sets;
-    pv_support_label_sets.reserve(pv_support_cofacets.size());
+    pv_support_label_sets.reserve(pv_support_info.raw_pv_support_cofacet_indices.size());
 
     size_t origin_vt_num = dist_mat_.getVertexNumber();
 
-    for (const auto& pv_support : pv_support_cofacets)
+    std::unordered_set<size_t> protected_indices;
+    for (const auto critical_facet_list_idx : pv_support_info.critical_facet_list_indices)
+    {
+        const auto facet_bindex = matching_context.sorted_facets[critical_facet_list_idx].first;
+        auto facet_vertices = SimplexUtility::getSimplexVertices(matching_context.binomial_table, facet_bindex, npts, dim - 1);
+        for (const auto vertex : facet_vertices)
+        {
+            if (vertex < origin_vt_num)
+                protected_indices.insert(vertex);
+        }
+    }
+
+    for (const auto& pv_support : pv_support_info.raw_pv_support_cofacet_indices)
     {
         //need set for trimming
         std::unordered_set<size_t> label_set;
@@ -605,11 +617,24 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getPVSup
 
             label_set.insert(simplex_vertices.begin(), simplex_vertices.end());
         }
-        if (!has_pv)
+        if (has_pv) continue;
+
+        bool has_protected_vertex = false;
+        for (const auto label : label_set)
+        {
+            if (protected_indices.count(label))
+            {
+                has_protected_vertex = true;
+                break;
+            }
+        }
+
+        if (!has_protected_vertex)
             pv_support_label_sets.push_back(std::move(label_set));
     }
-    std::cout << "pv support cofacets size = " << pv_support_cofacets.size() << '\n';
-    std::cout << "pv support label sets with no pv contents size = " << pv_support_label_sets.size() << '\n';
+    std::cout << "pv support cofacets size = " << pv_support_info.raw_pv_support_cofacet_indices.size() << '\n';
+    std::cout << "protected indices size = " << protected_indices.size() << '\n';
+    std::cout << "pv support label sets with no pv/protected contents size = " << pv_support_label_sets.size() << '\n';
 
     return pv_support_label_sets;
 }
@@ -853,4 +878,3 @@ robin_hood::unordered_map<int64_t, size_t> QuotientAndExpand<DistMatType>::getVi
 
     return active_edge_hash_table;
 }
-
