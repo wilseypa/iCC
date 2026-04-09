@@ -92,10 +92,8 @@ private:
 
     struct SelectedPV
     {
-        // current labels found in this window; may include old PV labels
-        std::unordered_set<size_t> label_set;
-
-        // flattened to original vertex indices
+        // flattened to original vertex indices; keep this as a struct so
+        // additional per-PV metadata can be restored later if needed.
         std::unordered_set<size_t> flat_index_set;
     };
 

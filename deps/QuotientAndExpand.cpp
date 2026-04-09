@@ -243,6 +243,22 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
 
     std::vector<std::pair<double, double>> dim_persistent_pairs;
 
+    const auto printPersistentPairs = [eps_lo](const std::vector<std::pair<double, double>>& persistent_pairs)
+    {
+        bool printed_any = false;
+        for (const auto& [facetweight, cofacetweight] : persistent_pairs)
+        {
+            if (cofacetweight > eps_lo || cofacetweight < 0)
+            {
+                std::cout << "  (" << facetweight << ", " << cofacetweight << ")" << std::endl;
+                printed_any = true;
+            }
+        }
+
+        if (!printed_any)
+            std::cout << "  (no new interval or surviving interval from previous eps range)" << std::endl;
+    };
+
     std::vector<std::unordered_set<size_t>> untrimmed_pv_label_sets;
 
     MaximumMorseMatching morse_matching;
@@ -267,17 +283,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
                       << "   persistent pairs:" << std::endl;
 
 
-            if (dim_persistent_pairs.empty())
-            {
-                std::cout << "  (empty)" << std::endl;
-            }
-            else
-            {
-                for (const auto& [facetweight, cofacetweight] : dim_persistent_pairs)
-                {
-                    std::cout << "  (" << facetweight << ", " << cofacetweight << ")" << std::endl;
-                }
-            }
+            printPersistentPairs(dim_persistent_pairs);
 
             dim_persistent_pairs.clear();
 
@@ -297,17 +303,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
                       << "  facet num = " << sorted_virtual_simplex.size() <<'\n'
                       << "   persistent pairs:" << std::endl;
 
-            if (dim_persistent_pairs.empty())
-            {
-                std::cout << "  (empty)" << std::endl;
-            }
-            else
-            {
-                for (const auto& [facetweight, cofacetweight] : dim_persistent_pairs)
-                {
-                    std::cout << "  (" << facetweight << ", " << cofacetweight << ")" << std::endl;
-                }
-            }
+            printPersistentPairs(dim_persistent_pairs);
 
             untrimmed_pv_label_sets = getNonMergingPVSupport(matching_context, pv_support_info, npts, dim);
         }
@@ -320,17 +316,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
                       << "  facet num = " << sorted_virtual_simplex.size() <<'\n'
                       << "   persistent pairs:" << std::endl;
 
-            if (dim_persistent_pairs.empty())
-            {
-                std::cout << "  (empty)" << std::endl;
-            }
-            else
-            {
-                for (const auto& [facetweight, cofacetweight] : dim_persistent_pairs)
-                {
-                    std::cout << "  (" << facetweight << ", " << cofacetweight << ")" << std::endl;
-                }
-            }
+            printPersistentPairs(dim_persistent_pairs);
 
             dim_persistent_pairs.clear();
         }
@@ -392,7 +378,7 @@ QuotientAndExpand<DistMatType>::trimPVCandidates(const WindowState& win_state, c
 
             claimed_labels.insert(label_set.begin(), label_set.end());
 
-            accepted_pv_list.push_back(SelectedPV{label_set, std::move(flat_index_set)});
+            accepted_pv_list.push_back(SelectedPV{std::move(flat_index_set)});
         }
     }
 
