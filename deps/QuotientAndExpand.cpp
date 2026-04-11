@@ -242,15 +242,89 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
     BipartiteGraph bi_graph(1, 1, ImplicitConstructionTag{});
 
     std::vector<std::pair<double, double>> dim_persistent_pairs;
+    std::vector<MaximumMorseMatching::PersistentPairInfo> maxdim_persistent_pair_info;
 
-    const auto printPersistentPairs = [eps_lo](const std::vector<std::pair<double, double>>& persistent_pairs)
+    const auto printIndexList = [](const std::vector<size_t>& index_list)
+    {
+        if (index_list.empty())
+        {
+            std::cout << "(empty)";
+            return;
+        }
+
+        for (size_t i = 0; i < index_list.size(); ++i)
+        {
+            if (i > 0)
+            {
+                std::cout << " ";
+            }
+            std::cout << index_list[i];
+        }
+    };
+
+    const auto getFlattenedIndexList = [original_vt_num, &pv_index_sets](const std::vector<size_t>& simplex_labels)
+    {
+        std::vector<size_t> flattened_index_list;
+
+        for (const auto label : simplex_labels)
+        {
+            if (label < original_vt_num)
+            {
+                flattened_index_list.push_back(label);
+                continue;
+            }
+
+            const auto& pv_flat_index_set = pv_index_sets[label - original_vt_num];
+            flattened_index_list.insert(flattened_index_list.end(), pv_flat_index_set.begin(), pv_flat_index_set.end());
+        }
+
+        std::sort(flattened_index_list.begin(), flattened_index_list.end());
+        flattened_index_list.erase(std::unique(flattened_index_list.begin(), flattened_index_list.end()), flattened_index_list.end());
+
+        return flattened_index_list;
+    };
+
+    const auto printSimplexInfo =
+        [this, npts, &printIndexList, &getFlattenedIndexList](const char* prefix, const int64_t simplex_bindex, const size_t simplex_dim)
+    {
+        std::cout << "    " << prefix << " labels: ";
+        if (simplex_bindex < 0)
+        {
+            std::cout << "(none)" << '\n';
+            std::cout << "    " << prefix << " flat indices: (none)" << '\n';
+            return;
+        }
+
+        const auto simplex_labels = SimplexUtility::getSimplexVertices(binomial_table_, simplex_bindex, npts, simplex_dim);
+        printIndexList(simplex_labels);
+        std::cout << '\n';
+
+        const auto flattened_index_list = getFlattenedIndexList(simplex_labels);
+        std::cout << "    " << prefix << " flat indices: ";
+        printIndexList(flattened_index_list);
+        std::cout << '\n';
+    };
+
+    const auto printPersistentPairs =
+        [eps_lo, maxdim, &printSimplexInfo](const std::vector<std::pair<double, double>>& persistent_pairs,
+                                            const std::vector<MaximumMorseMatching::PersistentPairInfo>* persistent_pair_info,
+                                            const size_t dim)
     {
         bool printed_any = false;
-        for (const auto& [facetweight, cofacetweight] : persistent_pairs)
+        for (size_t pair_idx = 0; pair_idx < persistent_pairs.size(); ++pair_idx)
         {
+            const auto& [facetweight, cofacetweight] = persistent_pairs[pair_idx];
             if (cofacetweight > eps_lo || cofacetweight < 0)
             {
                 std::cout << "  (" << facetweight << ", " << cofacetweight << ")" << std::endl;
+
+                if (dim == maxdim && persistent_pair_info != nullptr && pair_idx < persistent_pair_info->size())
+                {
+                    const auto& pair_info = (*persistent_pair_info)[pair_idx];
+                    printSimplexInfo("birth facet", pair_info.facet_bindex, dim - 1);
+                    printSimplexInfo("death cofacet", pair_info.cofacet_bindex, dim);
+                }
+
                 printed_any = true;
             }
         }
@@ -283,7 +357,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
                       << "   persistent pairs:" << std::endl;
 
 
-            printPersistentPairs(dim_persistent_pairs);
+            printPersistentPairs(dim_persistent_pairs, nullptr, dim);
 
             dim_persistent_pairs.clear();
 
@@ -296,29 +370,40 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
         }
         else if (collect_pv)
         {
-            auto pv_support_info = morse_matching.implicitMatchAndCollectPVInfo(matching_context, dim_persistent_pairs);
+            maxdim_persistent_pair_info.clear();
+            auto pv_support_info = morse_matching.implicitMatchAndCollectPVInfo(
+                matching_context,
+                dim_persistent_pairs,
+                &maxdim_persistent_pair_info);
 
             std::cout << "in eps range "<<eps_lo<< "  " <<eps_hi<< "    dimension = " <<dim
                       << "  cofacet num = " << sorted_virtual_cofacet.size()
                       << "  facet num = " << sorted_virtual_simplex.size() <<'\n'
                       << "   persistent pairs:" << std::endl;
 
-            printPersistentPairs(dim_persistent_pairs);
+            printPersistentPairs(dim_persistent_pairs, &maxdim_persistent_pair_info, dim);
 
             untrimmed_pv_label_sets = getNonMergingPVSupport(matching_context, pv_support_info, npts, dim);
+            dim_persistent_pairs.clear();
+            maxdim_persistent_pair_info.clear();
         }
         else
         {
-            auto crit_simp_num = morse_matching.implicitMatch(matching_context, dim_persistent_pairs);
+            maxdim_persistent_pair_info.clear();
+            auto crit_simp_num = morse_matching.implicitMatch(
+                matching_context,
+                dim_persistent_pairs,
+                &maxdim_persistent_pair_info);
 
             std::cout << "in eps range "<<eps_lo<< "  " <<eps_hi<< "    dimension = " <<dim
                       << "  cofacet num = " << sorted_virtual_cofacet.size()
                       << "  facet num = " << sorted_virtual_simplex.size() <<'\n'
                       << "   persistent pairs:" << std::endl;
 
-            printPersistentPairs(dim_persistent_pairs);
+            printPersistentPairs(dim_persistent_pairs, &maxdim_persistent_pair_info, dim);
 
             dim_persistent_pairs.clear();
+            maxdim_persistent_pair_info.clear();
         }
     }
 

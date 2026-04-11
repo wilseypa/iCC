@@ -8,7 +8,9 @@
 #include "MaximumMorseMatching.hpp"
 #include "SimplexUtility.hpp"
 
-size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair)
+size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context,
+                                           std::vector<std::pair<double, double>>& dim_persistent_pair,
+                                           std::vector<PersistentPairInfo>* persistent_pair_info)
 {
     auto& binom_table = matching_context.binomial_table;
     auto& cofacet_list = matching_context.sorted_cofacets;
@@ -39,6 +41,22 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context, st
 
     size_t ct = 0;    //apparent pair count
 
+    const auto appendPersistentPair =
+        [&](const double facetweight, const double cofacetweight, const int64_t facetbindex, const int64_t cofacetbindex)
+    {
+        dim_persistent_pair.emplace_back(facetweight, cofacetweight);
+
+        if (persistent_pair_info != nullptr)
+        {
+            persistent_pair_info->push_back(PersistentPairInfo{
+                facetweight,
+                cofacetweight,
+                facetbindex,
+                cofacetbindex,
+            });
+        }
+    };
+
     //process facet in reverse order
     for (int64_t i = static_cast<int64_t>(v) - 1; i >= 0; --i)
     {
@@ -57,7 +75,7 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context, st
         {
             const double facetweight = matching_context.sorted_facets[static_cast<size_t>(i)].second;
             // std::cout <<"interface dim = "<<dim<< "  facet weight = " << facetweight << "  cofacet weight = -1 "<<'\n';
-            dim_persistent_pair.push_back(std::make_pair(facetweight, -1.0));
+            appendPersistentPair(facetweight, -1.0, facetbindex, -1);
             count += 1;
             continue;
         }
@@ -105,7 +123,7 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context, st
         {
             const double facetweight = matching_context.sorted_facets[static_cast<size_t>(i)].second;
             // std::cout <<"interface dim = "<<dim<< "  facet weight = " << facetweight << "  cofacet weight = -1 "<<'\n';
-            dim_persistent_pair.push_back(std::make_pair(facetweight, -1.0));
+            appendPersistentPair(facetweight, -1.0, facetbindex, -1);
             count += 1;
             continue;
         }
@@ -114,6 +132,8 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context, st
         const double cofacetweight = matching_context.sorted_cofacets[uidx].second;
         const size_t vidx = aug_path_[static_cast<size_t>(pathlen) - 1];
         const double facetweight = matching_context.sorted_facets[vidx - u].second;
+        const int64_t reduced_facet_bindex = matching_context.sorted_facets[vidx - u].first;
+        const int64_t reduced_cofacet_bindex = matching_context.sorted_cofacets[uidx].first;
 
         for (int64_t j = 0; j < pathlen; j += 2) 
         {
@@ -123,7 +143,7 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context, st
 
         if (facetweight != cofacetweight)
         {
-            dim_persistent_pair.push_back(std::make_pair(facetweight, cofacetweight));
+            appendPersistentPair(facetweight, cofacetweight, reduced_facet_bindex, reduced_cofacet_bindex);
             // std::cout <<"interface dim = "<<dim<< "  facet weight = " << facetweight << "  cofacet weight = " << cofacetweight << '\n';
         }
 
@@ -134,7 +154,10 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context, st
     return count;
 }
 
-MaximumMorseMatching::PVSupportInfo MaximumMorseMatching::implicitMatchAndCollectPVInfo(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair)
+MaximumMorseMatching::PVSupportInfo MaximumMorseMatching::implicitMatchAndCollectPVInfo(
+    MatchingContext& matching_context,
+    std::vector<std::pair<double, double>>& dim_persistent_pair,
+    std::vector<PersistentPairInfo>* persistent_pair_info)
 {
     auto& binom_table = matching_context.binomial_table;
     auto& cofacet_list = matching_context.sorted_cofacets;
@@ -160,6 +183,22 @@ MaximumMorseMatching::PVSupportInfo MaximumMorseMatching::implicitMatchAndCollec
     pv_support_info.critical_facet_list_indices.reserve(dim < 5 ? 32 : 64);
 
     size_t ct = 0;    //apparent pair count
+
+    const auto appendPersistentPair =
+        [&](const double facetweight, const double cofacetweight, const int64_t facetbindex, const int64_t cofacetbindex)
+    {
+        dim_persistent_pair.emplace_back(facetweight, cofacetweight);
+
+        if (persistent_pair_info != nullptr)
+        {
+            persistent_pair_info->push_back(PersistentPairInfo{
+                facetweight,
+                cofacetweight,
+                facetbindex,
+                cofacetbindex,
+            });
+        }
+    };
     
     // process facets in reverse order
     for (int64_t i = static_cast<int64_t>(v) - 1; i >= 0; --i)
@@ -180,7 +219,7 @@ MaximumMorseMatching::PVSupportInfo MaximumMorseMatching::implicitMatchAndCollec
         if (cofacet_indices_.empty())
         {
             const double facetweight = matching_context.sorted_facets[static_cast<size_t>(i)].second;
-            dim_persistent_pair.push_back(std::make_pair(facetweight, -1.0));
+            appendPersistentPair(facetweight, -1.0, facetbindex, -1);
 
             // save critical facet list index
             pv_support_info.critical_facet_list_indices.push_back(static_cast<size_t>(i));
@@ -224,7 +263,7 @@ MaximumMorseMatching::PVSupportInfo MaximumMorseMatching::implicitMatchAndCollec
         if (pathlen <= 0)
         {
             const double facetweight = matching_context.sorted_facets[static_cast<size_t>(i)].second;
-            dim_persistent_pair.push_back(std::make_pair(facetweight, -1.0));
+            appendPersistentPair(facetweight, -1.0, facetbindex, -1);
 
             // save critical facet list index
             pv_support_info.critical_facet_list_indices.push_back(static_cast<size_t>(i));
@@ -240,6 +279,8 @@ MaximumMorseMatching::PVSupportInfo MaximumMorseMatching::implicitMatchAndCollec
         const double cofacetweight = matching_context.sorted_cofacets[uidx].second;
         const size_t vidx = aug_path_[static_cast<size_t>(pathlen) - 1];
         const double facetweight = matching_context.sorted_facets[vidx - u].second;
+        const int64_t reduced_facet_bindex = matching_context.sorted_facets[vidx - u].first;
+        const int64_t reduced_cofacet_bindex = matching_context.sorted_cofacets[uidx].first;
 
         for (int64_t j = 0; j < pathlen; j += 2) 
         {
@@ -249,7 +290,7 @@ MaximumMorseMatching::PVSupportInfo MaximumMorseMatching::implicitMatchAndCollec
 
         if (facetweight != cofacetweight)
         {
-            dim_persistent_pair.push_back(std::make_pair(facetweight, cofacetweight));
+            appendPersistentPair(facetweight, cofacetweight, reduced_facet_bindex, reduced_cofacet_bindex);
             // std::cout <<"interface dim = "<<dim<< "  facet weight = " << facetweight << "  cofacet weight = " << cofacetweight << '\n';
         }
 

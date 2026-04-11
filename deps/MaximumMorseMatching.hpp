@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <queue>
 
@@ -9,6 +10,14 @@
 class MaximumMorseMatching : public MatchingStrategy
 {
 public:
+    struct PersistentPairInfo
+    {
+        double facet_weight = -1.0;
+        double cofacet_weight = -1.0;
+        int64_t facet_bindex = -1;
+        int64_t cofacet_bindex = -1;
+    };
+
     struct PVSupportInfo
     {
         std::vector<std::vector<size_t>> raw_pv_support_cofacet_indices;
@@ -17,11 +26,15 @@ public:
 
     MaximumMorseMatching() {};
 
-    size_t implicitMatch(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
+    size_t implicitMatch(MatchingContext& matching_context,
+                         std::vector<std::pair<double, double>>& dim_persistent_pair,
+                         std::vector<PersistentPairInfo>* persistent_pair_info = nullptr);
 
     // int64_t implicitMatchAndGetMinCritialIndex(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);    //for the quotient
 
-    PVSupportInfo implicitMatchAndCollectPVInfo(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
+    PVSupportInfo implicitMatchAndCollectPVInfo(MatchingContext& matching_context,
+                                                std::vector<std::pair<double, double>>& dim_persistent_pair,
+                                                std::vector<PersistentPairInfo>* persistent_pair_info = nullptr);
 
     //legacy explicit graph representation  
     MaximumMorseMatching(int threadnum): threadnum_(threadnum) {};
