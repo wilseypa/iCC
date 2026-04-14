@@ -95,127 +95,6 @@ void QuotientAndExpand<DistMatType>::runPiecewisePH(const std::vector<double>& e
 }
 
 template <typename DistMatType>
-std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runQuotient(const size_t maxdim, const double initeps, const int threadnumber)
-{
-    std::vector<std::unordered_set<size_t>> untrimed_pv_index_sets = getPVIndexSets(maxdim, initeps, threadnumber);
-
-    std::vector<std::unordered_set<size_t>> pv_index_sets = trimIndexSets(untrimed_pv_index_sets, initeps);
-
-    /********************************debug*******************************/
-    const auto getMaxPairwiseDistance = [this](const std::unordered_set<size_t>& index_set)
-    {
-        if (index_set.size() < 2)
-            return 0.0;
-
-        double maxdist = 0.0;
-        for (auto first = index_set.begin(); first != index_set.end(); ++first)
-        {
-            auto second = first;
-            ++second;
-            for (; second != index_set.end(); ++second)
-            {
-                maxdist = std::max(maxdist, dist_mat_.getDistance(*first, *second));
-            }
-        }
-
-        return maxdist;
-    };
-
-    for (auto& pv_vts : pv_index_sets)
-    {
-        std::cout << "size of the vt = " << pv_vts.size()
-                  << "  max pairwise distance = " << getMaxPairwiseDistance(pv_vts)
-                  << "  contents :  ";
-        for (auto &vt : pv_vts)
-            std::cout << vt << "  ";
-        std::cout << '\n';
-    }
-
-    return pv_index_sets;
-}
-
-template <typename DistMatType>
-void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_set<size_t>>& pv_index_sets, const size_t maxdim, const double maxeps, const int threadnumber)
-{
-    const size_t originalvtnum = dist_mat_.getVertexNumber(); // number of original vertices
-    const size_t pvnum = pv_index_sets.size();
-    const size_t npts = originalvtnum + pvnum; // original + virtual vertices
-
-    std::cout << "***********virtual vertex num = " << pvnum << "*****************" << '\n';
-
-    SimplexUtility::updateBinomialTable(binomial_table_, originalvtnum, pvnum, maxdim);
-
-    SimplexEnumerator<DistMatType> simplex_enumerator(dist_mat_, binomial_table_);
-
-    auto active_vertices = getActiveVertexIndices(pv_index_sets);
-
-    auto virtual_distance_hash_table = getVirtualDistanceHashTable(active_vertices, pv_index_sets, threadnumber);
-
-    auto sorted_virtual_simplex = getSortedVirtualEdgeList(active_vertices, virtual_distance_hash_table, maxeps, threadnumber);
-
-    auto active_facet_hash = getVirtualActiveEdgeIndexHashTable(sorted_virtual_simplex, pvnum);
-
-    // auto sorted_virtual_cofacet = getVirtualCofacetList(sorted_virtual_simplex, active_vertices, virtual_distance_hash_table, 1, maxeps, threadnumber);
-    auto sorted_virtual_cofacet = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_simplex, active_vertices, pv_index_sets, 1, maxeps, threadnumber);
-
-    // Implicit interface graph (no explicit adjacency lists)
-    BipartiteGraph bi_graph(1, 1, ImplicitConstructionTag{});
-
-    // Implicit matching object
-    MaximumMorseMatching morse_matching;
-
-    std::vector<std::pair<double, double>> dim_persistent_pairs;
-
-    for (size_t dim = 2; dim <= maxdim; ++dim)
-    {
-        // Build cofacet hash for implicit adjacency queries
-        auto cofacet_hash = SimplexUtility::getSimplexIndexHashTable(sorted_virtual_cofacet);
-
-        bi_graph.updateDimensionImplicit(sorted_virtual_cofacet.size(), sorted_virtual_simplex.size());
-
-        MatchingContext matching_context(bi_graph, binomial_table_, sorted_virtual_simplex, sorted_virtual_cofacet,
-                                         active_facet_hash, cofacet_hash, npts, dim);
-
-        std::cout << "in expand phase (implicit). dim = " << dim
-                  << "  cofacet num = " << sorted_virtual_cofacet.size()
-                  << "  facet num = " << sorted_virtual_simplex.size() << '\n';
-
-        auto crit_simp_num = morse_matching.implicitMatch(matching_context, dim_persistent_pairs);
-
-        std::cout << "dimensional persistent pairs:" << std::endl;
-        if (dim_persistent_pairs.empty())
-        {
-            std::cout << "  (empty)" << std::endl;
-        }
-        else
-        {
-            for (const auto& [facetweight, cofacetweight] : dim_persistent_pairs)
-            {
-                std::cout << "  (" << facetweight << ", " << cofacetweight << ")" << std::endl;
-            }
-        }
-
-        dim_persistent_pairs.clear();
-
-
-        if (dim != maxdim)
-        {
-            // facets for the next dimension are the unmatched cofacets from the current dimension
-            active_facet_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_virtual_cofacet);
-
-            // enumerate next cofacet list (geometric PV clique filter)
-            sorted_virtual_simplex = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_cofacet, active_vertices, pv_index_sets, dim, maxeps, threadnumber);
-
-            std::swap(sorted_virtual_simplex, sorted_virtual_cofacet);
-        }
-    }
-
-    return;
-}
-
-/* private helpers */
-
-template <typename DistMatType>
 std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindow(const WindowState& win_state, const size_t maxdim, const double eps_lo, const double eps_hi,
                                                                                   const int threadnumber, const bool collect_pv)
 {
@@ -336,6 +215,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
     std::vector<std::unordered_set<size_t>> untrimmed_pv_label_sets;
 
     MaximumMorseMatching morse_matching;
+    std::unordered_set<size_t> protected_indices;
 
     for (size_t dim = 2; dim <= maxdim; ++dim)
     {
@@ -347,63 +227,73 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
                                          active_simplex_hash, cofacet_hash, npts, dim);
 
 
-        if (dim != maxdim)
+        if (collect_pv)
         {
-            auto crit_simp_num = morse_matching.implicitMatch(matching_context, dim_persistent_pairs);
+            const bool collect_dim_pv_support = (dim == maxdim);
 
-            std::cout << "in eps range "<<eps_lo<< "  " <<eps_hi<< "    dimension = " <<dim
-                      << "  cofacet num = " << sorted_virtual_cofacet.size()
-                      << "  facet num = " << sorted_virtual_simplex.size() <<'\n'
-                      << "   persistent pairs:" << std::endl;
-
-
-            printPersistentPairs(dim_persistent_pairs, nullptr, dim);
-
-            dim_persistent_pairs.clear();
-
-            // facets for the next dimension are the unmatched cofacets from the current dimension
-            active_simplex_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_virtual_cofacet);
-
-            // enumerate next cofacet list
-            sorted_virtual_simplex = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_cofacet, active_labels, pv_index_sets, dim, eps_hi, threadnumber);
-            std::swap(sorted_virtual_simplex, sorted_virtual_cofacet);
-        }
-        else if (collect_pv)
-        {
             maxdim_persistent_pair_info.clear();
-            auto pv_support_info = morse_matching.implicitMatchAndCollectPVInfo(
+            auto dim_match_support_info = morse_matching.implicitMatchAndCollectSupportInfo(
                 matching_context,
                 dim_persistent_pairs,
-                &maxdim_persistent_pair_info);
+                collect_dim_pv_support,
+                collect_dim_pv_support ? &maxdim_persistent_pair_info : nullptr);
+            collectProtectedIndices(matching_context, dim_match_support_info, protected_indices);
 
             std::cout << "in eps range "<<eps_lo<< "  " <<eps_hi<< "    dimension = " <<dim
                       << "  cofacet num = " << sorted_virtual_cofacet.size()
                       << "  facet num = " << sorted_virtual_simplex.size() <<'\n'
                       << "   persistent pairs:" << std::endl;
 
-            printPersistentPairs(dim_persistent_pairs, &maxdim_persistent_pair_info, dim);
 
-            untrimmed_pv_label_sets = getNonMergingPVSupport(matching_context, pv_support_info, npts, dim);
+            printPersistentPairs(dim_persistent_pairs, collect_dim_pv_support ? &maxdim_persistent_pair_info : nullptr, dim);
+
             dim_persistent_pairs.clear();
             maxdim_persistent_pair_info.clear();
+
+            if (collect_dim_pv_support)
+            {
+                untrimmed_pv_label_sets = getNonMergingPVSupport(matching_context,
+                                                                 dim_match_support_info.raw_pv_support_cofacet_indices,
+                                                                 protected_indices,
+                                                                 original_vt_num);
+            }
+            else
+            {
+                // facets for the next dimension are the unmatched cofacets from the current dimension
+                active_simplex_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_virtual_cofacet);
+
+                // enumerate next cofacet list
+                sorted_virtual_simplex = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_cofacet, active_labels, pv_index_sets, dim, eps_hi, threadnumber);
+                std::swap(sorted_virtual_simplex, sorted_virtual_cofacet);
+            }
         }
         else
         {
             maxdim_persistent_pair_info.clear();
-            auto crit_simp_num = morse_matching.implicitMatch(
+            morse_matching.implicitMatch(
                 matching_context,
                 dim_persistent_pairs,
-                &maxdim_persistent_pair_info);
+                dim == maxdim ? &maxdim_persistent_pair_info : nullptr);
 
             std::cout << "in eps range "<<eps_lo<< "  " <<eps_hi<< "    dimension = " <<dim
                       << "  cofacet num = " << sorted_virtual_cofacet.size()
                       << "  facet num = " << sorted_virtual_simplex.size() <<'\n'
                       << "   persistent pairs:" << std::endl;
 
-            printPersistentPairs(dim_persistent_pairs, &maxdim_persistent_pair_info, dim);
+            printPersistentPairs(dim_persistent_pairs, dim == maxdim ? &maxdim_persistent_pair_info : nullptr, dim);
 
             dim_persistent_pairs.clear();
             maxdim_persistent_pair_info.clear();
+
+            if (dim != maxdim)
+            {
+                // facets for the next dimension are the unmatched cofacets from the current dimension
+                active_simplex_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_virtual_cofacet);
+
+                // enumerate next cofacet list
+                sorted_virtual_simplex = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_cofacet, active_labels, pv_index_sets, dim, eps_hi, threadnumber);
+                std::swap(sorted_virtual_simplex, sorted_virtual_cofacet);
+            }
         }
     }
 
@@ -541,133 +431,40 @@ void QuotientAndExpand<DistMatType>::rebuildWindowState(WindowState& win_state, 
 }
 
 template <typename DistMatType>
-std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getPVIndexSets(const size_t maxdim, const double initeps, const int threadnumber)
+void QuotientAndExpand<DistMatType>::collectProtectedIndices(const MatchingContext& matching_context,
+                                                             const MaximumMorseMatching::MatchSupportInfo& match_support_info,
+                                                             std::unordered_set<size_t>& protected_indices)
 {
-    std::vector<std::unordered_set<size_t>> raw_pv_index_sets;
+    const size_t origin_vt_num = dist_mat_.getVertexNumber();
+    const size_t npts = matching_context.npts;
+    const size_t facet_dim = matching_context.dim - 1;
 
-    const size_t originalvtnum = dist_mat_.getVertexNumber(); // number of original vertices
-
-    SimplexEnumerator<DistMatType> simplex_enumerator(dist_mat_, binomial_table_);
-
-    // 1-simplices (edges) at initeps
-    auto sorted_simplex = simplex_enumerator.getSortedVREdges(initeps);
-
-    // active facets for dim=2 are edges not in the MST 
-    auto active_facet_hash = SimplexUtility::getActiveEdgeIndexHashTable(binomial_table_, sorted_simplex, originalvtnum);
-
-    // 2-simplices
-    auto sorted_cofacet = simplex_enumerator.getSortedVRCofacets(sorted_simplex, 1, initeps, threadnumber);
-
-    // implicit interface graph (no adjacency list)
-    BipartiteGraph bi_graph(1, 1, ImplicitConstructionTag{});
-
-    // matching object (implicit)
-    MaximumMorseMatching morse_matching;
-
-    // workspace for persistence pairs (optional)
-    std::vector<std::pair<double, double>> dim_persistent_pairs;
-
-    for (size_t dim = 2; dim <= maxdim; ++dim)
+    for (const auto protected_facet_list_idx : match_support_info.protected_facet_list_indices)
     {
-        // build cofacet hash for implicit adjacency queries
-        auto cofacet_hash = SimplexUtility::getSimplexIndexHashTable(sorted_cofacet);
+        const auto facet_bindex = matching_context.sorted_facets[protected_facet_list_idx].first;
+        const auto facet_vertices = SimplexUtility::getSimplexVertices(matching_context.binomial_table, facet_bindex, npts, facet_dim);
 
-        bi_graph.updateDimensionImplicit(sorted_cofacet.size(), sorted_simplex.size());
-
-        MatchingContext matching_context(bi_graph, binomial_table_, sorted_simplex, sorted_cofacet,
-                                         active_facet_hash, cofacet_hash, originalvtnum, dim);
-
-        std::cout << "in quotient phase (implicit), dim = " << dim
-                  << "  cofacet num = " << sorted_cofacet.size()
-                  << "  facet num = " << sorted_simplex.size() << "\n";
-
-        if (dim != maxdim)
-        {
-            auto critsimpnum = morse_matching.implicitMatch(matching_context, dim_persistent_pairs);
-
-            std::cout << "dimensional persistent pairs:" << std::endl;
-            if (dim_persistent_pairs.empty())
-            {
-                std::cout << "  (empty)" << std::endl;
-            }
-            else
-            {
-                for (const auto& [facetweight, cofacetweight] : dim_persistent_pairs)
-                {
-                    std::cout << "  (" << facetweight << ", " << cofacetweight << ")" << std::endl;
-                }
-            }
-
-            dim_persistent_pairs.clear();
-        }
-        else
-        {
-            auto pv_support_info = morse_matching.implicitMatchAndCollectPVInfo(matching_context, dim_persistent_pairs);
-
-            std::cout << "pv support set num = " << pv_support_info.raw_pv_support_cofacet_indices.size() << '\n';
-
-            std::cout << "dimensional persistent pairs:" << std::endl;
-            if (dim_persistent_pairs.empty())
-            {
-                std::cout << "  (empty)" << std::endl;
-            }
-            else
-            {
-                for (const auto& [facetweight, cofacetweight] : dim_persistent_pairs)
-                {
-                    std::cout << "  (" << facetweight << ", " << cofacetweight << ")" << std::endl;
-                }
-            }
-
-            dim_persistent_pairs.clear();
-
-            // for (auto& support : pv_support_cofacets)
-            // {
-            //     std::cout << "support cofacet indices: ";
-            //     for (auto& idx : support)
-            //         std::cout << idx << "  ";
-            //     std::cout << '\n';
-            // }
-
-            raw_pv_index_sets = getNonMergingPVSupport(matching_context, pv_support_info, originalvtnum, dim);
-        }
-
-        if (dim != maxdim)
-        {
-            // facets for the next dimension are the unmatched cofacets from the current dimension
-            active_facet_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_cofacet);
-
-            // enumerate next cofacet list
-            sorted_simplex = simplex_enumerator.getSortedVRCofacets(sorted_cofacet, dim, initeps, threadnumber);
-            std::swap(sorted_simplex, sorted_cofacet);
-        }
-    }
-
-    return raw_pv_index_sets;
-}
-
-template <typename DistMatType>
-std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getNonMergingPVSupport(const MatchingContext& matching_context, const MaximumMorseMatching::PVSupportInfo& pv_support_info,
-                                                                                               const size_t npts, const size_t dim)
-{
-    std::vector<std::unordered_set<size_t>> pv_support_label_sets;
-    pv_support_label_sets.reserve(pv_support_info.raw_pv_support_cofacet_indices.size());
-
-    size_t origin_vt_num = dist_mat_.getVertexNumber();
-
-    std::unordered_set<size_t> protected_indices;
-    for (const auto critical_facet_list_idx : pv_support_info.critical_facet_list_indices)
-    {
-        const auto facet_bindex = matching_context.sorted_facets[critical_facet_list_idx].first;
-        auto facet_vertices = SimplexUtility::getSimplexVertices(matching_context.binomial_table, facet_bindex, npts, dim - 1);
         for (const auto vertex : facet_vertices)
         {
             if (vertex < origin_vt_num)
                 protected_indices.insert(vertex);
         }
     }
+}
 
-    for (const auto& pv_support : pv_support_info.raw_pv_support_cofacet_indices)
+template <typename DistMatType>
+std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getNonMergingPVSupport(const MatchingContext& matching_context,
+                                                                                               const std::vector<std::vector<size_t>>& raw_pv_support_cofacet_indices,
+                                                                                               const std::unordered_set<size_t>& protected_indices,
+                                                                                               const size_t origin_vt_num)
+{
+    std::vector<std::unordered_set<size_t>> pv_support_label_sets;
+    pv_support_label_sets.reserve(raw_pv_support_cofacet_indices.size());
+
+    const size_t npts = matching_context.npts;
+    const size_t dim = matching_context.dim;
+
+    for (const auto& pv_support : raw_pv_support_cofacet_indices)
     {
         //need set for trimming
         std::unordered_set<size_t> label_set;
@@ -703,104 +500,11 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getNonMe
         if (!has_protected_vertex)
             pv_support_label_sets.push_back(std::move(label_set));
     }
-    std::cout << "pv support cofacets size = " << pv_support_info.raw_pv_support_cofacet_indices.size() << '\n';
+    std::cout << "pv support cofacets size = " << raw_pv_support_cofacet_indices.size() << '\n';
     std::cout << "protected indices size = " << protected_indices.size() << '\n';
     std::cout << "pv support label sets with no pv/protected contents size = " << pv_support_label_sets.size() << '\n';
 
     return pv_support_label_sets;
-}
-
-template <typename DistMatType>
-std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::trimIndexSets(std::vector<std::unordered_set<size_t>>& pv_support_vertex_sets, const double initeps)
-{
-    // std::sort(gradient_path_vertex_sets.begin(), gradient_path_vertex_sets.end(),
-    //           [](const std::unordered_set<size_t> &lhs, const std::unordered_set<size_t> &rhs)
-    //           { return lhs.size() > rhs.size(); });
-
-    const auto getMaxPairwiseDistance = [this](const std::unordered_set<size_t>& index_set)
-    {
-        if (index_set.size() < 2)
-            return 0.0;
-
-        double maxdist = 0.0;
-        for (auto first = index_set.begin(); first != index_set.end(); ++first)
-        {
-            auto second = first;
-            ++second;
-            for (; second != index_set.end(); ++second)
-            {
-                maxdist = std::max(maxdist, dist_mat_.getDistance(*first, *second));
-            }
-        }
-
-        return maxdist;
-    };
-
-    std::vector<std::unordered_set<size_t>> trimmed_vertex_sets;
-
-    std::unordered_set<size_t> claimed_vertices;
-
-    // const size_t MAX_VERTICES_NUM = MAX_SIZE_ - 1;    //max number of virtual vertex. the max value of uint8_t used in EdgeRecord
-
-    for (auto it = pv_support_vertex_sets.rbegin(); it != pv_support_vertex_sets.rend(); ++it)
-    {
-        auto& vertex_set = *it;
-        bool overlap = false;
-
-        for (const auto vertex : vertex_set)
-        {
-            if (claimed_vertices.count(vertex))
-            {
-                overlap = true; // discard the vertex set (the smaller set) if it overlaps with claimed vertices
-                break;
-            }
-        }
-
-        if (!overlap)
-        {
-            if (vertex_set.size() >= MAX_SIZE_) continue;
-            if (getMaxPairwiseDistance(vertex_set) > initeps) continue;
-
-            claimed_vertices.insert(vertex_set.begin(), vertex_set.end());
-            trimmed_vertex_sets.push_back(std::move(vertex_set));
-        }
-    }
-
-    return trimmed_vertex_sets;
-}
-
-template <typename DistMatType>
-std::vector<size_t> QuotientAndExpand<DistMatType>::getActiveVertexIndices(const std::vector<std::unordered_set<size_t>>& pv_index_sets)
-{
-    const size_t originalvtnum = dist_mat_.getVertexNumber();
-
-    std::vector<bool> is_virtualized(originalvtnum, false);
-
-    for (const auto &pv_indices : pv_index_sets)
-    {
-        for (const auto vt : pv_indices)
-            is_virtualized[vt] = true;
-    }
-
-    std::vector<size_t> active_vertices;
-    active_vertices.reserve(originalvtnum);    //num of active vertices <= original
-
-    for (size_t i = 0; i < originalvtnum; ++i)
-    {
-        if (!is_virtualized[i])
-            active_vertices.push_back(i);
-    }
-
-    size_t initpvidx = originalvtnum;
-    for (size_t i = 0; i < pv_index_sets.size(); ++i)
-    {
-        // if (virtual_vt_set.empty()) continue;
-        active_vertices.push_back(initpvidx);
-        initpvidx++;
-    }
-
-    // active vertices indices are sorted in ascending order
-    return active_vertices;
 }
 
 template <typename DistMatType>
@@ -948,4 +652,335 @@ robin_hood::unordered_map<int64_t, size_t> QuotientAndExpand<DistMatType>::getVi
     }
 
     return active_edge_hash_table;
+}
+
+
+//legacy QE
+template <typename DistMatType>
+std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runQuotient(const size_t maxdim, const double initeps, const int threadnumber)
+{
+    std::vector<std::unordered_set<size_t>> untrimed_pv_index_sets = getPVIndexSets(maxdim, initeps, threadnumber);
+
+    std::vector<std::unordered_set<size_t>> pv_index_sets = trimIndexSets(untrimed_pv_index_sets, initeps);
+
+    /********************************debug*******************************/
+    const auto getMaxPairwiseDistance = [this](const std::unordered_set<size_t>& index_set)
+    {
+        if (index_set.size() < 2)
+            return 0.0;
+
+        double maxdist = 0.0;
+        for (auto first = index_set.begin(); first != index_set.end(); ++first)
+        {
+            auto second = first;
+            ++second;
+            for (; second != index_set.end(); ++second)
+            {
+                maxdist = std::max(maxdist, dist_mat_.getDistance(*first, *second));
+            }
+        }
+
+        return maxdist;
+    };
+
+    for (auto& pv_vts : pv_index_sets)
+    {
+        std::cout << "size of the vt = " << pv_vts.size()
+                  << "  max pairwise distance = " << getMaxPairwiseDistance(pv_vts)
+                  << "  contents :  ";
+        for (auto &vt : pv_vts)
+            std::cout << vt << "  ";
+        std::cout << '\n';
+    }
+
+    return pv_index_sets;
+}
+
+template <typename DistMatType>
+void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_set<size_t>>& pv_index_sets, const size_t maxdim, const double maxeps, const int threadnumber)
+{
+    const size_t originalvtnum = dist_mat_.getVertexNumber(); // number of original vertices
+    const size_t pvnum = pv_index_sets.size();
+    const size_t npts = originalvtnum + pvnum; // original + virtual vertices
+
+    std::cout << "***********virtual vertex num = " << pvnum << "*****************" << '\n';
+
+    SimplexUtility::updateBinomialTable(binomial_table_, originalvtnum, pvnum, maxdim);
+
+    SimplexEnumerator<DistMatType> simplex_enumerator(dist_mat_, binomial_table_);
+
+    auto active_vertices = getActiveVertexIndices(pv_index_sets);
+
+    auto virtual_distance_hash_table = getVirtualDistanceHashTable(active_vertices, pv_index_sets, threadnumber);
+
+    auto sorted_virtual_simplex = getSortedVirtualEdgeList(active_vertices, virtual_distance_hash_table, maxeps, threadnumber);
+
+    auto active_facet_hash = getVirtualActiveEdgeIndexHashTable(sorted_virtual_simplex, pvnum);
+
+    // auto sorted_virtual_cofacet = getVirtualCofacetList(sorted_virtual_simplex, active_vertices, virtual_distance_hash_table, 1, maxeps, threadnumber);
+    auto sorted_virtual_cofacet = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_simplex, active_vertices, pv_index_sets, 1, maxeps, threadnumber);
+
+    // Implicit interface graph (no explicit adjacency lists)
+    BipartiteGraph bi_graph(1, 1, ImplicitConstructionTag{});
+
+    // Implicit matching object
+    MaximumMorseMatching morse_matching;
+
+    std::vector<std::pair<double, double>> dim_persistent_pairs;
+
+    for (size_t dim = 2; dim <= maxdim; ++dim)
+    {
+        // Build cofacet hash for implicit adjacency queries
+        auto cofacet_hash = SimplexUtility::getSimplexIndexHashTable(sorted_virtual_cofacet);
+
+        bi_graph.updateDimensionImplicit(sorted_virtual_cofacet.size(), sorted_virtual_simplex.size());
+
+        MatchingContext matching_context(bi_graph, binomial_table_, sorted_virtual_simplex, sorted_virtual_cofacet,
+                                         active_facet_hash, cofacet_hash, npts, dim);
+
+        std::cout << "in expand phase (implicit). dim = " << dim
+                  << "  cofacet num = " << sorted_virtual_cofacet.size()
+                  << "  facet num = " << sorted_virtual_simplex.size() << '\n';
+
+        auto crit_simp_num = morse_matching.implicitMatch(matching_context, dim_persistent_pairs);
+
+        std::cout << "dimensional persistent pairs:" << std::endl;
+        if (dim_persistent_pairs.empty())
+        {
+            std::cout << "  (empty)" << std::endl;
+        }
+        else
+        {
+            for (const auto& [facetweight, cofacetweight] : dim_persistent_pairs)
+            {
+                std::cout << "  (" << facetweight << ", " << cofacetweight << ")" << std::endl;
+            }
+        }
+
+        dim_persistent_pairs.clear();
+
+
+        if (dim != maxdim)
+        {
+            // facets for the next dimension are the unmatched cofacets from the current dimension
+            active_facet_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_virtual_cofacet);
+
+            // enumerate next cofacet list (geometric PV clique filter)
+            sorted_virtual_simplex = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_cofacet, active_vertices, pv_index_sets, dim, maxeps, threadnumber);
+
+            std::swap(sorted_virtual_simplex, sorted_virtual_cofacet);
+        }
+    }
+
+    return;
+}
+
+template <typename DistMatType>
+std::vector<size_t> QuotientAndExpand<DistMatType>::getActiveVertexIndices(const std::vector<std::unordered_set<size_t>>& pv_index_sets)
+{
+    const size_t originalvtnum = dist_mat_.getVertexNumber();
+
+    std::vector<bool> is_virtualized(originalvtnum, false);
+
+    for (const auto &pv_indices : pv_index_sets)
+    {
+        for (const auto vt : pv_indices)
+            is_virtualized[vt] = true;
+    }
+
+    std::vector<size_t> active_vertices;
+    active_vertices.reserve(originalvtnum);    //num of active vertices <= original
+
+    for (size_t i = 0; i < originalvtnum; ++i)
+    {
+        if (!is_virtualized[i])
+            active_vertices.push_back(i);
+    }
+
+    size_t initpvidx = originalvtnum;
+    for (size_t i = 0; i < pv_index_sets.size(); ++i)
+    {
+        // if (virtual_vt_set.empty()) continue;
+        active_vertices.push_back(initpvidx);
+        initpvidx++;
+    }
+
+    // active vertices indices are sorted in ascending order
+    return active_vertices;
+}
+
+template <typename DistMatType>
+std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::trimIndexSets(std::vector<std::unordered_set<size_t>>& pv_support_vertex_sets, const double initeps)
+{
+    // std::sort(gradient_path_vertex_sets.begin(), gradient_path_vertex_sets.end(),
+    //           [](const std::unordered_set<size_t> &lhs, const std::unordered_set<size_t> &rhs)
+    //           { return lhs.size() > rhs.size(); });
+
+    const auto getMaxPairwiseDistance = [this](const std::unordered_set<size_t>& index_set)
+    {
+        if (index_set.size() < 2)
+            return 0.0;
+
+        double maxdist = 0.0;
+        for (auto first = index_set.begin(); first != index_set.end(); ++first)
+        {
+            auto second = first;
+            ++second;
+            for (; second != index_set.end(); ++second)
+            {
+                maxdist = std::max(maxdist, dist_mat_.getDistance(*first, *second));
+            }
+        }
+
+        return maxdist;
+    };
+
+    std::vector<std::unordered_set<size_t>> trimmed_vertex_sets;
+
+    std::unordered_set<size_t> claimed_vertices;
+
+    // const size_t MAX_VERTICES_NUM = MAX_SIZE_ - 1;    //max number of virtual vertex. the max value of uint8_t used in EdgeRecord
+
+    for (auto it = pv_support_vertex_sets.rbegin(); it != pv_support_vertex_sets.rend(); ++it)
+    {
+        auto& vertex_set = *it;
+        bool overlap = false;
+
+        for (const auto vertex : vertex_set)
+        {
+            if (claimed_vertices.count(vertex))
+            {
+                overlap = true; // discard the vertex set (the smaller set) if it overlaps with claimed vertices
+                break;
+            }
+        }
+
+        if (!overlap)
+        {
+            if (vertex_set.size() >= MAX_SIZE_) continue;
+            if (getMaxPairwiseDistance(vertex_set) > initeps) continue;
+
+            claimed_vertices.insert(vertex_set.begin(), vertex_set.end());
+            trimmed_vertex_sets.push_back(std::move(vertex_set));
+        }
+    }
+
+    return trimmed_vertex_sets;
+}
+
+template <typename DistMatType>
+std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getPVIndexSets(const size_t maxdim, const double initeps, const int threadnumber)
+{
+    std::vector<std::unordered_set<size_t>> raw_pv_index_sets;
+
+    const size_t originalvtnum = dist_mat_.getVertexNumber(); // number of original vertices
+
+    SimplexEnumerator<DistMatType> simplex_enumerator(dist_mat_, binomial_table_);
+
+    // 1-simplices (edges) at initeps
+    auto sorted_simplex = simplex_enumerator.getSortedVREdges(initeps);
+
+    // active facets for dim=2 are edges not in the MST 
+    auto active_facet_hash = SimplexUtility::getActiveEdgeIndexHashTable(binomial_table_, sorted_simplex, originalvtnum);
+
+    // 2-simplices
+    auto sorted_cofacet = simplex_enumerator.getSortedVRCofacets(sorted_simplex, 1, initeps, threadnumber);
+
+    // implicit interface graph (no adjacency list)
+    BipartiteGraph bi_graph(1, 1, ImplicitConstructionTag{});
+
+    // matching object (implicit)
+    MaximumMorseMatching morse_matching;
+
+    // workspace for persistence pairs (optional)
+    std::vector<std::pair<double, double>> dim_persistent_pairs;
+
+    for (size_t dim = 2; dim <= maxdim; ++dim)
+    {
+        // build cofacet hash for implicit adjacency queries
+        auto cofacet_hash = SimplexUtility::getSimplexIndexHashTable(sorted_cofacet);
+
+        bi_graph.updateDimensionImplicit(sorted_cofacet.size(), sorted_simplex.size());
+
+        MatchingContext matching_context(bi_graph, binomial_table_, sorted_simplex, sorted_cofacet,
+                                         active_facet_hash, cofacet_hash, originalvtnum, dim);
+
+        std::cout << "in quotient phase (implicit), dim = " << dim
+                  << "  cofacet num = " << sorted_cofacet.size()
+                  << "  facet num = " << sorted_simplex.size() << "\n";
+
+        if (dim != maxdim)
+        {
+            auto critsimpnum = morse_matching.implicitMatch(matching_context, dim_persistent_pairs);
+
+            std::cout << "dimensional persistent pairs:" << std::endl;
+            if (dim_persistent_pairs.empty())
+            {
+                std::cout << "  (empty)" << std::endl;
+            }
+            else
+            {
+                for (const auto& [facetweight, cofacetweight] : dim_persistent_pairs)
+                {
+                    std::cout << "  (" << facetweight << ", " << cofacetweight << ")" << std::endl;
+                }
+            }
+
+            dim_persistent_pairs.clear();
+        }
+        else
+        {
+            auto match_support_info = morse_matching.implicitMatchAndCollectSupportInfo(matching_context, dim_persistent_pairs, true);
+            std::unordered_set<size_t> protected_indices;
+
+            for (const auto protected_facet_list_idx : match_support_info.protected_facet_list_indices)
+            {
+                const auto facet_bindex = matching_context.sorted_facets[protected_facet_list_idx].first;
+                const auto facet_vertices = SimplexUtility::getSimplexVertices(matching_context.binomial_table, facet_bindex, originalvtnum, dim - 1);
+                protected_indices.insert(facet_vertices.begin(), facet_vertices.end());
+            }
+
+            std::cout << "pv support set num = " << match_support_info.raw_pv_support_cofacet_indices.size() << '\n';
+
+            std::cout << "dimensional persistent pairs:" << std::endl;
+            if (dim_persistent_pairs.empty())
+            {
+                std::cout << "  (empty)" << std::endl;
+            }
+            else
+            {
+                for (const auto& [facetweight, cofacetweight] : dim_persistent_pairs)
+                {
+                    std::cout << "  (" << facetweight << ", " << cofacetweight << ")" << std::endl;
+                }
+            }
+
+            dim_persistent_pairs.clear();
+
+            // for (auto& support : pv_support_cofacets)
+            // {
+            //     std::cout << "support cofacet indices: ";
+            //     for (auto& idx : support)
+            //         std::cout << idx << "  ";
+            //     std::cout << '\n';
+            // }
+
+            raw_pv_index_sets = getNonMergingPVSupport(matching_context,
+                                                       match_support_info.raw_pv_support_cofacet_indices,
+                                                       protected_indices,
+                                                       originalvtnum);
+        }
+
+        if (dim != maxdim)
+        {
+            // facets for the next dimension are the unmatched cofacets from the current dimension
+            active_facet_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_cofacet);
+
+            // enumerate next cofacet list
+            sorted_simplex = simplex_enumerator.getSortedVRCofacets(sorted_cofacet, dim, initeps, threadnumber);
+            std::swap(sorted_simplex, sorted_cofacet);
+        }
+    }
+
+    return raw_pv_index_sets;
 }

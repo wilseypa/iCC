@@ -154,9 +154,10 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context,
     return count;
 }
 
-MaximumMorseMatching::PVSupportInfo MaximumMorseMatching::implicitMatchAndCollectPVInfo(
+MaximumMorseMatching::MatchSupportInfo MaximumMorseMatching::implicitMatchAndCollectSupportInfo(
     MatchingContext& matching_context,
     std::vector<std::pair<double, double>>& dim_persistent_pair,
+    const bool collect_pv_support,
     std::vector<PersistentPairInfo>* persistent_pair_info)
 {
     auto& binom_table = matching_context.binomial_table;
@@ -178,9 +179,10 @@ MaximumMorseMatching::PVSupportInfo MaximumMorseMatching::implicitMatchAndCollec
     vertex_workspace_.reserve(dim + 1);
     pq_workspace_.reserve(u);
 
-    PVSupportInfo pv_support_info;
-    pv_support_info.raw_pv_support_cofacet_indices.reserve(dim < 5 ? 64 : 128);    //estimated numbers
-    pv_support_info.critical_facet_list_indices.reserve(dim < 5 ? 32 : 64);
+    MatchSupportInfo match_support_info;
+    if (collect_pv_support)
+        match_support_info.raw_pv_support_cofacet_indices.reserve(dim < 5 ? 64 : 128);    //estimated numbers
+    match_support_info.protected_facet_list_indices.reserve(dim < 5 ? 32 : 64);
 
     size_t ct = 0;    //apparent pair count
 
@@ -198,6 +200,12 @@ MaximumMorseMatching::PVSupportInfo MaximumMorseMatching::implicitMatchAndCollec
                 cofacetbindex,
             });
         }
+    };
+
+    const auto appendProtectedFacet =
+        [&](const size_t facet_list_index)
+    {
+        match_support_info.protected_facet_list_indices.push_back(facet_list_index);
     };
     
     // process facets in reverse order
@@ -220,9 +228,7 @@ MaximumMorseMatching::PVSupportInfo MaximumMorseMatching::implicitMatchAndCollec
         {
             const double facetweight = matching_context.sorted_facets[static_cast<size_t>(i)].second;
             appendPersistentPair(facetweight, -1.0, facetbindex, -1);
-
-            // save critical facet list index
-            pv_support_info.critical_facet_list_indices.push_back(static_cast<size_t>(i));
+            appendProtectedFacet(static_cast<size_t>(i));
 
             continue;
         }
@@ -264,15 +270,14 @@ MaximumMorseMatching::PVSupportInfo MaximumMorseMatching::implicitMatchAndCollec
         {
             const double facetweight = matching_context.sorted_facets[static_cast<size_t>(i)].second;
             appendPersistentPair(facetweight, -1.0, facetbindex, -1);
-
-            // save critical facet list index
-            pv_support_info.critical_facet_list_indices.push_back(static_cast<size_t>(i));
+            appendProtectedFacet(static_cast<size_t>(i));
 
             continue;
         }
 
         const size_t terminalcofacetidx = aug_path_[0];
-        pv_support_info.raw_pv_support_cofacet_indices.push_back(collectReducedColumnSupport(matching_context, terminalcofacetidx, facetgraphidx));
+        if (collect_pv_support)
+            match_support_info.raw_pv_support_cofacet_indices.push_back(collectReducedColumnSupport(matching_context, terminalcofacetidx, facetgraphidx));
         
 
         const size_t uidx = aug_path_[0];
@@ -298,7 +303,7 @@ MaximumMorseMatching::PVSupportInfo MaximumMorseMatching::implicitMatchAndCollec
 
     // std::cout<<"interface dim = "<<dim<<" implicit apparent pair count = "<<ct<<'\n';
     
-    return pv_support_info;
+    return match_support_info;
 }
 
 

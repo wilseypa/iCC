@@ -18,6 +18,8 @@ public:
 
     void runPiecewisePH(const std::vector<double>& eps_breaks, const size_t maxdim, const int thread_number);
 
+    //legacy QE
+
     std::vector<std::unordered_set<size_t>> runQuotient(const size_t maxdim, const double initeps, const int thread_number);
 
     void runExpand(const std::vector<std::unordered_set<size_t>>& pv_index_sets, const size_t maxdim, const double maxeps, const int thread_number);
@@ -106,13 +108,14 @@ private:
 
     void rebuildWindowState(WindowState& win_state, std::vector<SelectedPV>&& new_pv_list);
 
-    std::vector<std::unordered_set<size_t>> getPVIndexSets(const size_t maxdim, const double initeps, const int thread_number);
+    void collectProtectedIndices(const MatchingContext& matching_context,
+                                 const MaximumMorseMatching::MatchSupportInfo& match_support_info,
+                                 std::unordered_set<size_t>& protected_indices);
 
-    std::vector<std::unordered_set<size_t>> getNonMergingPVSupport(const MatchingContext& matching_context, const MaximumMorseMatching::PVSupportInfo& pv_support_info, const size_t npts, const size_t dim);
-
-    std::vector<std::unordered_set<size_t>> trimIndexSets(std::vector<std::unordered_set<size_t>>& pv_support_vertex_sets, const double initeps);
-
-    std::vector<size_t> getActiveVertexIndices(const std::vector<std::unordered_set<size_t>>& pv_index_sets); // list of active indices to construct edges and cofaces
+    std::vector<std::unordered_set<size_t>> getNonMergingPVSupport(const MatchingContext& matching_context,
+                                                                   const std::vector<std::vector<size_t>>& raw_pv_support_cofacet_indices,
+                                                                   const std::unordered_set<size_t>& protected_indices,
+                                                                   const size_t origin_vt_num);
 
     double computeVirtualDistance(const size_t i, const size_t j, const std::vector<std::unordered_set<size_t>>& pv_index_sets);
 
@@ -124,6 +127,13 @@ private:
                                                                  const robin_hood::unordered_map<uint64_t, double> &virtual_distance_hash_table, const double maxeps, int threadnum);
 
     robin_hood::unordered_map<int64_t, size_t> getVirtualActiveEdgeIndexHashTable(const std::vector<std::pair<int64_t, double>> &sorted_virtual_edge, const size_t pvnum);
+
+    //legacy QE
+    std::vector<std::unordered_set<size_t>> getPVIndexSets(const size_t maxdim, const double initeps, const int thread_number);
+
+    std::vector<std::unordered_set<size_t>> trimIndexSets(std::vector<std::unordered_set<size_t>>& pv_support_vertex_sets, const double initeps);
+
+    std::vector<size_t> getActiveVertexIndices(const std::vector<std::unordered_set<size_t>>& pv_index_sets); // list of active indices to construct edges and cofaces
 };
 
 extern template class QuotientAndExpand<NormalDistMat>;

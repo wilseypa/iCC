@@ -18,10 +18,10 @@ public:
         int64_t cofacet_bindex = -1;
     };
 
-    struct PVSupportInfo
+    struct MatchSupportInfo
     {
         std::vector<std::vector<size_t>> raw_pv_support_cofacet_indices;
-        std::vector<size_t> critical_facet_list_indices;
+        std::vector<size_t> protected_facet_list_indices;
     };
 
     MaximumMorseMatching() {};
@@ -32,9 +32,10 @@ public:
 
     // int64_t implicitMatchAndGetMinCritialIndex(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);    //for the quotient
 
-    PVSupportInfo implicitMatchAndCollectPVInfo(MatchingContext& matching_context,
-                                                std::vector<std::pair<double, double>>& dim_persistent_pair,
-                                                std::vector<PersistentPairInfo>* persistent_pair_info = nullptr);
+    MatchSupportInfo implicitMatchAndCollectSupportInfo(MatchingContext& matching_context,
+                                                        std::vector<std::pair<double, double>>& dim_persistent_pair,
+                                                        const bool collect_pv_support,
+                                                        std::vector<PersistentPairInfo>* persistent_pair_info = nullptr);
 
     //legacy explicit graph representation  
     MaximumMorseMatching(int threadnum): threadnum_(threadnum) {};
