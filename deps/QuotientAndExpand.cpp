@@ -13,7 +13,7 @@ template class QuotientAndExpand<NormalDistMat>;
 // template class QuotientAndExpand<SparseDistMat>;
 
 template <typename DistMatType>
-void QuotientAndExpand<DistMatType>::runPiecewisePH(const std::vector<double>& eps_breaks, const size_t maxdim, const int threadnumber)
+void QuotientAndExpand<DistMatType>::runPiecewisePH(const std::vector<double>& eps_breaks, const size_t maxdim, const int threadnumber, const double pv_cap_scale)
 {
     WindowState win_state(dist_mat_.getVertexNumber());
 
@@ -34,7 +34,7 @@ void QuotientAndExpand<DistMatType>::runPiecewisePH(const std::vector<double>& e
 
         if (!collect_pv) break;
 
-        auto new_pv_list = trimPVCandidates(win_state, untrimmed_pv_label_sets, eps_hi);
+        auto new_pv_list = trimPVCandidates(win_state, untrimmed_pv_label_sets, eps_hi, pv_cap_scale);
 
         rebuildWindowState(win_state, std::move(new_pv_list));
 
@@ -302,7 +302,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
 
 template <typename DistMatType>
 std::vector<typename QuotientAndExpand<DistMatType>::SelectedPV> 
-QuotientAndExpand<DistMatType>::trimPVCandidates(const WindowState& win_state, const std::vector<std::unordered_set<size_t>>& raw_label_sets, const double eps_hi)
+QuotientAndExpand<DistMatType>::trimPVCandidates(const WindowState& win_state, const std::vector<std::unordered_set<size_t>>& raw_label_sets, const double eps_hi, const double pv_cap_scale)
 {
     const auto getMaxPairwiseDistance = [this](const std::unordered_set<size_t>& index_set)
     {
@@ -349,7 +349,7 @@ QuotientAndExpand<DistMatType>::trimPVCandidates(const WindowState& win_state, c
 
             if (flat_index_set.size() >= MAX_SIZE_) continue;
 
-            if (getMaxPairwiseDistance(flat_index_set) > eps_hi) continue;
+            if (getMaxPairwiseDistance(flat_index_set) > (pv_cap_scale * eps_hi)) continue;
 
             claimed_labels.insert(label_set.begin(), label_set.end());
 
