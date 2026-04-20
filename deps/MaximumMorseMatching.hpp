@@ -30,7 +30,6 @@ public:
                          std::vector<std::pair<double, double>>& dim_persistent_pair,
                          std::vector<PersistentPairInfo>* persistent_pair_info = nullptr);
 
-    // int64_t implicitMatchAndGetMinCritialIndex(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);    //for the quotient
 
     MatchSupportInfo implicitMatchAndCollectSupportInfo(MatchingContext& matching_context,
                                                         std::vector<std::pair<double, double>>& dim_persistent_pair,
@@ -70,10 +69,34 @@ private:
     std::vector<size_t> vertex_workspace_;
     std::vector<size_t> pq_workspace_;
 
-    int64_t implicitFacetAugPath(const std::vector<std::vector<int64_t>>& binomial_table, BipartiteGraph& bi_graph, const std::vector<std::pair<int64_t, double>>& facet_list, 
-                                 const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash_table, const size_t facetgraphindex, size_t npts, size_t interfacedimension);
+    int64_t implicitFacetAugPath(const std::vector<std::vector<int64_t>>& binomial_table, BipartiteGraph& bi_graph, 
+                                 const std::vector<std::pair<int64_t, double>>& facet_list, 
+                                 const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash_table, const size_t facetgraphindex, 
+                                 size_t npts, size_t interfacedimension);
 
-    std::vector<size_t> collectReducedColumnSupport(const MatchingContext& matching_context, const size_t terminalcofacet, const size_t expectedfacet);
+    int64_t implicitFacetCompressedAugPath(const std::vector<std::vector<int64_t>>& binomial_table, const BipartiteGraph& bi_graph,
+                                           const std::vector<std::pair<int64_t, double>>& facet_list,
+                                           const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash_table,
+                                           const size_t facetgraphindex, size_t npts, size_t interfacedimension);
+
+    void enqueueReducedCompressedColumnTail(const std::vector<std::vector<int64_t>>& binomial_table,
+                                            const BipartiteGraph& bi_graph,
+                                            const std::vector<std::pair<int64_t, double>>& facet_list,
+                                            const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash_table,
+                                            const size_t facet_list_index,
+                                            const size_t pivot_cofacet,
+                                            size_t npts,
+                                            size_t interfacedimension,
+                                            MinIndexQueue& target_queue);
+
+    std::vector<size_t> collectReducedColumnSupport(const MatchingContext& matching_context, const size_t terminalcofacet, 
+                                                    const size_t expectedfacet);
+
+    void enqueueReducedCofacetBoundaryTail(const MatchingContext& matching_context,
+                                           const size_t cofacet_list_index,
+                                           const size_t pivot_facet_list_index,
+                                           MaxIndexQueue& target_queue,
+                                           std::vector<size_t>& cofacet_trace);
     
 
     int64_t implicitFacetAugPathDebug(const std::vector<std::vector<int64_t>>& binomial_table, BipartiteGraph& bi_graph, const std::vector<std::pair<int64_t, double>>& facet_list, 

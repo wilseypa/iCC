@@ -12,6 +12,12 @@
 
 namespace
 {
+enum class Workflow
+{
+    PiecewisePH,
+    MorseVRPH
+};
+
 std::string trim(const std::string& text)
 {
     const auto first = text.find_first_not_of(" \t\r\n");
@@ -67,6 +73,24 @@ std::string promptFilename()
         }
 
         return filename;
+    }
+}
+
+Workflow promptWorkflow()
+{
+    while (true)
+    {
+        std::cout << "Select workflow:\n";
+        std::cout << "  1) morsePiecewisePH\n";
+        std::cout << "  2) morseVRPH\n";
+
+        const std::string answer = promptRequiredLine("Input workflow [1/2]: ");
+        if (answer == "1")
+            return Workflow::PiecewisePH;
+        if (answer == "2")
+            return Workflow::MorseVRPH;
+
+        std::cout << "  Please enter 1 for morsePiecewisePH or 2 for morseVRPH.\n";
     }
 }
 
@@ -171,6 +195,25 @@ int promptThreadNumber()
     }
 }
 
+double promptMaxEpsilon()
+{
+    while (true)
+    {
+        const std::string line = promptRequiredLine("Input max epsilon: ");
+        std::stringstream parser(line);
+        double value = 0.0;
+        char extra = '\0';
+
+        if (!(parser >> value) || (parser >> extra) || value <= 0.0)
+        {
+            std::cout << "  Please enter a positive number.\n";
+            continue;
+        }
+
+        return value;
+    }
+}
+
 double promptPVCapScale()
 {
     while (true)
@@ -190,19 +233,39 @@ double promptPVCapScale()
     }
 }
 
-bool promptConfirmation(const std::string& filename, const size_t maxdim, const std::vector<double>& eps_breaks, const int threadnumber, const double pv_cap_scale)
+bool promptConfirmation(const Workflow workflow,
+                        const std::string& filename,
+                        const size_t maxdim,
+                        const std::vector<double>& eps_breaks,
+                        const double maxeps,
+                        const int threadnumber,
+                        const double pv_cap_scale)
 {
     while (true)
     {
-        std::cout << "\nRun morsePiecewisePH with:\n";
+        std::cout << "\nRun ";
+        if (workflow == Workflow::PiecewisePH)
+            std::cout << "morsePiecewisePH";
+        else
+            std::cout << "morseVRPH";
+        std::cout << " with:\n";
+
         std::cout << "  input file: " << filename << '\n';
         std::cout << "  max dimension: " << maxdim << '\n';
-        std::cout << "  epsilon breaks:";
-        for (const double eps : eps_breaks)
-            std::cout << ' ' << eps;
-        std::cout << '\n';
         std::cout << "  thread number: " << threadnumber << '\n';
-        std::cout << "  pv cap scale: " << pv_cap_scale << '\n';
+
+        if (workflow == Workflow::PiecewisePH)
+        {
+            std::cout << "  epsilon breaks:";
+            for (const double eps : eps_breaks)
+                std::cout << ' ' << eps;
+            std::cout << '\n';
+            std::cout << "  pv cap scale: " << pv_cap_scale << '\n';
+        }
+        else
+        {
+            std::cout << "  max epsilon: " << maxeps << '\n';
+        }
 
         const std::string answer = promptRequiredLine("Proceed? [y/n]: ");
         if (answer == "y" || answer == "Y" || answer == "yes" || answer == "YES" || answer == "Yes")
@@ -219,15 +282,28 @@ int main()
 {
     try
     {
-        std::cout << "morsePiecewisePH interactive runner\n\n";
+        std::cout << "Morse PH interactive runner\n\n";
 
         const std::string filename = promptFilename();
+        const Workflow workflow = promptWorkflow();
         const size_t maxdim = promptMaxDimension();
-        const std::vector<double> eps_breaks = promptEpsilonBreaks();
         const int threadnumber = promptThreadNumber();
-        const double pv_cap_scale = promptPVCapScale();
 
-        if (!promptConfirmation(filename, maxdim, eps_breaks, threadnumber, pv_cap_scale))
+        std::vector<double> eps_breaks;
+        double maxeps = 0.0;
+        double pv_cap_scale = 0.0;
+
+        if (workflow == Workflow::PiecewisePH)
+        {
+            eps_breaks = promptEpsilonBreaks();
+            pv_cap_scale = promptPVCapScale();
+        }
+        else
+        {
+            maxeps = promptMaxEpsilon();
+        }
+
+        if (!promptConfirmation(workflow, filename, maxdim, eps_breaks, maxeps, threadnumber, pv_cap_scale))
         {
             std::cout << "Run cancelled.\n";
             return 0;
@@ -238,7 +314,10 @@ int main()
         std::cout << "\nstarted running...\n";
 
         const auto st0 = std::chrono::high_resolution_clock::now();
-        cc.morsePiecewisePH(maxdim, eps_breaks, threadnumber, pv_cap_scale);
+        if (workflow == Workflow::PiecewisePH)
+            cc.morsePiecewisePH(maxdim, eps_breaks, threadnumber, pv_cap_scale);
+        else
+            cc.morseVRPH(maxdim, maxeps, threadnumber);
         const auto st1 = std::chrono::high_resolution_clock::now();
 
         const auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
@@ -263,9 +342,9 @@ int main()
 //     auto st0 = std::chrono::high_resolution_clock::now();
 
 //     // cc.morseQuotientAndExpand(3, 1.0, 1.7, 4);
-//     // cc.morseVRPH(3, 1.4, 4);
+//     // cc.morseVRPH(4, 1.7, 4);
 
-//     std::vector<double> eps_breaks = {1.1, 1.4, 1.7};
+//     std::vector<double> eps_breaks = {1.4, 1.7};
 //     cc.morsePiecewisePH(4, eps_breaks, 4, 0.8);
 
 //     auto st1 = std::chrono::high_resolution_clock::now();

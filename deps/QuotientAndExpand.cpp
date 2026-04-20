@@ -38,7 +38,7 @@ void QuotientAndExpand<DistMatType>::runPiecewisePH(const std::vector<double>& e
 
         rebuildWindowState(win_state, std::move(new_pv_list));
 
-        /********************************debug*******************************/
+        /********************************debug print*******************************/
         const auto getMaxPairwiseDistance = [this](const std::unordered_set<size_t>& index_set)
         {
             if (index_set.size() < 2)
@@ -87,7 +87,7 @@ void QuotientAndExpand<DistMatType>::runPiecewisePH(const std::vector<double>& e
             }
             std::cout<<std::endl;
         }
-
+        /********************************end of debug print*******************************/
 
     }
 
@@ -123,6 +123,8 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
     std::vector<std::pair<double, double>> dim_persistent_pairs;
     std::vector<MaximumMorseMatching::PersistentPairInfo> maxdim_persistent_pair_info;
 
+    //****************************diagnose info print **************************/
+
     const auto printIndexList = [](const std::vector<size_t>& index_list)
     {
         if (index_list.empty())
@@ -141,46 +143,18 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
         }
     };
 
-    const auto getFlattenedIndexList = [original_vt_num, &pv_index_sets](const std::vector<size_t>& simplex_labels)
-    {
-        std::vector<size_t> flattened_index_list;
-
-        for (const auto label : simplex_labels)
-        {
-            if (label < original_vt_num)
-            {
-                flattened_index_list.push_back(label);
-                continue;
-            }
-
-            const auto& pv_flat_index_set = pv_index_sets[label - original_vt_num];
-            flattened_index_list.insert(flattened_index_list.end(), pv_flat_index_set.begin(), pv_flat_index_set.end());
-        }
-
-        std::sort(flattened_index_list.begin(), flattened_index_list.end());
-        flattened_index_list.erase(std::unique(flattened_index_list.begin(), flattened_index_list.end()), flattened_index_list.end());
-
-        return flattened_index_list;
-    };
-
     const auto printSimplexInfo =
-        [this, npts, &printIndexList, &getFlattenedIndexList](const char* prefix, const int64_t simplex_bindex, const size_t simplex_dim)
+        [this, npts, &printIndexList](const char* prefix, const int64_t simplex_bindex, const size_t simplex_dim)
     {
         std::cout << "    " << prefix << " labels: ";
         if (simplex_bindex < 0)
         {
             std::cout << "(none)" << '\n';
-            std::cout << "    " << prefix << " flat indices: (none)" << '\n';
             return;
         }
 
         const auto simplex_labels = SimplexUtility::getSimplexVertices(binomial_table_, simplex_bindex, npts, simplex_dim);
         printIndexList(simplex_labels);
-        std::cout << '\n';
-
-        const auto flattened_index_list = getFlattenedIndexList(simplex_labels);
-        std::cout << "    " << prefix << " flat indices: ";
-        printIndexList(flattened_index_list);
         std::cout << '\n';
     };
 
@@ -211,6 +185,9 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
         if (!printed_any)
             std::cout << "  (no new interval or surviving interval from previous eps range)" << std::endl;
     };
+
+    //****************************end of diagnose info print **************************/
+
 
     std::vector<std::unordered_set<size_t>> untrimmed_pv_label_sets;
 

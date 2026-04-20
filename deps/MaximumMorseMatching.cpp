@@ -1,5 +1,6 @@
 #include <execution>
 #include <iostream>
+#include <stdexcept>
 
 #include <cassert>
 
@@ -7,6 +8,59 @@
 
 #include "MaximumMorseMatching.hpp"
 #include "SimplexUtility.hpp"
+
+namespace
+{
+    void printSimplexVertices(std::ostream& os,
+                            const std::vector<std::vector<int64_t>>& binomial_table,
+                            const int64_t bindex,
+                            const size_t npts,
+                            const size_t simplex_dim)
+    {
+        if (bindex < 0)
+        {
+            os << "{?}";
+            return;
+        }
+
+        const auto simplex_vertices =
+            SimplexUtility::getSimplexVertices(binomial_table, bindex, npts, simplex_dim);
+
+        os << '{';
+        for (size_t i = 0; i < simplex_vertices.size(); ++i)
+        {
+            if (i > 0) os << ',';
+            os << simplex_vertices[i];
+        }
+        os << '}';
+    }
+
+    void printGhostPair(const std::vector<std::vector<int64_t>>& binomial_table,
+                        const size_t npts,
+                        const size_t cofacet_dim,
+                        const double facetweight,
+                        const double cofacetweight,
+                        const int64_t facetbindex,
+                        const int64_t cofacetbindex)
+    {
+        std::cerr << "[ghost pair] cofacet weight != facet weight\n"
+                << "  cofacet dim = " << cofacet_dim << '\n'
+                << "  facet weight = " << facetweight
+                << ", bindex = " << facetbindex
+                << ", vertices = ";
+        printSimplexVertices(std::cerr,
+                            binomial_table,
+                            facetbindex,
+                            npts,
+                            cofacet_dim == 0 ? 0 : cofacet_dim - 1);
+        std::cerr << '\n'
+                << "  cofacet weight = " << cofacetweight
+                << ", bindex = " << cofacetbindex
+                << ", vertices = ";
+        printSimplexVertices(std::cerr, binomial_table, cofacetbindex, npts, cofacet_dim);
+        std::cerr << '\n';
+    }
+}    // helper namespace
 
 size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context,
                                            std::vector<std::pair<double, double>>& dim_persistent_pair,
@@ -107,19 +161,16 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context,
 
                         continue;
                     }
+
+                    // printGhostPair(binom_table, npts, dim, facetweight, cofacetweight, facetbindex, cofacet_list[mincofacetidx].first);
                 }
             }
         }
 
-        //not an apparent pair, need to find augmenting path
-        // std::cout<<"will start aug path"<<'\n';
-        // int64_t pathlen = implicitFacetAugPath(binom_table, bi_graph, facet_list, cofacet_hash, facetgraphidx, npts, dim);
+        const int64_t terminalcofacet = implicitFacetCompressedAugPath(binom_table, bi_graph, facet_list,
+                                                                       cofacet_hash, facetgraphidx, npts, dim);
 
-        int64_t pathlen = implicitFacetAugPath(binom_table, bi_graph, facet_list, cofacet_hash, facetgraphidx, npts, dim);
-
-        // std::cout<<"aug path done, path len = "<<pathlen<<'\n';
-
-        if (pathlen <= 0)
+        if (terminalcofacet < 0)
         {
             const double facetweight = matching_context.sorted_facets[static_cast<size_t>(i)].second;
             // std::cout <<"interface dim = "<<dim<< "  facet weight = " << facetweight << "  cofacet weight = -1 "<<'\n';
@@ -128,18 +179,15 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context,
             continue;
         }
 
-        const size_t uidx = aug_path_[0];
+        const size_t uidx = static_cast<size_t>(terminalcofacet);
         const double cofacetweight = matching_context.sorted_cofacets[uidx].second;
-        const size_t vidx = aug_path_[static_cast<size_t>(pathlen) - 1];
-        const double facetweight = matching_context.sorted_facets[vidx - u].second;
-        const int64_t reduced_facet_bindex = matching_context.sorted_facets[vidx - u].first;
+        const double facetweight = matching_context.sorted_facets[static_cast<size_t>(i)].second;
+        const int64_t reduced_facet_bindex = matching_context.sorted_facets[static_cast<size_t>(i)].first;
         const int64_t reduced_cofacet_bindex = matching_context.sorted_cofacets[uidx].first;
 
-        for (int64_t j = 0; j < pathlen; j += 2) 
-        {
-            bi_graph.match_list[aug_path_[static_cast<size_t>(j)]] = static_cast<int64_t>(aug_path_[static_cast<size_t>(j) + 1]);
-            bi_graph.match_list[aug_path_[static_cast<size_t>(j) + 1]] = static_cast<int64_t>(aug_path_[static_cast<size_t>(j)]);
-        }
+        // compressed path: pair the current facet directly with the terminal cofacet.
+        bi_graph.match_list[facetgraphidx] = static_cast<int64_t>(uidx);
+        bi_graph.match_list[uidx] = static_cast<int64_t>(facetgraphidx);
 
         if (facetweight != cofacetweight)
         {
@@ -148,8 +196,6 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context,
         }
 
     }
-
-    // std::cout<<"interface dim = "<<dim<<" implicit apparent pair count = "<<ct<<'\n';
 
     return count;
 }
@@ -184,7 +230,7 @@ MaximumMorseMatching::MatchSupportInfo MaximumMorseMatching::implicitMatchAndCol
         match_support_info.raw_pv_support_cofacet_indices.reserve(dim < 5 ? 64 : 128);    //estimated numbers
     match_support_info.protected_facet_list_indices.reserve(dim < 5 ? 32 : 64);
 
-    size_t ct = 0;    //apparent pair count
+    // size_t ct = 0;    //apparent pair count
 
     const auto appendPersistentPair =
         [&](const double facetweight, const double cofacetweight, const int64_t facetbindex, const int64_t cofacetbindex)
@@ -255,18 +301,18 @@ MaximumMorseMatching::MatchSupportInfo MaximumMorseMatching::implicitMatchAndCol
                         bi_graph.match_list[facetgraphidx] = static_cast<int64_t>(mincofacetidx);
                         bi_graph.match_list[mincofacetidx] = static_cast<int64_t>(facetgraphidx);
 
-                        ct+=1;
-
                         continue;
                     }
+
+                    // printGhostPair(binom_table, npts, dim, facetweight, cofacetweight, facetbindex, cofacet_list[mincofacetidx].first);
                 }
             }
         }
 
-        // find augmenting path
-        const int64_t pathlen = implicitFacetAugPath(binom_table, bi_graph, facet_list, cofacet_hash, facetgraphidx, npts, dim);
+        const int64_t terminalcofacet = implicitFacetCompressedAugPath(binom_table, bi_graph, facet_list,
+                                                                       cofacet_hash, facetgraphidx, npts, dim);
 
-        if (pathlen <= 0)
+        if (terminalcofacet < 0)
         {
             const double facetweight = matching_context.sorted_facets[static_cast<size_t>(i)].second;
             appendPersistentPair(facetweight, -1.0, facetbindex, -1);
@@ -275,23 +321,22 @@ MaximumMorseMatching::MatchSupportInfo MaximumMorseMatching::implicitMatchAndCol
             continue;
         }
 
-        const size_t terminalcofacetidx = aug_path_[0];
+        const size_t terminalcofacetidx = static_cast<size_t>(terminalcofacet);
         if (collect_pv_support)
+        {
+            // PV detection needs the reduced column before the compressed pair is installed.
             match_support_info.raw_pv_support_cofacet_indices.push_back(collectReducedColumnSupport(matching_context, terminalcofacetidx, facetgraphidx));
-        
+        }
 
-        const size_t uidx = aug_path_[0];
+        const size_t uidx = terminalcofacetidx;
         const double cofacetweight = matching_context.sorted_cofacets[uidx].second;
-        const size_t vidx = aug_path_[static_cast<size_t>(pathlen) - 1];
-        const double facetweight = matching_context.sorted_facets[vidx - u].second;
-        const int64_t reduced_facet_bindex = matching_context.sorted_facets[vidx - u].first;
+        const double facetweight = matching_context.sorted_facets[static_cast<size_t>(i)].second;
+        const int64_t reduced_facet_bindex = matching_context.sorted_facets[static_cast<size_t>(i)].first;
         const int64_t reduced_cofacet_bindex = matching_context.sorted_cofacets[uidx].first;
 
-        for (int64_t j = 0; j < pathlen; j += 2) 
-        {
-            bi_graph.match_list[aug_path_[static_cast<size_t>(j)]] = static_cast<int64_t>(aug_path_[static_cast<size_t>(j) + 1]);
-            bi_graph.match_list[aug_path_[static_cast<size_t>(j) + 1]] = static_cast<int64_t>(aug_path_[static_cast<size_t>(j)]);
-        }
+        // Compressed install: pair the current facet directly with the terminal cofacet.
+        bi_graph.match_list[facetgraphidx] = static_cast<int64_t>(uidx);
+        bi_graph.match_list[uidx] = static_cast<int64_t>(facetgraphidx);
 
         if (facetweight != cofacetweight)
         {
@@ -406,6 +451,169 @@ int64_t MaximumMorseMatching::implicitFacetAugPath(const std::vector<std::vector
     return static_cast<int64_t>(aug_path_.size());
 }
 
+int64_t MaximumMorseMatching::implicitFacetCompressedAugPath(const std::vector<std::vector<int64_t>>& binomial_table,
+                                                             const BipartiteGraph& bi_graph,
+                                                             const std::vector<std::pair<int64_t, double>>& facet_list,
+                                                             const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash_table,
+                                                             const size_t facetgraphindex,
+                                                             size_t npts,
+                                                             size_t interfacedimension)
+{
+    pq_workspace_.clear();
+
+    MinIndexQueue cofacet_queue(std::greater<size_t>{}, std::move(pq_workspace_));
+
+    const int64_t start_facet_bindex = facet_list[facetgraphindex - bi_graph.unodes].first;
+    SimplexUtility::getCofacetListIndicesInPlace(binomial_table,
+                                                 cofacet_hash_table,
+                                                 cofacet_indices_,
+                                                 vertex_workspace_,
+                                                 start_facet_bindex,
+                                                 npts,
+                                                 interfacedimension - 1);
+
+    for (auto cofidx : cofacet_indices_)
+    {
+        cofacet_queue.push(cofidx);
+    }
+
+    while (!cofacet_queue.empty())
+    {
+        const size_t topcofacet = cofacet_queue.top();  // cofacet graph index == list index
+        cofacet_queue.pop();
+
+        size_t multiplicity = 1;
+        while (!cofacet_queue.empty() && cofacet_queue.top() == topcofacet)
+        {
+            cofacet_queue.pop();
+            ++multiplicity;
+        }
+
+        if ((multiplicity & 1ULL) == 0ULL) continue;
+
+        if (bi_graph.match_list[topcofacet] < 0)
+        {
+            auto& pq_buffer = cofacet_queue.getContainer();
+            pq_buffer.clear();
+            pq_workspace_ = std::move(pq_buffer);
+            return static_cast<int64_t>(topcofacet);
+        }
+
+        const size_t nextfacet = static_cast<size_t>(bi_graph.match_list[topcofacet]);
+        const size_t nextfacet_list_idx = nextfacet - bi_graph.unodes;
+        enqueueReducedCompressedColumnTail(binomial_table,
+                                           bi_graph,
+                                           facet_list,
+                                           cofacet_hash_table,
+                                           nextfacet_list_idx,
+                                           topcofacet,
+                                           npts,
+                                           interfacedimension,
+                                           cofacet_queue);
+    }
+
+    auto& pq_buffer = cofacet_queue.getContainer();
+    pq_buffer.clear();
+    pq_workspace_ = std::move(pq_buffer);
+
+    return -1;
+}
+
+void MaximumMorseMatching::enqueueReducedCompressedColumnTail(const std::vector<std::vector<int64_t>>& binomial_table,
+                                                              const BipartiteGraph& bi_graph,
+                                                              const std::vector<std::pair<int64_t, double>>& facet_list,
+                                                              const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash_table,
+                                                              const size_t facet_list_index,
+                                                              const size_t expected_pivot_cofacet,
+                                                              size_t npts,
+                                                              size_t interfacedimension,
+                                                              MinIndexQueue& target_queue)
+{
+    MinIndexQueue column_queue(std::greater<size_t>{});
+
+    const int64_t facetbindex = facet_list[facet_list_index].first;
+    SimplexUtility::getCofacetListIndicesInPlace(binomial_table,
+                                                 cofacet_hash_table,
+                                                 cofacet_indices_,
+                                                 vertex_workspace_,
+                                                 facetbindex,
+                                                 npts,
+                                                 interfacedimension - 1);
+
+    for (auto cofidx : cofacet_indices_)
+    {
+        column_queue.push(cofidx);
+    }
+
+    while (!column_queue.empty())
+    {
+        const size_t topcofacet = column_queue.top();
+        column_queue.pop();
+
+        size_t multiplicity = 1;
+        while (!column_queue.empty() && column_queue.top() == topcofacet)
+        {
+            column_queue.pop();
+            ++multiplicity;
+        }
+
+        if ((multiplicity & 1ULL) == 0ULL) continue;
+
+        if (topcofacet == expected_pivot_cofacet)
+        {
+            // Expected pivot exposed. Do not enqueue it; this is the term being canceled.
+            break;
+        }
+
+        if (topcofacet > expected_pivot_cofacet)
+        {
+            // Since the queue is a min-queue, we have already passed the expected pivot.
+            // The pivot cannot reappear under monotone reduced-tail expansion.
+            throw std::logic_error("enqueueReducedCompressedColumnTail: passed expected pivot");
+        }
+
+        // Now topcofacet < expected_pivot_cofacet. It must be reducible by an already processed matched facet.
+        const int64_t matchedfacet = bi_graph.match_list[topcofacet];
+        if (matchedfacet < 0)
+        {
+            throw std::logic_error("enqueueReducedCompressedColumnTail: unmatched term before expected pivot");
+        }
+
+        const size_t matched_facet_list_index = static_cast<size_t>(matchedfacet) - bi_graph.unodes;
+        if (matched_facet_list_index <= facet_list_index)
+        {
+            throw std::logic_error("enqueueReducedCompressedColumnTail: reducer is not available in processing order");
+        }
+
+        enqueueReducedCompressedColumnTail(binomial_table,
+                                           bi_graph,
+                                           facet_list,
+                                           cofacet_hash_table,
+                                           matched_facet_list_index,
+                                           topcofacet,
+                                           npts,
+                                           interfacedimension,
+                                           column_queue);
+        continue;
+    }
+
+    while (!column_queue.empty())
+    {
+        const size_t queued_cofacet = column_queue.top();
+        column_queue.pop();
+
+        size_t multiplicity = 1;
+        while (!column_queue.empty() && column_queue.top() == queued_cofacet)
+        {
+            column_queue.pop();
+            ++multiplicity;
+        }
+
+        if ((multiplicity & 1ULL) != 0ULL && queued_cofacet != expected_pivot_cofacet)
+            target_queue.push(queued_cofacet);
+    }
+}
+
 std::vector<size_t> MaximumMorseMatching::collectReducedColumnSupport(const MatchingContext& matching_context, const size_t terminalcofacet, const size_t expected_facet_graph_idx)
 {
     auto& binom_table = matching_context.binomial_table;
@@ -437,7 +645,7 @@ std::vector<size_t> MaximumMorseMatching::collectReducedColumnSupport(const Matc
         facet_queue.pop();
 
         size_t multiplicity = 1;
-        if (!facet_queue.empty() && top_facet_list_idx == facet_queue.top())
+        while (!facet_queue.empty() && top_facet_list_idx == facet_queue.top())
         {
             facet_queue.pop();
             ++multiplicity;
@@ -455,12 +663,11 @@ std::vector<size_t> MaximumMorseMatching::collectReducedColumnSupport(const Matc
         const size_t cfi = static_cast<size_t>(nextcofacet);
         cofacet_trace.push_back(cfi);
 
-        SimplexUtility::getFacetListIndicesInPlace(binom_table, facet_hash, facet_indices_, vertex_workspace_, cofacet_list[cfi].first, npts, dim);
-
-        for (size_t fi : facet_indices_)
-        {
-            if (fi != top_facet_list_idx) facet_queue.push(fi);
-        }
+        enqueueReducedCofacetBoundaryTail(matching_context,
+                                          cfi,
+                                          top_facet_list_idx,
+                                          facet_queue,
+                                          cofacet_trace);
     }
 
     auto& pq_buffer = facet_queue.getContainer();
@@ -470,6 +677,88 @@ std::vector<size_t> MaximumMorseMatching::collectReducedColumnSupport(const Matc
     return cofacet_trace;
 }
 
+void MaximumMorseMatching::enqueueReducedCofacetBoundaryTail(const MatchingContext& matching_context,
+                                                             const size_t cofacet_list_index,
+                                                             const size_t pivot_facet_list_index,
+                                                             MaxIndexQueue& target_queue,
+                                                             std::vector<size_t>& cofacet_trace)
+{
+    auto& binom_table = matching_context.binomial_table;
+    auto& cofacet_list = matching_context.sorted_cofacets;
+    auto& facet_hash = matching_context.facet_bindex_to_list_index;
+    auto& bi_graph = matching_context.graph;
+    const size_t u = bi_graph.unodes;
+    const size_t dim = matching_context.dim;
+    const size_t npts = matching_context.npts;
+
+    MaxIndexQueue facet_queue(std::less<size_t>{});
+
+    SimplexUtility::getFacetListIndicesInPlace(binom_table,
+                                               facet_hash,
+                                               facet_indices_,
+                                               vertex_workspace_,
+                                               cofacet_list[cofacet_list_index].first,
+                                               npts,
+                                               dim);
+
+    for (size_t fi : facet_indices_)
+    {
+        facet_queue.push(fi);
+    }
+
+    while (!facet_queue.empty())
+    {
+        const size_t top_facet_list_idx = facet_queue.top();
+        facet_queue.pop();
+
+        size_t multiplicity = 1;
+        while (!facet_queue.empty() && top_facet_list_idx == facet_queue.top())
+        {
+            facet_queue.pop();
+            ++multiplicity;
+        }
+
+        if ((multiplicity & 1ULL) == 0ULL) continue;
+
+        const int64_t nextcofacet = bi_graph.match_list[top_facet_list_idx + u];
+        if (nextcofacet >= 0 && top_facet_list_idx > pivot_facet_list_index)
+        {
+            const size_t cfi = static_cast<size_t>(nextcofacet);
+            cofacet_trace.push_back(cfi);
+
+            enqueueReducedCofacetBoundaryTail(matching_context,
+                                              cfi,
+                                              top_facet_list_idx,
+                                              facet_queue,
+                                              cofacet_trace);
+            continue;
+        }
+
+        if (top_facet_list_idx != pivot_facet_list_index)
+        {
+            assert(false && "cofacet boundary replay did not stop at its pivot facet");
+            target_queue.push(top_facet_list_idx);
+        }
+
+        break;
+    }
+
+    while (!facet_queue.empty())
+    {
+        const size_t queued_facet = facet_queue.top();
+        facet_queue.pop();
+
+        size_t multiplicity = 1;
+        while (!facet_queue.empty() && facet_queue.top() == queued_facet)
+        {
+            facet_queue.pop();
+            ++multiplicity;
+        }
+
+        if ((multiplicity & 1ULL) != 0ULL && queued_facet != pivot_facet_list_index)
+            target_queue.push(queued_facet);
+    }
+}
 
 
 //legacy explicit matching routines
