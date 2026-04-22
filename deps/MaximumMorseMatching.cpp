@@ -1,4 +1,4 @@
-#include <execution>
+#include <algorithm>
 #include <iostream>
 #include <stdexcept>
 

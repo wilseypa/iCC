@@ -1,6 +1,4 @@
 #include <cmath>
-#include <algorithm>
-#include <execution>
 #include <stdexcept>
 #include <omp.h>
 #include "DistanceMatrix.hpp"
@@ -17,9 +15,13 @@ inline double vectors_distance(const std::vector<double> &a, const std::vector<d
         throw std::invalid_argument("Vectors must not be empty");
     }
 #endif
-    return sqrt(std::transform_reduce(std::execution::par, a.cbegin(), a.cend(), b.cbegin(), 0.0, std::plus<>(),
-                                      [](double e1, double e2)
-                                      { return (e1 - e2) * (e1 - e2); }));
+    double squared_distance = 0.0;
+    for (size_t i = 0; i < a.size(); i++)
+    {
+        const double diff = a[i] - b[i];
+        squared_distance += diff * diff;
+    }
+    return std::sqrt(squared_distance);
 }
 
 NormalDistMat::NormalDistMat(const std::vector<std::vector<double>> &point_cloud)

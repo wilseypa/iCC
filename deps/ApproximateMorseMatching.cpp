@@ -1,4 +1,4 @@
-#include <execution>
+#include <algorithm>
 #include <iostream>
 
 #include "omp.h"
@@ -150,7 +150,7 @@ void ApproximateMorseMatching::parallelFacetDFSMatch(BipartiteGraph &graph)
         // shared among threads
         finalunmatched = 0;
 
-        std::fill(std::execution::par, dfs_flag.begin(), dfs_flag.end(), 0);
+        std::fill(dfs_flag.begin(), dfs_flag.end(), 0);
 
 #pragma omp parallel for schedule(dynamic)
         for (size_t i = 0; i < initialunmatched; i++)
