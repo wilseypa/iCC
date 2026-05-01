@@ -16,7 +16,7 @@ class QuotientAndExpand
 public:
     QuotientAndExpand(DistMatType& dist_mat, std::vector<std::vector<int64_t>>& binomial_table, const size_t originalvertexnumber) : dist_mat_(dist_mat), binomial_table_(binomial_table) {}
 
-    void runPiecewisePH(const std::vector<double>& eps_breaks, const size_t maxdim, const int thread_number, const double pv_cap_scale);
+    void runPiecewisePH(const std::vector<double>& eps_breaks, const size_t maxdim, const int thread_number, const double pv_cap_scale, const bool verbose = false);
 
     //legacy QE
 
@@ -100,7 +100,7 @@ private:
     };
 
     std::vector<std::unordered_set<size_t>> runWindow(const WindowState& win_state, const size_t maxdim, const double eps_lo, const double eps_hi,
-                                                      const int thread_number, const bool collect_pv);
+                                                      const int thread_number, const bool collect_pv, const bool verbose);
 
     std::vector<SelectedPV> trimPVCandidates(const WindowState& win_state, const std::vector<std::unordered_set<size_t>>& raw_label_sets, const double eps_hi, const double pv_cap_scale);
 
@@ -115,7 +115,8 @@ private:
     std::vector<std::unordered_set<size_t>> getNonMergingPVSupport(const MatchingContext& matching_context,
                                                                    const std::vector<std::vector<size_t>>& raw_pv_support_cofacet_indices,
                                                                    const std::unordered_set<size_t>& protected_indices,
-                                                                   const size_t origin_vt_num);
+                                                                   const size_t origin_vt_num,
+                                                                   const bool verbose);
 
     double computeVirtualDistance(const size_t i, const size_t j, const std::vector<std::unordered_set<size_t>>& pv_index_sets);
 

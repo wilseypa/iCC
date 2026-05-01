@@ -11,7 +11,9 @@ This repository contains the c++ code for studies with iCC that are being perfor
   
 - OpenMP
 
-- Eigen3
+<!-- - Eigen3  -->
+
+- CLI11 (fetched automatically by CMake if not already installed)
 
 ---
 			  
@@ -25,7 +27,19 @@ This repository contains the c++ code for studies with iCC that are being perfor
 
 ##  RUNNING 
 
-	##    ./CritCells <input_filename> <maxDim> [<batch_size>]
+Interactive mode:
+
+	##    ./iCC
+
+Command-line mode:
+
+	##    ./iCC -t ph --file-name <input_filename> --max-dim <maxDim> --max-eps <epsilon> [-n <thread_count>] [-v]
+
+	##    ./iCC -t piecewise --file-name <input_filename> --max-dim <maxDim> --eps-breaks <eps1> <eps2> ... --pv-cap-scale <scale> [-n <thread_count>] [-v]
+
+For all CLI options:
+
+	##    ./iCC --help
 
 ## CUSTOMIZATION
 
@@ -46,4 +60,3 @@ This repository contains the c++ code for studies with iCC that are being perfor
        std::map<double, std::vector<std::vector<int>>> dsimplices_batches(ComplexType &simplex_const, size_t dim, size_t batch_size);
        ```
    - These functions are crucial for handling custom complex types and ensuring proper functionality.
-

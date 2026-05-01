@@ -443,7 +443,7 @@ void CritCells<ComplexType, DistMatType>::morseQuotientAndExpand(const size_t ma
 }
 
 template <typename ComplexType, typename DistMatType>
-void CritCells<ComplexType, DistMatType>::morsePiecewisePH(const size_t maxdim, const std::vector<double>& eps_breaks, const int thread_number, const double pv_cap_scale)
+void CritCells<ComplexType, DistMatType>::morsePiecewisePH(const size_t maxdim, const std::vector<double>& eps_breaks, const int thread_number, const double pv_cap_scale, const bool verbose)
 {
     if constexpr (std::is_same_v<ComplexType, Alpha>)
         throw std::invalid_argument("Piece-wise PH currently only supports VR complex.");
@@ -455,7 +455,7 @@ void CritCells<ComplexType, DistMatType>::morsePiecewisePH(const size_t maxdim, 
     auto binomial_table = SimplexUtility::getBinomialTable(npts, maxdim);
 
     QuotientAndExpand<DistMatType> qe(static_cast<DistMatType&>(*this), binomial_table, npts);
-    qe.runPiecewisePH(eps_breaks, maxdim, thread_number, pv_cap_scale);
+    qe.runPiecewisePH(eps_breaks, maxdim, thread_number, pv_cap_scale, verbose);
 
     return;
 }

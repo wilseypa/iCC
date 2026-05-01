@@ -26,6 +26,12 @@ inline double vectors_distance(const std::vector<double> &a, const std::vector<d
 
 NormalDistMat::NormalDistMat(const std::vector<std::vector<double>> &point_cloud)
 {
+
+    if (point_cloud.empty()) 
+    {
+        throw std::invalid_argument("Input point cloud is empty.");
+    }
+
     this->dist_mat_.resize(point_cloud.size(), std::vector<double>(point_cloud.size(), 0.0));
 #pragma omp parallel for
     for (size_t i = 0; i < point_cloud.size() - 1; i++)

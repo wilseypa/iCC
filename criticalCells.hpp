@@ -118,7 +118,7 @@ public:
 
     void morseQuotientAndExpand(const size_t maxdim, const double initeps, const double maxeps, const int threadnumber);
 
-    void morsePiecewisePH(const size_t maxdim, const std::vector<double>& eps_breaks, const int thread_number, const double pv_cap_scale);
+    void morsePiecewisePH(const size_t maxdim, const std::vector<double>& eps_breaks, const int thread_number, const double pv_cap_scale, const bool verbose = false);
 
 private:
     std::vector<std::vector<double>> point_cloud_;

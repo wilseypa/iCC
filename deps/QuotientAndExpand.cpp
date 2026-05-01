@@ -13,7 +13,7 @@ template class QuotientAndExpand<NormalDistMat>;
 // template class QuotientAndExpand<SparseDistMat>;
 
 template <typename DistMatType>
-void QuotientAndExpand<DistMatType>::runPiecewisePH(const std::vector<double>& eps_breaks, const size_t maxdim, const int threadnumber, const double pv_cap_scale)
+void QuotientAndExpand<DistMatType>::runPiecewisePH(const std::vector<double>& eps_breaks, const size_t maxdim, const int threadnumber, const double pv_cap_scale, const bool verbose)
 {
     WindowState win_state(dist_mat_.getVertexNumber());
 
@@ -30,64 +30,66 @@ void QuotientAndExpand<DistMatType>::runPiecewisePH(const std::vector<double>& e
 
         const bool collect_pv = (i + 1 < full_eps_list.size());
 
-        auto untrimmed_pv_label_sets = runWindow(win_state, maxdim, eps_lo, eps_hi, threadnumber, collect_pv);
+        auto untrimmed_pv_label_sets = runWindow(win_state, maxdim, eps_lo, eps_hi, threadnumber, collect_pv, verbose);
 
         if (!collect_pv) break;
 
         auto new_pv_list = trimPVCandidates(win_state, untrimmed_pv_label_sets, eps_hi, pv_cap_scale);
+        const size_t new_pv_count = new_pv_list.size();
 
         rebuildWindowState(win_state, std::move(new_pv_list));
 
-        /********************************debug print*******************************/
-        const auto getMaxPairwiseDistance = [this](const std::unordered_set<size_t>& index_set)
+        if (verbose)
         {
-            if (index_set.size() < 2)
-                return 0.0;
-
-            double maxdist = 0.0;
-            for (auto first = index_set.begin(); first != index_set.end(); ++first)
+            const auto getMaxPairwiseDistance = [this](const std::unordered_set<size_t>& index_set)
             {
-                auto second = first;
-                ++second;
-                for (; second != index_set.end(); ++second)
+                if (index_set.size() < 2)
+                    return 0.0;
+
+                double maxdist = 0.0;
+                for (auto first = index_set.begin(); first != index_set.end(); ++first)
                 {
-                    maxdist = std::max(maxdist, dist_mat_.getDistance(*first, *second));
-                }
-            }
-
-            return maxdist;
-        };
-
-        std::cout << "after eps range "<<eps_lo<< "  " <<eps_hi<< "  new pv number = "<<new_pv_list.size()
-                  <<"  total pv number = "<<win_state.pv_flat_index_set_list.size()<<std::endl;
-
-        std::cout << "pv flat index sets:" << std::endl;
-        if (win_state.pv_flat_index_set_list.empty())
-        {
-            std::cout << "  (empty)" << std::endl;
-        }
-        else
-        {
-            size_t pv_idx = 0;
-            for (const auto& pv_index_set : win_state.pv_flat_index_set_list)
-            {
-                std::cout << "  [" << pv_idx++ << "] ";
-                bool first = true;
-                for (const auto& flat_index : pv_index_set)
-                {
-                    if (!first)
+                    auto second = first;
+                    ++second;
+                    for (; second != index_set.end(); ++second)
                     {
-                        std::cout << " ";
+                        maxdist = std::max(maxdist, dist_mat_.getDistance(*first, *second));
                     }
-                    std::cout << flat_index;
-                    first = false;
                 }
-                
-                std::cout <<"    diameter = "<<getMaxPairwiseDistance(pv_index_set)<<'\n';
+
+                return maxdist;
+            };
+
+            std::cout << "after eps range "<<eps_lo<< "  " <<eps_hi<< "  new pv number = "<<new_pv_count
+                      <<"  total pv number = "<<win_state.pv_flat_index_set_list.size()<<std::endl;
+
+            std::cout << "pv flat index sets:" << std::endl;
+            if (win_state.pv_flat_index_set_list.empty())
+            {
+                std::cout << "  (empty)" << std::endl;
             }
-            std::cout<<std::endl;
+            else
+            {
+                size_t pv_idx = 0;
+                for (const auto& pv_index_set : win_state.pv_flat_index_set_list)
+                {
+                    std::cout << "  [" << pv_idx++ << "] ";
+                    bool first = true;
+                    for (const auto& flat_index : pv_index_set)
+                    {
+                        if (!first)
+                        {
+                            std::cout << " ";
+                        }
+                        std::cout << flat_index;
+                        first = false;
+                    }
+
+                    std::cout <<"    diameter = "<<getMaxPairwiseDistance(pv_index_set)<<'\n';
+                }
+                std::cout<<std::endl;
+            }
         }
-        /********************************end of debug print*******************************/
 
     }
 
@@ -96,8 +98,15 @@ void QuotientAndExpand<DistMatType>::runPiecewisePH(const std::vector<double>& e
 
 template <typename DistMatType>
 std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindow(const WindowState& win_state, const size_t maxdim, const double eps_lo, const double eps_hi,
-                                                                                  const int threadnumber, const bool collect_pv)
+                                                                                  const int threadnumber, const bool collect_pv, const bool verbose)
 {
+    if (!verbose)
+    {
+        std::cout << "window lower bound, window upper bound\n";
+        std::cout << eps_lo << ", " << eps_hi << '\n';
+        std::cout << "dimension, birth weight, death weight\n";
+    }
+
     const size_t original_vt_num = win_state.original_vertex_number;
     const size_t pv_num = win_state.pv_flat_index_set_list.size();
     const size_t npts = original_vt_num + pv_num;
@@ -159,9 +168,9 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
     };
 
     const auto printPersistentPairs =
-        [eps_lo, maxdim, &printSimplexInfo](const std::vector<std::pair<double, double>>& persistent_pairs,
-                                            const std::vector<MaximumMorseMatching::PersistentPairInfo>* persistent_pair_info,
-                                            const size_t dim)
+        [eps_lo, maxdim, verbose, &printSimplexInfo](const std::vector<std::pair<double, double>>& persistent_pairs,
+                                                     const std::vector<MaximumMorseMatching::PersistentPairInfo>* persistent_pair_info,
+                                                     const size_t dim)
     {
         bool printed_any = false;
         for (size_t pair_idx = 0; pair_idx < persistent_pairs.size(); ++pair_idx)
@@ -169,20 +178,27 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
             const auto& [facetweight, cofacetweight] = persistent_pairs[pair_idx];
             if (cofacetweight > eps_lo || cofacetweight < 0)
             {
-                std::cout << "  (" << facetweight << ", " << cofacetweight << ")" << std::endl;
-
-                if (dim == maxdim && persistent_pair_info != nullptr && pair_idx < persistent_pair_info->size())
+                if (verbose)
                 {
-                    const auto& pair_info = (*persistent_pair_info)[pair_idx];
-                    printSimplexInfo("birth facet", pair_info.facet_bindex, dim - 1);
-                    printSimplexInfo("death cofacet", pair_info.cofacet_bindex, dim);
+                    std::cout << "  (" << facetweight << ", " << cofacetweight << ")" << std::endl;
+
+                    if (dim == maxdim && persistent_pair_info != nullptr && pair_idx < persistent_pair_info->size())
+                    {
+                        const auto& pair_info = (*persistent_pair_info)[pair_idx];
+                        printSimplexInfo("birth facet", pair_info.facet_bindex, dim - 1);
+                        printSimplexInfo("death cofacet", pair_info.cofacet_bindex, dim);
+                    }
+                }
+                else
+                {
+                    std::cout << dim << ", " << facetweight << ", " << cofacetweight << '\n';
                 }
 
                 printed_any = true;
             }
         }
 
-        if (!printed_any)
+        if (verbose && !printed_any)
             std::cout << "  (no new interval or surviving interval from previous eps range)" << std::endl;
     };
 
@@ -216,10 +232,13 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
                 collect_dim_pv_support ? &maxdim_persistent_pair_info : nullptr);
             collectProtectedIndices(matching_context, dim_match_support_info, protected_indices);
 
-            std::cout << "in eps range "<<eps_lo<< "  " <<eps_hi<< "    dimension = " <<dim
-                      << "  cofacet num = " << sorted_virtual_cofacet.size()
-                      << "  facet num = " << sorted_virtual_simplex.size() <<'\n'
-                      << "   persistent pairs:" << std::endl;
+            if (verbose)
+            {
+                std::cout << "in eps range "<<eps_lo<< "  " <<eps_hi<< "    dimension = " <<dim
+                          << "  cofacet num = " << sorted_virtual_cofacet.size()
+                          << "  facet num = " << sorted_virtual_simplex.size() <<'\n'
+                          << "   persistent pairs:" << std::endl;
+            }
 
 
             printPersistentPairs(dim_persistent_pairs, collect_dim_pv_support ? &maxdim_persistent_pair_info : nullptr, dim);
@@ -232,7 +251,8 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
                 untrimmed_pv_label_sets = getNonMergingPVSupport(matching_context,
                                                                  dim_match_support_info.raw_pv_support_cofacet_indices,
                                                                  protected_indices,
-                                                                 original_vt_num);
+                                                                 original_vt_num,
+                                                                 verbose);
             }
             else
             {
@@ -252,10 +272,13 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
                 dim_persistent_pairs,
                 dim == maxdim ? &maxdim_persistent_pair_info : nullptr);
 
-            std::cout << "in eps range "<<eps_lo<< "  " <<eps_hi<< "    dimension = " <<dim
-                      << "  cofacet num = " << sorted_virtual_cofacet.size()
-                      << "  facet num = " << sorted_virtual_simplex.size() <<'\n'
-                      << "   persistent pairs:" << std::endl;
+            if (verbose)
+            {
+                std::cout << "in eps range "<<eps_lo<< "  " <<eps_hi<< "    dimension = " <<dim
+                          << "  cofacet num = " << sorted_virtual_cofacet.size()
+                          << "  facet num = " << sorted_virtual_simplex.size() <<'\n'
+                          << "   persistent pairs:" << std::endl;
+            }
 
             printPersistentPairs(dim_persistent_pairs, dim == maxdim ? &maxdim_persistent_pair_info : nullptr, dim);
 
@@ -273,6 +296,9 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
             }
         }
     }
+
+    if (!verbose)
+        std::cout << '\n';
 
     return untrimmed_pv_label_sets;
 }
@@ -433,7 +459,8 @@ template <typename DistMatType>
 std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getNonMergingPVSupport(const MatchingContext& matching_context,
                                                                                                const std::vector<std::vector<size_t>>& raw_pv_support_cofacet_indices,
                                                                                                const std::unordered_set<size_t>& protected_indices,
-                                                                                               const size_t origin_vt_num)
+                                                                                               const size_t origin_vt_num,
+                                                                                               const bool verbose)
 {
     std::vector<std::unordered_set<size_t>> pv_support_label_sets;
     pv_support_label_sets.reserve(raw_pv_support_cofacet_indices.size());
@@ -477,9 +504,12 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getNonMe
         if (!has_protected_vertex)
             pv_support_label_sets.push_back(std::move(label_set));
     }
-    std::cout << "pv support cofacets size = " << raw_pv_support_cofacet_indices.size() << '\n';
-    std::cout << "protected indices size = " << protected_indices.size() << '\n';
-    std::cout << "pv support label sets with no pv/protected contents size = " << pv_support_label_sets.size() << '\n';
+    if (verbose)
+    {
+        std::cout << "pv support cofacets size = " << raw_pv_support_cofacet_indices.size() << '\n';
+        std::cout << "protected indices size = " << protected_indices.size() << '\n';
+        std::cout << "pv support label sets with no pv/protected contents size = " << pv_support_label_sets.size() << '\n';
+    }
 
     return pv_support_label_sets;
 }
@@ -945,7 +975,8 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getPVInd
             raw_pv_index_sets = getNonMergingPVSupport(matching_context,
                                                        match_support_info.raw_pv_support_cofacet_indices,
                                                        protected_indices,
-                                                       originalvtnum);
+                                                       originalvtnum,
+                                                       true);
         }
 
         if (dim != maxdim)
