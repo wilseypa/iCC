@@ -5,9 +5,11 @@
 #include <algorithm>
 #include <chrono>
 #include <cctype>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -18,6 +20,7 @@ namespace
 {
 constexpr const char* PIECEWISE_PH_TOOL = "piecewise";
 constexpr const char* MORSE_PH_TOOL = "ph";
+constexpr double DEFAULT_EPS_INTERVAL_SCALE = 1.0;
 
 class HelpSpacingFormatter : public CLI::Formatter
 {
@@ -223,6 +226,67 @@ std::vector<double> promptEpsilonBreaks()
     }
 }
 
+bool promptUseAutomaticEpsilonBreaks()
+{
+    while (true)
+    {
+        std::cout << "Select epsilon input method:\n";
+        std::cout << "  1) explicit epsilon breaks\n";
+        std::cout << "  2) number of intervals from sorted pairwise distances\n";
+
+        const std::string answer = promptRequiredLine("Input epsilon method [1/2]: ");
+        if (answer == "1" || answer == "explicit" || answer == "breaks")
+            return false;
+        if (answer == "2" || answer == "auto" || answer == "count" || answer == "interval-count" || answer == "break-count" || answer == "windows")
+            return true;
+
+        std::cout << "  Please enter 1 for explicit breaks or 2 for automatic intervals.\n";
+    }
+}
+
+size_t promptEpsilonIntervalCount()
+{
+    while (true)
+    {
+        const std::string line = promptRequiredLine("Input epsilon interval count: ");
+        std::stringstream parser(line);
+        long long value = 0;
+        char extra = '\0';
+
+        if (!(parser >> value) || (parser >> extra) || value <= 0)
+        {
+            std::cout << "  Please enter a positive integer.\n";
+            continue;
+        }
+
+        return static_cast<size_t>(value);
+    }
+}
+
+bool isValidEpsilonIntervalScale(const double value)
+{
+    return value >= 1.0 && std::isfinite(value);
+}
+
+double promptEpsilonIntervalScale()
+{
+    while (true)
+    {
+        const std::string line = promptRequiredLine("Input epsilon interval scale (>=1.0; 1.0 = linear, larger values make earlier intervals larger): ");
+        std::stringstream parser(line);
+        double value = 0.0;
+        char extra = '\0';
+
+        if (!(parser >> value) || (parser >> extra) || !isValidEpsilonIntervalScale(value))
+        {
+            std::cout << "  Please enter a finite number greater than or equal to 1.0.\n";
+            continue;
+        }
+
+        return value;
+    }
+}
+
 int promptThreadNumber()
 {
     while (true)
@@ -280,11 +344,109 @@ double promptPVCapScale()
     }
 }
 
+std::vector<double> collectSortedUniquePositiveDistances(const CritCells<VR, NormalDistMat>& crit_cells)
+{
+    const size_t npts = crit_cells.getVertexNumber();
+    std::vector<double> distances;
+    distances.reserve((npts > 1) ? (npts * (npts - 1)) / 2 : 0);
+
+    for (size_t i = 0; i + 1 < npts; ++i)
+    {
+        for (size_t j = i + 1; j < npts; ++j)
+        {
+            const double distance = crit_cells.getDistance(i, j);
+            if (!std::isfinite(distance))
+                throw std::runtime_error("Encountered a non-finite pairwise distance while generating epsilon breaks.");
+            if (distance > 0.0)
+                distances.push_back(distance);
+        }
+    }
+
+    if (distances.empty())
+        throw std::runtime_error("Automatic epsilon breaks require at least one positive pairwise distance.");
+
+    std::sort(distances.begin(), distances.end());
+    distances.erase(std::unique(distances.begin(), distances.end()), distances.end());
+    return distances;
+}
+
+std::vector<double> generateEpsilonBreaksFromIntervalCount(const CritCells<VR, NormalDistMat>& crit_cells,
+                                                           const size_t interval_count,
+                                                           const double interval_scale)
+{
+    if (interval_count == 0)
+        throw std::invalid_argument("Epsilon interval count must be positive.");
+    if (!isValidEpsilonIntervalScale(interval_scale))
+        throw std::invalid_argument("Epsilon interval scale must be a finite number greater than or equal to 1.0.");
+
+    const auto distances = collectSortedUniquePositiveDistances(crit_cells);
+    const size_t distance_count = distances.size();
+
+    if (interval_count > distance_count)
+        throw std::invalid_argument("Epsilon interval count exceeds the number of distinct positive pairwise distances.");
+
+    std::vector<double> eps_breaks;
+    eps_breaks.reserve(interval_count);
+
+    size_t previous_index = 0;
+    bool has_previous_index = false;
+
+    for (size_t j = 1; j <= interval_count; ++j)
+    {
+        const double linear_fraction = static_cast<double>(j) / static_cast<double>(interval_count);
+
+        // Scale 1 gives linear distance ranks. Larger values move earlier cut
+        // points upward, so earlier intervals contain more distinct distances.
+        double scaled_fraction = 1.0 - std::pow(1.0 - linear_fraction, interval_scale);
+        scaled_fraction = std::clamp(scaled_fraction, 0.0, 1.0);
+
+        size_t raw_index = 0;
+        if (scaled_fraction >= 1.0)
+        {
+            raw_index = distance_count - 1;
+        }
+        else if (scaled_fraction > 0.0)
+        {
+            raw_index = static_cast<size_t>(std::ceil(scaled_fraction * static_cast<double>(distance_count))) - 1;
+        }
+
+        const size_t remaining_intervals = interval_count - j;
+        const size_t lower_bound_index = has_previous_index ? previous_index + 1 : 0;
+        const size_t upper_bound_index = distance_count - 1 - remaining_intervals;
+
+        if (lower_bound_index > upper_bound_index)
+            throw std::logic_error("Internal epsilon break index selection error.");
+
+        const size_t selected_index = std::clamp(raw_index, lower_bound_index, upper_bound_index);
+        previous_index = selected_index;
+        has_previous_index = true;
+
+        // The VR enumerators use strict upper bounds. Moving to the next
+        // representable double includes the selected discrete distance.
+        eps_breaks.push_back(std::nextafter(distances[selected_index], std::numeric_limits<double>::infinity()));
+    }
+
+    return eps_breaks;
+}
+
+std::vector<double> resolveEpsilonBreaks(const CritCells<VR, NormalDistMat>& crit_cells,
+                                         const std::vector<double>& explicit_eps_breaks,
+                                         const size_t eps_interval_count,
+                                         const double eps_interval_scale)
+{
+    if (!explicit_eps_breaks.empty())
+        return explicit_eps_breaks;
+
+    return generateEpsilonBreaksFromIntervalCount(crit_cells, eps_interval_count, eps_interval_scale);
+}
+
 void printRunConfiguration(const std::string& tool,
                            const std::string& filename,
                            const size_t maxdim,
                            const int threadnumber,
                            const std::vector<double>& eps_breaks,
+                           const size_t eps_interval_count,
+                           const double eps_interval_scale,
                            const double maxeps,
                            const double pv_cap_scale)
 {
@@ -297,10 +459,18 @@ void printRunConfiguration(const std::string& tool,
 
     if (normalized_tool == PIECEWISE_PH_TOOL)
     {
-        std::cout << "  epsilon breaks:";
-        for (const double eps : eps_breaks)
-            std::cout << ' ' << eps;
-        std::cout << '\n';
+        if (!eps_breaks.empty())
+        {
+            std::cout << "  epsilon breaks:";
+            for (const double eps : eps_breaks)
+                std::cout << ' ' << eps;
+            std::cout << '\n';
+        }
+        else
+        {
+            std::cout << "  epsilon interval count: " << eps_interval_count << '\n';
+            std::cout << "  epsilon interval scale: " << eps_interval_scale << '\n';
+        }
         std::cout << "  pv cap scale: " << pv_cap_scale << '\n';
     }
     else
@@ -314,12 +484,14 @@ bool promptConfirmation(const std::string& tool,
                         const size_t maxdim,
                         const int threadnumber,
                         const std::vector<double>& eps_breaks,
+                        const size_t eps_interval_count,
+                        const double eps_interval_scale,
                         const double maxeps,
                         const double pv_cap_scale)
 {
     while (true)
     {
-        printRunConfiguration(tool, filename, maxdim, threadnumber, eps_breaks, maxeps, pv_cap_scale);
+        printRunConfiguration(tool, filename, maxdim, threadnumber, eps_breaks, eps_interval_count, eps_interval_scale, maxeps, pv_cap_scale);
 
         const std::string answer = promptRequiredLine("Proceed? [y/n]: ");
         if (answer == "y" || answer == "Y" || answer == "yes" || answer == "YES" || answer == "Yes")
@@ -354,6 +526,8 @@ void validateRunOptions(const std::string& tool,
                         const size_t maxdim,
                         const int threadnumber,
                         const std::vector<double>& eps_breaks,
+                        const size_t eps_interval_count,
+                        const double eps_interval_scale,
                         const double maxeps,
                         const double pv_cap_scale)
 {
@@ -375,7 +549,18 @@ void validateRunOptions(const std::string& tool,
 
     if (normalized_tool == PIECEWISE_PH_TOOL)
     {
-        validateEpsilonBreaks(eps_breaks);
+        const bool has_explicit_breaks = !eps_breaks.empty();
+        const bool has_automatic_intervals = (eps_interval_count > 0);
+
+        if (has_explicit_breaks == has_automatic_intervals)
+            throw std::invalid_argument("When --tool piecewise is selected, specify exactly one of --eps-breaks or --eps-interval-count.");
+
+        if (has_explicit_breaks)
+            validateEpsilonBreaks(eps_breaks);
+
+        if (has_automatic_intervals && !isValidEpsilonIntervalScale(eps_interval_scale))
+            throw std::invalid_argument("--eps-interval-scale must be a finite number greater than or equal to 1.0.");
+
         if (pv_cap_scale <= 0.0)
             throw std::invalid_argument("--pv-cap-scale is required and must be positive when --tool piecewise is selected.");
     }
@@ -391,6 +576,8 @@ int runTool(const std::string& tool,
             const size_t maxdim,
             const int threadnumber,
             const std::vector<double>& eps_breaks,
+            const size_t eps_interval_count,
+            const double eps_interval_scale,
             const double maxeps,
             const double pv_cap_scale,
             const bool print_configuration,
@@ -398,26 +585,39 @@ int runTool(const std::string& tool,
 {
     const std::string normalized_tool = normalizeTool(tool);
 
-    validateRunOptions(normalized_tool, filename, maxdim, threadnumber, eps_breaks, maxeps, pv_cap_scale);
+    validateRunOptions(normalized_tool, filename, maxdim, threadnumber, eps_breaks, eps_interval_count, eps_interval_scale, maxeps, pv_cap_scale);
 
     if (print_configuration && verbose)
-        printRunConfiguration(normalized_tool, filename, maxdim, threadnumber, eps_breaks, maxeps, pv_cap_scale);
+        printRunConfiguration(normalized_tool, filename, maxdim, threadnumber, eps_breaks, eps_interval_count, eps_interval_scale, maxeps, pv_cap_scale);
 
     CritCells<VR, NormalDistMat> icc(filename);
+
+    std::vector<double> resolved_eps_breaks;
+    if (normalized_tool == PIECEWISE_PH_TOOL)
+    {
+        resolved_eps_breaks = resolveEpsilonBreaks(icc, eps_breaks, eps_interval_count, eps_interval_scale);
+
+        if (verbose && eps_breaks.empty())
+        {
+            std::cout << "  generated epsilon breaks:";
+            for (const double eps : resolved_eps_breaks)
+                std::cout << ' ' << eps;
+            std::cout << '\n';
+        }
+    }
 
     if (verbose)
         std::cout << "\nstarted running...\n";
 
     const auto st0 = std::chrono::high_resolution_clock::now();
     if (normalized_tool == PIECEWISE_PH_TOOL)
-        icc.morsePiecewisePH(maxdim, eps_breaks, threadnumber, pv_cap_scale, verbose);
+        icc.morsePiecewisePH(maxdim, resolved_eps_breaks, threadnumber, pv_cap_scale, verbose);
     else
         icc.morseVRPH(maxdim, maxeps, threadnumber);
     const auto st1 = std::chrono::high_resolution_clock::now();
 
     const auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
-    if (verbose)
-        std::cout << "run time = " << pt_ms.count() << '\n';
+    std::cout << "run time = " << pt_ms.count() << '\n';
 
     return 0;
 }
@@ -432,12 +632,23 @@ int runInteractive()
     const int threadnumber = promptThreadNumber();
 
     std::vector<double> eps_breaks;
+    size_t eps_interval_count = 0;
+    double eps_interval_scale = DEFAULT_EPS_INTERVAL_SCALE;
     double maxeps = 0.0;
     double pv_cap_scale = 0.0;
 
     if (isPiecewisePHTool(tool))
     {
-        eps_breaks = promptEpsilonBreaks();
+        if (promptUseAutomaticEpsilonBreaks())
+        {
+            eps_interval_count = promptEpsilonIntervalCount();
+            eps_interval_scale = promptEpsilonIntervalScale();
+        }
+        else
+        {
+            eps_breaks = promptEpsilonBreaks();
+        }
+
         pv_cap_scale = promptPVCapScale();
     }
     else
@@ -445,13 +656,13 @@ int runInteractive()
         maxeps = promptMaxEpsilon();
     }
 
-    if (!promptConfirmation(tool, filename, maxdim, threadnumber, eps_breaks, maxeps, pv_cap_scale))
+    if (!promptConfirmation(tool, filename, maxdim, threadnumber, eps_breaks, eps_interval_count, eps_interval_scale, maxeps, pv_cap_scale))
     {
         std::cout << "Run cancelled.\n";
         return 0;
     }
 
-    return runTool(tool, filename, maxdim, threadnumber, eps_breaks, maxeps, pv_cap_scale, false, true);
+    return runTool(tool, filename, maxdim, threadnumber, eps_breaks, eps_interval_count, eps_interval_scale, maxeps, pv_cap_scale, false, true);
 }
 
 int runCommandLine(int argc, char** argv)
@@ -464,6 +675,8 @@ int runCommandLine(int argc, char** argv)
     size_t maxdim = 0;
     int threadnumber = 1;
     std::vector<double> eps_breaks;
+    size_t eps_interval_count = 0;
+    double eps_interval_scale = DEFAULT_EPS_INTERVAL_SCALE;
     double maxeps = 0.0;
     double pv_cap_scale = 0.0;
     bool verbose = false;
@@ -489,8 +702,17 @@ int runCommandLine(int argc, char** argv)
     // the option is present. Conditional requirement and strictly-increasing
     // validation are handled after parsing in validateRunOptions().
     app.add_option("--eps-breaks", eps_breaks,
-                   "Required when --tool piecewise. Strictly increasing epsilon breaks. Accepts spaces or commas, e.g. '--eps-breaks 1.0 1.4 1.7' or '--eps-breaks=1.0,1.4,1.7'")
+                   "For --tool piecewise. Strictly increasing epsilon breaks. Accepts spaces or commas, e.g. '--eps-breaks 1.0 1.4 1.7' or '--eps-breaks=1.0,1.4,1.7'")
         ->delimiter(',')
+        ->check(CLI::PositiveNumber);
+
+    app.add_option("--eps-interval-count,--eps-break-count,--eps-window-count", eps_interval_count,
+                   "For --tool piecewise. Alternative to --eps-breaks. Builds this many epsilon intervals from sorted distinct pairwise distances")
+        ->check(CLI::PositiveNumber);
+
+    app.add_option("--eps-interval-scale,--eps-break-scale,--eps-window-scale", eps_interval_scale,
+                   "For --tool piecewise with --eps-interval-count. Must be >= 1.0; 1.0 gives linear distance ranks and larger values make earlier intervals larger")
+        ->default_val(DEFAULT_EPS_INTERVAL_SCALE)
         ->check(CLI::PositiveNumber);
 
     app.add_option("--pv-cap-scale", pv_cap_scale,
@@ -504,7 +726,7 @@ int runCommandLine(int argc, char** argv)
     try
     {
         app.parse(argc, argv);
-        return runTool(tool, filename, maxdim, threadnumber, eps_breaks, maxeps, pv_cap_scale, true, verbose);
+        return runTool(tool, filename, maxdim, threadnumber, eps_breaks, eps_interval_count, eps_interval_scale, maxeps, pv_cap_scale, true, verbose);
     }
     catch (const CLI::ParseError& err)
     {
