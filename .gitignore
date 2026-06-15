@@ -1,4 +1,7 @@
 
+/.codex
+/README_REVIEWER.md
+
 .vscode
 
 build/*
