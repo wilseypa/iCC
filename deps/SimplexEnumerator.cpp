@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "omp.h"
 
 #include "SimplexEnumerator.hpp"
@@ -227,182 +229,291 @@ double SimplexEnumerator<DistMatType>::getAlphaSimplexWeight(const std::vector<s
 // ======================= Geometric virtual enumeration (pseudo-vertex) =======================
 
 template <typename DistMatType>
-bool SimplexEnumerator<DistMatType>::findCliqueRecursive(const std::vector<std::vector<std::vector<uint64_t>>>& adj_mask,
-                                                         std::vector<uint64_t> &candidate_mask,
-                                                         std::vector<size_t> &current_clique_local_indices,
-                                                         size_t depth)
+void SimplexEnumerator<DistMatType>::prepareFacetWitnessContext(WitnessWorkspace &ws,
+                                                                const std::vector<size_t> &facet_labels,
+                                                                const std::vector<std::vector<size_t>> &pv_rep_lists,
+                                                                const size_t originalvtnum, const double maxeps) const
 {
-    const size_t K = candidate_mask.size(); // clique size
+    const size_t K = facet_labels.size();
 
-    if (depth == K)
-        return true;  // Successfully found a clique of the target size
-
-    // Heuristic: branch on the set with the fewest remaining candidates.
-    size_t pivot = std::numeric_limits<size_t>::max();
-    size_t mincandidates = std::numeric_limits<size_t>::max();
-
-    const size_t UNCHOSEN = std::numeric_limits<size_t>::max();
+    if (ws.singleton_slots.size() < K + 1)
+        ws.singleton_slots.resize(K + 1);
+    if (ws.rep_ptrs.size() < K + 1)
+        ws.rep_ptrs.resize(K + 1);
 
     for (size_t i = 0; i < K; ++i)
     {
-        if (current_clique_local_indices[i] == UNCHOSEN)
+        const size_t label = facet_labels[i];
+
+        if (label < originalvtnum)
         {
-            const int candnum = __builtin_popcountll(candidate_mask[i]);
-            if (candnum > 0 && static_cast<size_t>(candnum) < mincandidates)
+            ws.singleton_slots[i].assign(1, label);
+            ws.rep_ptrs[i] = &ws.singleton_slots[i];
+        }
+        else
+        {
+            ws.rep_ptrs[i] = &pv_rep_lists[label - originalvtnum];
+        }
+    }
+
+    ws.facet_edges.clear();
+
+    for (size_t i = 0; i + 1 < K; ++i)
+    {
+        const auto &rep_i = *ws.rep_ptrs[i];
+
+        for (size_t j = i + 1; j < K; ++j)
+        {
+            const auto &rep_j = *ws.rep_ptrs[j];
+
+            for (size_t a = 0; a < rep_i.size(); ++a)
             {
-                mincandidates = static_cast<size_t>(candnum);
-                pivot = i;
+                for (size_t b = 0; b < rep_j.size(); ++b)
+                {
+                    const double w = dist_mat_.getDistance(rep_i[a], rep_j[b]);
+                    if (w < maxeps)
+                    {
+                        ws.facet_edges.push_back({w, static_cast<uint8_t>(i), static_cast<uint8_t>(j),
+                                                  static_cast<uint8_t>(a), static_cast<uint8_t>(b)});
+                    }
+                }
             }
         }
     }
 
-    if (pivot == std::numeric_limits<size_t>::max())
-        return false;  // no valid candidates left
+    std::sort(ws.facet_edges.begin(), ws.facet_edges.end());
+}
 
-    uint64_t opts = candidate_mask[pivot];
-    while (opts)
+template <typename DistMatType>
+void SimplexEnumerator<DistMatType>::prepareCovtWitnessGroup(WitnessWorkspace &ws, const size_t covt, const size_t facet_label_count,
+                                                             const std::vector<std::vector<size_t>> &pv_rep_lists,
+                                                             const size_t originalvtnum, const double maxeps) const
+{
+    const size_t K = facet_label_count;
+
+    if (covt < originalvtnum)
     {
-        const int localidx = __builtin_ctzll(opts);  // start from the local index of the vertex represented by the lowest bit. <64
-        opts &= (opts - 1);  // pop the lowest bit
+        ws.singleton_slots[K].assign(1, covt);
+        ws.rep_ptrs[K] = &ws.singleton_slots[K];
+    }
+    else
+    {
+        ws.rep_ptrs[K] = &pv_rep_lists[covt - originalvtnum];
+    }
 
-        current_clique_local_indices[pivot] = static_cast<size_t>(localidx);
+    const auto &rep_c = *ws.rep_ptrs[K];
 
-        std::vector<uint64_t> next_candidate_mask = candidate_mask;
-        bool feasible = true;
+    ws.covt_edges.clear();
 
-        // early prune
-        for (size_t j = 0; j < K; ++j)
+    for (size_t i = 0; i < K; ++i)
+    {
+        const auto &rep_i = *ws.rep_ptrs[i];
+
+        for (size_t a = 0; a < rep_i.size(); ++a)
         {
-            if (j == pivot || current_clique_local_indices[j] != UNCHOSEN)
-                continue;
+            for (size_t b = 0; b < rep_c.size(); ++b)
+            {
+                const double w = dist_mat_.getDistance(rep_i[a], rep_c[b]);
+                if (w < maxeps)
+                {
+                    ws.covt_edges.push_back({w, static_cast<uint8_t>(i), static_cast<uint8_t>(K),
+                                             static_cast<uint8_t>(a), static_cast<uint8_t>(b)});
+                }
+            }
+        }
+    }
 
-            next_candidate_mask[j] &= adj_mask[pivot][j][static_cast<size_t>(localidx)];
-            if (next_candidate_mask[j] == 0ULL)
+    std::sort(ws.covt_edges.begin(), ws.covt_edges.end());
+}
+
+template <typename DistMatType>
+double SimplexEnumerator<DistMatType>::getGeometricVirtualSimplexWeight(WitnessWorkspace &ws, const size_t groups,
+                                                                        const double lower_bound, const double maxeps) const
+{
+    const size_t G = groups;
+    const size_t slab_words = G * G * REP_STRIDE_;
+    if (ws.adj_slab.size() < slab_words)
+        ws.adj_slab.resize(slab_words);
+    std::fill_n(ws.adj_slab.begin(), slab_words, 0ULL);
+
+    if (ws.candidate_mask.size() < G)
+        ws.candidate_mask.resize(G);
+    if (ws.chosen.size() < G)
+        ws.chosen.resize(G);
+    if (ws.candidate_stack.size() < G)
+        ws.candidate_stack.resize(G);
+    for (auto &level : ws.candidate_stack)
+    {
+        if (level.size() < G)
+            level.resize(G);
+    }
+
+    uint64_t *slab = ws.adj_slab.data();
+
+    const auto adjRow = [slab, G](const size_t g0, const size_t g1, const size_t local0) -> uint64_t &
+    {
+        return slab[(g0 * G + g1) * REP_STRIDE_ + local0];
+    };
+
+    const auto fullMask = [&ws](const size_t g) -> uint64_t
+    {
+        const size_t repsize = ws.rep_ptrs[g]->size();
+        return (repsize >= 64) ? ~0ULL : ((1ULL << repsize) - 1ULL);
+    };
+
+    uint64_t coverage = 0ULL;
+    bool covered = false;
+
+    const auto &fedges = ws.facet_edges;
+    const auto &cedges = ws.covt_edges;
+    size_t fi = 0;
+    size_t ci = 0;
+
+    while (fi < fedges.size() || ci < cedges.size())
+    {
+        bool take_facet_edge;
+        if (fi >= fedges.size())
+            take_facet_edge = false;
+        else if (ci >= cedges.size())
+            take_facet_edge = true;
+        else
+            take_facet_edge = (fedges[fi].weight <= cedges[ci].weight);
+
+        const EdgeRecord &edge = take_facet_edge ? fedges[fi++] : cedges[ci++];
+
+        adjRow(edge.virtualidx0, edge.virtualidx1, edge.localidx0) |= (1ULL << edge.localidx1);
+        adjRow(edge.virtualidx1, edge.virtualidx0, edge.localidx1) |= (1ULL << edge.localidx0);
+
+        if (!covered)
+        {
+            coverage |= (1ULL << edge.virtualidx0) | (1ULL << edge.virtualidx1);
+            if (static_cast<size_t>(__builtin_popcountll(coverage)) != G)
+                continue;
+            covered = true;
+        }
+
+        if (edge.weight < lower_bound)
+            continue;
+
+        const size_t g0 = edge.virtualidx0;
+        const size_t g1 = edge.virtualidx1;
+        const size_t l0 = edge.localidx0;
+        const size_t l1 = edge.localidx1;
+
+        bool feasible = true;
+        for (size_t g = 0; g < G; ++g)
+        {
+            if (g == g0)
+            {
+                ws.candidate_mask[g] = (1ULL << l0);
+                ws.chosen[g] = l0;
+                continue;
+            }
+            if (g == g1)
+            {
+                ws.candidate_mask[g] = (1ULL << l1);
+                ws.chosen[g] = l1;
+                continue;
+            }
+
+            ws.chosen[g] = UNCHOSEN_;
+            ws.candidate_mask[g] = fullMask(g) & adjRow(g0, g, l0) & adjRow(g1, g, l1);
+
+            if (ws.candidate_mask[g] == 0ULL)
             {
                 feasible = false;
                 break;
             }
         }
 
-        if (feasible && findCliqueRecursive(adj_mask, next_candidate_mask, current_clique_local_indices, depth + 1))
-            return true;
+        if (feasible && findCliqueRecursive(slab, G, ws, ws.candidate_mask, 2))
+            return edge.weight;
     }
 
-    // unfeasible with current options, backtrack
-    current_clique_local_indices[pivot] = UNCHOSEN;
-    return false;
+    return std::numeric_limits<double>::infinity();
 }
 
 template <typename DistMatType>
-double SimplexEnumerator<DistMatType>::getGeometricVirtualSimplexWeight(const std::vector<size_t>& simplex_vertices,
-                                                                        const std::vector<std::unordered_set<size_t>>& virtual_vertex_indices,
-                                                                        size_t dim)
+bool SimplexEnumerator<DistMatType>::findCliqueRecursive(const uint64_t *adj_slab, const size_t groups, WitnessWorkspace &ws,
+                                                         const std::vector<uint64_t> &candidate, const size_t chosen_count) const
 {
-    const size_t UNCHOSEN = std::numeric_limits<size_t>::max();
+    if (chosen_count == groups)
+        return true;
 
-    const size_t originalvtnum = dist_mat_.getVertexNumber();
-    const size_t K = dim + 1;
+    size_t pivot = UNCHOSEN_;
+    int min_candidates = std::numeric_limits<int>::max();
 
-    if (K < 3)
-        return 0.0;
-
-    // Expand each simplex vertex into a list of possible original representatives.
-    std::vector<std::vector<size_t>> rep_lists(K);
-    for (size_t i = 0; i < K; ++i)
+    for (size_t g = 0; g < groups; ++g)
     {
-        const size_t vtidx = simplex_vertices[i];
-
-        if (vtidx < originalvtnum)
+        if (ws.chosen[g] == UNCHOSEN_)
         {
-            rep_lists[i] = {vtidx};
-        }
-        else
-        {
-            const auto& idx_set = virtual_vertex_indices[vtidx - originalvtnum];
-            rep_lists[i].assign(idx_set.begin(), idx_set.end());
-        }
-    }
-
-    // Collect and sort all possible cross-edges between representative choices.
-    std::vector<EdgeRecord> sorted_edges;
-    sorted_edges.reserve(K * (K - 1) / 2 * 16); // mild hint; exact depends on PV sizes
-
-    for (uint8_t i = 0; i < K; ++i)
-    {
-        for (uint8_t j = i + 1; j < K; ++j)
-        {
-            for (uint8_t locali = 0; locali < rep_lists[i].size(); ++locali)
+            const int candnum = __builtin_popcountll(candidate[g]);
+            if (candnum < min_candidates)
             {
-                for (uint8_t localj = 0; localj < rep_lists[j].size(); ++localj)
-                {
-                    const double w = dist_mat_.getDistance(rep_lists[i][locali], rep_lists[j][localj]);
-                    sorted_edges.push_back({w, i, j, locali, localj});  // aggregate/list initialization
-                }
+                min_candidates = candnum;
+                pivot = g;
             }
         }
     }
 
-    if (sorted_edges.empty())
-        return std::numeric_limits<double>::infinity();
+    if (pivot == UNCHOSEN_)
+        return false;
 
-    std::sort(sorted_edges.begin(), sorted_edges.end());
+    auto &next_candidate = ws.candidate_stack[chosen_count];
 
-    // adjacency masks: adj_mask[a][b][local_a] is a bitmask of b's vertices adjacent to local_a
-    std::vector<std::vector<std::vector<uint64_t>>> adj_mask(K, std::vector<std::vector<uint64_t>>(K));
-    for (size_t i = 0; i < K; ++i)
+    uint64_t opts = candidate[pivot];
+    while (opts != 0ULL)
     {
-        for (size_t j = 0; j < K; ++j)
+        const size_t local = static_cast<size_t>(__builtin_ctzll(opts));
+        opts &= (opts - 1);
+
+        ws.chosen[pivot] = local;
+
+        bool feasible = true;
+        for (size_t g = 0; g < groups; ++g)
         {
-            if (i == j)
+            next_candidate[g] = candidate[g];
+
+            if (g == pivot || ws.chosen[g] != UNCHOSEN_)
                 continue;
-            adj_mask[i][j].assign(rep_lists[i].size(), 0ULL);
+
+            next_candidate[g] &= adj_slab[(pivot * groups + g) * REP_STRIDE_ + local];
+
+            if (next_candidate[g] == 0ULL)
+            {
+                feasible = false;
+                break;
+            }
         }
+
+        if (feasible && findCliqueRecursive(adj_slab, groups, ws, next_candidate, chosen_count + 1))
+            return true;
     }
 
-    // Delay the expensive clique check until every group has at least one incident edge.
-    uint64_t coverage = 0ULL;
-    bool covered = false;
-
-    for (const auto &edge : sorted_edges)
-    {
-        adj_mask[edge.virtualidx0][edge.virtualidx1][edge.localidx0] |= (1ULL << edge.localidx1);
-        adj_mask[edge.virtualidx1][edge.virtualidx0][edge.localidx1] |= (1ULL << edge.localidx0);
-
-        if (!covered)
-        {
-            coverage |= (1ULL << edge.virtualidx0) | (1ULL << edge.virtualidx1);
-            if (static_cast<size_t>(__builtin_popcountll(coverage)) != K)
-                continue;
-            covered = true;
-        }
-
-        std::vector<uint64_t> candidate_mask(K);
-        for (size_t i = 0; i < K; ++i)
-        {
-            // NOTE: PV size is capped (<64) upstream. If this ever becomes 64, this shift is UB.
-            candidate_mask[i] = (1ULL << rep_lists[i].size()) - 1ULL;
-        }
-
-        std::vector<size_t> current_clique_local_indices(K, UNCHOSEN);
-
-        if (findCliqueRecursive(adj_mask, candidate_mask, current_clique_local_indices, 0))
-            return edge.weight;
-    }
-
-    return std::numeric_limits<double>::infinity();  // no clique found
+    ws.chosen[pivot] = UNCHOSEN_;
+    return false;
 }
 
 template <typename DistMatType>
 std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getGeometricVirtualCofacetList(const std::vector<std::pair<int64_t, double>>& sorted_virtual_simplex_list,
                                                                                                        const std::vector<size_t>& active_vertices,
                                                                                                        const std::vector<std::unordered_set<size_t>>& virtual_vertex_indices,
+                                                                                                       const robin_hood::unordered_map<uint64_t, double>& virtual_distance_hash,
                                                                                                        const size_t dim, const double maxeps, const int threadnum)
 {
     std::vector<std::vector<std::pair<int64_t, double>>> thread_workspace(threadnum);
     
     const size_t originalvtnum = dist_mat_.getVertexNumber();
     const size_t npts = originalvtnum + virtual_vertex_indices.size(); // original vertex number + virtual vertex number
-    
+
+    std::vector<std::vector<size_t>> pv_rep_lists(virtual_vertex_indices.size());
+    for (size_t i = 0; i < virtual_vertex_indices.size(); ++i)
+    {
+        pv_rep_lists[i].assign(virtual_vertex_indices[i].begin(), virtual_vertex_indices[i].end());
+        std::sort(pv_rep_lists[i].begin(), pv_rep_lists[i].end());
+    }
+
+    std::vector<WitnessWorkspace> witness_workspaces(threadnum);
 
     omp_set_num_threads(threadnum);
 
@@ -411,11 +522,13 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getGeome
     {
         const int threadid = omp_get_thread_num();
         auto& thread_cofacets = thread_workspace[threadid];
+        auto& ws = witness_workspaces[threadid];
 
         const int64_t bindex = sorted_virtual_simplex_list[i].first;
         const double weight = sorted_virtual_simplex_list[i].second;
 
-        auto simplex_vertices = SimplexUtility::getSimplexVertices(binomial_table_, bindex, npts, dim);
+        SimplexUtility::getSimplexVerticesInPlace(binomial_table_, ws.facet_vertices, bindex, npts, dim);
+        const auto& simplex_vertices = ws.facet_vertices;
 
         const size_t minfacetvt = simplex_vertices.back();
 
@@ -426,20 +539,43 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getGeome
 
         const size_t vtpos = static_cast<size_t>(std::distance(active_vertices.begin(), iter));
 
+        if (vtpos == 0)
+            continue;
+
         const bool hasvirtual = (simplex_vertices.front() >= originalvtnum);
+        const size_t facet_label_count = dim + 1;
+        bool witness_context_ready = false;
 
         for (size_t j = 0; j < vtpos; ++j)
         {
             const size_t covt = active_vertices[j];
 
-            std::vector<size_t> cofacet_vertices = simplex_vertices;
-            cofacet_vertices.push_back(covt); // still descending order because covt < minfacetvt
-
             double cofacetweight = 0.0;
 
             if (hasvirtual)
             {
-                cofacetweight = getGeometricVirtualSimplexWeight(cofacet_vertices, virtual_vertex_indices, dim + 1);
+                double lower_bound = weight;
+                for (const auto& vt : simplex_vertices)
+                {
+                    const double d = SimplexUtility::getVirtualLabelDistance(virtual_distance_hash, covt, vt);
+                    if (d > lower_bound)
+                        lower_bound = d;
+                }
+
+                if (lower_bound >= maxeps)
+                    continue;
+
+                if (!witness_context_ready)
+                {
+                    prepareFacetWitnessContext(ws, simplex_vertices, pv_rep_lists, originalvtnum, maxeps);
+                    witness_context_ready = true;
+                }
+
+                prepareCovtWitnessGroup(ws, covt, facet_label_count, pv_rep_lists, originalvtnum, maxeps);
+                cofacetweight = getGeometricVirtualSimplexWeight(ws, facet_label_count + 1, lower_bound, maxeps);
+
+                if (!(cofacetweight < maxeps))
+                    continue;
             }
             else
             {
@@ -450,7 +586,10 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getGeome
 
             if (cofacetweight > 0.0 && cofacetweight < maxeps)
             {
-                const int64_t cofacetbindex = SimplexUtility::getBinomialIndex(binomial_table_, cofacet_vertices, 0);
+                ws.cofacet_vertices.assign(simplex_vertices.begin(), simplex_vertices.end());
+                ws.cofacet_vertices.push_back(covt); // still descending order because covt < minfacetvt
+
+                const int64_t cofacetbindex = SimplexUtility::getBinomialIndex(binomial_table_, ws.cofacet_vertices, 0);
                 thread_cofacets.emplace_back(cofacetbindex, cofacetweight);
             }
         }

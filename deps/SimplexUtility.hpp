@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include <numeric> // For std::iota
+#include <utility> // For std::swap
 
 #include "robin_hood.h"
 
@@ -233,6 +234,16 @@ namespace SimplexUtility
         }
 
         return facet_index_hash;
+    }
+
+    inline double getVirtualLabelDistance(const robin_hood::unordered_map<uint64_t, double> &virtual_distance_hash_table, size_t i, size_t j)
+    {
+        if (i > j)
+            std::swap(i, j);
+
+        const uint64_t key = (static_cast<uint64_t>(i) << 32) | static_cast<uint64_t>(j);
+        const auto it = virtual_distance_hash_table.find(key);
+        return (it != virtual_distance_hash_table.end()) ? it->second : -1.0;
     }
 
     inline void updateBinomialTable(std::vector<std::vector<int64_t>> &binomial_table, const size_t originalvtnum, const size_t virtualvtnum, const size_t maxdim)

@@ -125,7 +125,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
     auto active_simplex_hash = getVirtualActiveEdgeIndexHashTable(sorted_virtual_simplex, pv_num);
 
     auto sorted_virtual_cofacet = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_simplex, 
-                                                                                    active_labels, pv_index_sets, 1, eps_hi, threadnumber);
+                                                                                    active_labels, pv_index_sets, virtual_distance_hash, 1, eps_hi, threadnumber);
     
     BipartiteGraph bi_graph(1, 1, ImplicitConstructionTag{});
 
@@ -260,7 +260,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
                 active_simplex_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_virtual_cofacet);
 
                 // enumerate next cofacet list
-                sorted_virtual_simplex = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_cofacet, active_labels, pv_index_sets, dim, eps_hi, threadnumber);
+                sorted_virtual_simplex = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_cofacet, active_labels, pv_index_sets, virtual_distance_hash, dim, eps_hi, threadnumber);
                 std::swap(sorted_virtual_simplex, sorted_virtual_cofacet);
             }
         }
@@ -291,7 +291,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
                 active_simplex_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_virtual_cofacet);
 
                 // enumerate next cofacet list
-                sorted_virtual_simplex = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_cofacet, active_labels, pv_index_sets, dim, eps_hi, threadnumber);
+                sorted_virtual_simplex = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_cofacet, active_labels, pv_index_sets, virtual_distance_hash, dim, eps_hi, threadnumber);
                 std::swap(sorted_virtual_simplex, sorted_virtual_cofacet);
             }
         }
@@ -576,20 +576,7 @@ robin_hood::unordered_map<uint64_t, double> QuotientAndExpand<DistMatType>::getV
 template <typename DistMatType>
 double QuotientAndExpand<DistMatType>::getVirtualDistance(size_t i, size_t j, const robin_hood::unordered_map<uint64_t, double> &virtual_distance_hash_table)
 {
-    if (i > j)
-        std::swap(i, j);
-
-    uint64_t key = (static_cast<uint64_t>(i) << 32) | static_cast<uint64_t>(j);
-
-    auto it = virtual_distance_hash_table.find(key);
-    if (it != virtual_distance_hash_table.end())
-    {
-        return it->second;
-    }
-    else
-    {
-        return -1.0; // Return -1.0 if the distance is not found in the hash table
-    }
+    return SimplexUtility::getVirtualLabelDistance(virtual_distance_hash_table, i, j);
 }
 
 template <typename DistMatType>
@@ -725,7 +712,7 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
     auto active_facet_hash = getVirtualActiveEdgeIndexHashTable(sorted_virtual_simplex, pvnum);
 
     // auto sorted_virtual_cofacet = getVirtualCofacetList(sorted_virtual_simplex, active_vertices, virtual_distance_hash_table, 1, maxeps, threadnumber);
-    auto sorted_virtual_cofacet = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_simplex, active_vertices, pv_index_sets, 1, maxeps, threadnumber);
+    auto sorted_virtual_cofacet = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_simplex, active_vertices, pv_index_sets, virtual_distance_hash_table, 1, maxeps, threadnumber);
 
     // Implicit interface graph (no explicit adjacency lists)
     BipartiteGraph bi_graph(1, 1, ImplicitConstructionTag{});
@@ -773,7 +760,7 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
             active_facet_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_virtual_cofacet);
 
             // enumerate next cofacet list (geometric PV clique filter)
-            sorted_virtual_simplex = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_cofacet, active_vertices, pv_index_sets, dim, maxeps, threadnumber);
+            sorted_virtual_simplex = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_cofacet, active_vertices, pv_index_sets, virtual_distance_hash_table, dim, maxeps, threadnumber);
 
             std::swap(sorted_virtual_simplex, sorted_virtual_cofacet);
         }
