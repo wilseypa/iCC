@@ -76,28 +76,28 @@ template <typename ComplexType, typename DistMatType>
 class CritCells : public DistMatType
 {
 public:
-    CritCells(const std::string &filename); // FileName to read InputData from
+    CritCells(const std::string& filename); // FileName to read InputData from
 
     CritCells(std::vector<std::vector<double>> point_coordinates); // primary ctor
 
-    // CritCells(Eigen::SparseMatrix<double> &distMat);
+    // CritCells(Eigen::SparseMatrix<double>& distMat);
 
     /*legacy*/
 #ifdef BUILD_LEGACY_ICC
 
     struct ICCLegacy
     {
-        CritCells<ComplexType, DistMatType> &parent_cc;
+        CritCells<ComplexType, DistMatType>& parent_cc;
 
-        LegacyRunner(CritCells<ComplexType, DistMatType> &critical_cells) : parent_cc(critical_cells) {}
+        LegacyRunner(CritCells<ComplexType, DistMatType>& critical_cells) : parent_cc(critical_cells) {}
 
         void run_Compute(int maxDim, int batchsize = 0);
 
     private:
         std::map<double, std::vector<std::vector<int>>> binEdgeSimplexes();                                                                             // Direct creation of edgebins to a map
-        void binByWeights(std::map<double, std::vector<std::vector<int>>> &weighted_simplicies, std::map<double, std::vector<std::vector<int>>> &bins); // Merged higher dim feature to bins
-        std::map<double, std::vector<std::vector<int>>> dsimplices_batches(ComplexType &simplex_const, size_t dim, size_t batch_size);                  // Worker is invokation counter
-        std::vector<std::vector<int>> dimMatching(std::vector<std::vector<int>> &simplexes, size_t dim, bool final);
+        void binByWeights(std::map<double, std::vector<std::vector<int>>>& weighted_simplicies, std::map<double, std::vector<std::vector<int>>>& bins); // Merged higher dim feature to bins
+        std::map<double, std::vector<std::vector<int>>> dsimplices_batches(ComplexType& simplex_const, size_t dim, size_t batch_size);                  // Worker is invokation counter
+        std::vector<std::vector<int>> dimMatching(std::vector<std::vector<int>>& simplexes, size_t dim, bool final);
     };
 
     ICCLegacy icc_legacy_runner{*this};
@@ -105,8 +105,8 @@ public:
 #endif
     /*legacy end*/
 
-    void buildInterface(BipartiteGraph &bi_graph, const std::vector<std::pair<int64_t, double>> &cofacet_list,
-                        const robin_hood::unordered_map<int64_t, size_t> &active_facet_index, const std::vector<std::vector<int64_t>> &binomial_table, const size_t dim);
+    void buildInterface(BipartiteGraph& bi_graph, const std::vector<std::pair<int64_t, double>>& cofacet_list,
+                        const robin_hood::unordered_map<int64_t, size_t>& active_facet_index, const std::vector<std::vector<int64_t>>& binomial_table, const size_t dim);
 
     void morseVRTest(size_t maxdim, double maxeps, int threadnumber);
 

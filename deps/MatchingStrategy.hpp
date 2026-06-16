@@ -9,5 +9,5 @@ class MatchingStrategy
 public:
     virtual ~MatchingStrategy() = default;
 
-    virtual size_t match(MatchingContext &matching_context) = 0;
+    virtual size_t match(MatchingContext& matching_context) = 0;
 };

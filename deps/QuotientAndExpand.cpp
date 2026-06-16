@@ -124,8 +124,8 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
 
     auto active_simplex_hash = getVirtualActiveEdgeIndexHashTable(sorted_virtual_simplex, pv_num);
 
-    auto sorted_virtual_cofacet = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_simplex, 
-                                                                                    active_labels, pv_index_sets, virtual_distance_hash, 1, eps_hi, threadnumber);
+    auto sorted_virtual_cofacet = simplex_enumerator.getGeometricCofacetList(sorted_virtual_simplex,
+                                                                             active_labels, pv_index_sets, virtual_distance_hash, 1, eps_hi, threadnumber);
     
     BipartiteGraph bi_graph(1, 1, ImplicitConstructionTag{});
 
@@ -260,7 +260,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
                 active_simplex_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_virtual_cofacet);
 
                 // enumerate next cofacet list
-                sorted_virtual_simplex = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_cofacet, active_labels, pv_index_sets, virtual_distance_hash, dim, eps_hi, threadnumber);
+                sorted_virtual_simplex = simplex_enumerator.getGeometricCofacetList(sorted_virtual_cofacet, active_labels, pv_index_sets, virtual_distance_hash, dim, eps_hi, threadnumber);
                 std::swap(sorted_virtual_simplex, sorted_virtual_cofacet);
             }
         }
@@ -291,7 +291,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
                 active_simplex_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_virtual_cofacet);
 
                 // enumerate next cofacet list
-                sorted_virtual_simplex = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_cofacet, active_labels, pv_index_sets, virtual_distance_hash, dim, eps_hi, threadnumber);
+                sorted_virtual_simplex = simplex_enumerator.getGeometricCofacetList(sorted_virtual_cofacet, active_labels, pv_index_sets, virtual_distance_hash, dim, eps_hi, threadnumber);
                 std::swap(sorted_virtual_simplex, sorted_virtual_cofacet);
             }
         }
@@ -515,7 +515,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getNonMe
 }
 
 template <typename DistMatType>
-double QuotientAndExpand<DistMatType>::computeVirtualDistance(const size_t i, const size_t j, const std::vector<std::unordered_set<size_t>> &pv_index_sets)
+double QuotientAndExpand<DistMatType>::computeVirtualDistance(const size_t i, const size_t j, const std::vector<std::unordered_set<size_t>>& pv_index_sets)
 {
     const size_t originalvtnum = dist_mat_.getVertexNumber();
 
@@ -527,13 +527,13 @@ double QuotientAndExpand<DistMatType>::computeVirtualDistance(const size_t i, co
     const std::unordered_set<size_t> temp_i_set = (i < originalvtnum) ? std::unordered_set<size_t>{i} : std::unordered_set<size_t>();
     const std::unordered_set<size_t> temp_j_set = (j < originalvtnum) ? std::unordered_set<size_t>{j} : std::unordered_set<size_t>();
 
-    const std::unordered_set<size_t> &vtset_i = (i < originalvtnum) ? temp_i_set : pv_index_sets[i - originalvtnum];
-    const std::unordered_set<size_t> &vtset_j = (j < originalvtnum) ? temp_j_set : pv_index_sets[j - originalvtnum];
+    const std::unordered_set<size_t>& vtset_i = (i < originalvtnum) ? temp_i_set : pv_index_sets[i - originalvtnum];
+    const std::unordered_set<size_t>& vtset_j = (j < originalvtnum) ? temp_j_set : pv_index_sets[j - originalvtnum];
 
     double mindist = std::numeric_limits<double>::max();
-    for (const auto &vi : vtset_i)
+    for (const auto& vi : vtset_i)
     {
-        for (const auto &vj : vtset_j)
+        for (const auto& vj : vtset_j)
         {
             mindist = std::min(mindist, dist_mat_.getDistance(vi, vj));
         }
@@ -543,7 +543,7 @@ double QuotientAndExpand<DistMatType>::computeVirtualDistance(const size_t i, co
 }
 
 template <typename DistMatType>
-robin_hood::unordered_map<uint64_t, double> QuotientAndExpand<DistMatType>::getVirtualDistanceHashTable(const std::vector<size_t> &active_vertices, const std::vector<std::unordered_set<size_t>> &pv_index_sets, int threadnum)
+robin_hood::unordered_map<uint64_t, double> QuotientAndExpand<DistMatType>::getVirtualDistanceHashTable(const std::vector<size_t>& active_vertices, const std::vector<std::unordered_set<size_t>>& pv_index_sets, int threadnum)
 {
     omp_set_num_threads(threadnum);
 
@@ -553,7 +553,7 @@ robin_hood::unordered_map<uint64_t, double> QuotientAndExpand<DistMatType>::getV
     for (size_t i = 0; i < active_vertices.size(); ++i)
     {
         size_t threadid = omp_get_thread_num();
-        auto &thread_hash_table = thread_hash_tables[threadid];
+        auto& thread_hash_table = thread_hash_tables[threadid];
 
         // index < std::numeric_limits<uint32_t>::max()
         for (size_t j = i + 1; j < active_vertices.size(); ++j)
@@ -565,7 +565,7 @@ robin_hood::unordered_map<uint64_t, double> QuotientAndExpand<DistMatType>::getV
     }
 
     robin_hood::unordered_map<uint64_t, double> virtual_distance_hash_table;
-    for (const auto &thread_hash_table : thread_hash_tables)
+    for (const auto& thread_hash_table : thread_hash_tables)
     {
         virtual_distance_hash_table.insert(thread_hash_table.begin(), thread_hash_table.end());
     }
@@ -574,14 +574,8 @@ robin_hood::unordered_map<uint64_t, double> QuotientAndExpand<DistMatType>::getV
 }
 
 template <typename DistMatType>
-double QuotientAndExpand<DistMatType>::getVirtualDistance(size_t i, size_t j, const robin_hood::unordered_map<uint64_t, double> &virtual_distance_hash_table)
-{
-    return SimplexUtility::getVirtualLabelDistance(virtual_distance_hash_table, i, j);
-}
-
-template <typename DistMatType>
-std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getSortedVirtualEdgeList(const std::vector<size_t> &active_vertices,
-                                                                                             const robin_hood::unordered_map<uint64_t, double> &virtual_distance_hash_table, const double maxeps, int threadnum)
+std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getSortedVirtualEdgeList(const std::vector<size_t>& active_vertices,
+                                                                                             const robin_hood::unordered_map<uint64_t, double>& virtual_distance_hash_table, const double maxeps, int threadnum)
 {
     omp_set_num_threads(threadnum);
 
@@ -591,11 +585,11 @@ std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getSorte
     for (size_t i = 0; i < active_vertices.size(); ++i)
     {
         int threadid = omp_get_thread_num();
-        auto &thread_edges = thread_edge_workspace[threadid];
+        auto& thread_edges = thread_edge_workspace[threadid];
 
         for (size_t j = i + 1; j < active_vertices.size(); ++j)
         {
-            double weight = getVirtualDistance(active_vertices[i], active_vertices[j], virtual_distance_hash_table);
+            double weight = SimplexUtility::getLabelDistance(virtual_distance_hash_table, active_vertices[i], active_vertices[j]);
             if (weight > 0 && weight < maxeps)
             {
                 int64_t bindex = SimplexUtility::getEdgeBinomialIndex(this->binomial_table_, active_vertices[j], active_vertices[i]);
@@ -605,7 +599,7 @@ std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getSorte
     }
 
     std::vector<std::pair<int64_t, double>> sorted_edges;
-    for (const auto &thread_edges : thread_edge_workspace)
+    for (const auto& thread_edges : thread_edge_workspace)
     {
         sorted_edges.insert(sorted_edges.end(), thread_edges.begin(), thread_edges.end());
     }
@@ -616,7 +610,7 @@ std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getSorte
 }
 
 template <typename DistMatType>
-robin_hood::unordered_map<int64_t, size_t> QuotientAndExpand<DistMatType>::getVirtualActiveEdgeIndexHashTable(const std::vector<std::pair<int64_t, double>> &sorted_virtual_edge, const size_t pvnum)
+robin_hood::unordered_map<int64_t, size_t> QuotientAndExpand<DistMatType>::getVirtualActiveEdgeIndexHashTable(const std::vector<std::pair<int64_t, double>>& sorted_virtual_edge, const size_t pvnum)
 {
     robin_hood::unordered_map<int64_t, size_t> active_edge_hash_table;
     active_edge_hash_table.reserve(sorted_virtual_edge.size());
@@ -682,7 +676,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runQuoti
         std::cout << "size of the vt = " << pv_vts.size()
                   << "  max pairwise distance = " << getMaxPairwiseDistance(pv_vts)
                   << "  contents :  ";
-        for (auto &vt : pv_vts)
+        for (auto& vt : pv_vts)
             std::cout << vt << "  ";
         std::cout << '\n';
     }
@@ -712,7 +706,7 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
     auto active_facet_hash = getVirtualActiveEdgeIndexHashTable(sorted_virtual_simplex, pvnum);
 
     // auto sorted_virtual_cofacet = getVirtualCofacetList(sorted_virtual_simplex, active_vertices, virtual_distance_hash_table, 1, maxeps, threadnumber);
-    auto sorted_virtual_cofacet = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_simplex, active_vertices, pv_index_sets, virtual_distance_hash_table, 1, maxeps, threadnumber);
+    auto sorted_virtual_cofacet = simplex_enumerator.getGeometricCofacetList(sorted_virtual_simplex, active_vertices, pv_index_sets, virtual_distance_hash_table, 1, maxeps, threadnumber);
 
     // Implicit interface graph (no explicit adjacency lists)
     BipartiteGraph bi_graph(1, 1, ImplicitConstructionTag{});
@@ -760,7 +754,7 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
             active_facet_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_virtual_cofacet);
 
             // enumerate next cofacet list (geometric PV clique filter)
-            sorted_virtual_simplex = simplex_enumerator.getGeometricVirtualCofacetList(sorted_virtual_cofacet, active_vertices, pv_index_sets, virtual_distance_hash_table, dim, maxeps, threadnumber);
+            sorted_virtual_simplex = simplex_enumerator.getGeometricCofacetList(sorted_virtual_cofacet, active_vertices, pv_index_sets, virtual_distance_hash_table, dim, maxeps, threadnumber);
 
             std::swap(sorted_virtual_simplex, sorted_virtual_cofacet);
         }
@@ -776,7 +770,7 @@ std::vector<size_t> QuotientAndExpand<DistMatType>::getActiveVertexIndices(const
 
     std::vector<bool> is_virtualized(originalvtnum, false);
 
-    for (const auto &pv_indices : pv_index_sets)
+    for (const auto& pv_indices : pv_index_sets)
     {
         for (const auto vt : pv_indices)
             is_virtualized[vt] = true;
@@ -807,7 +801,7 @@ template <typename DistMatType>
 std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::trimIndexSets(std::vector<std::unordered_set<size_t>>& pv_support_vertex_sets, const double initeps)
 {
     // std::sort(gradient_path_vertex_sets.begin(), gradient_path_vertex_sets.end(),
-    //           [](const std::unordered_set<size_t> &lhs, const std::unordered_set<size_t> &rhs)
+    //           [](const std::unordered_set<size_t>& lhs, const std::unordered_set<size_t>& rhs)
     //           { return lhs.size() > rhs.size(); });
 
     const auto getMaxPairwiseDistance = [this](const std::unordered_set<size_t>& index_set)

@@ -36,7 +36,7 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSorte
 }
 
 template <typename DistMatType>
-std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSortedVRCofacets(const std::vector<std::pair<int64_t, double>> &sorted_simplex_list, const size_t dim, const double maxeps, const int threadnum)
+std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSortedVRCofacets(const std::vector<std::pair<int64_t, double>>& sorted_simplex_list, const size_t dim, const double maxeps, const int threadnum)
 {
     // dim == simplex dimension == cofacet dimension - 1
     std::vector<std::pair<int64_t, double>> cofacet_list;
@@ -51,7 +51,7 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSorte
     for (size_t i = 0; i < sorted_simplex_list.size(); ++i)
     {
         int threadid = omp_get_thread_num();
-        auto &thread_cofacets = thread_workspace[threadid];
+        auto& thread_cofacets = thread_workspace[threadid];
 
         const int64_t bindex = sorted_simplex_list[i].first;
         const double weight = sorted_simplex_list[i].second;
@@ -62,7 +62,7 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSorte
         for (size_t covt = 0; covt < minvt; ++covt)
         {
             double newweight = 0.0;
-            for (const auto &vt : simplex_vertices)
+            for (const auto& vt : simplex_vertices)
             {
                 newweight = std::max(newweight, dist_mat_.getDistance(covt, vt));
             }
@@ -78,7 +78,7 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSorte
         }
     }
 
-    for (const auto &thread_cofacets : thread_workspace)
+    for (const auto& thread_cofacets : thread_workspace)
     {
         cofacet_list.insert(cofacet_list.end(), thread_cofacets.begin(), thread_cofacets.end());
     }
@@ -90,9 +90,9 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSorte
 
 #ifdef BUILD_ALPHA_COMPLEX
 template <typename DistMatType>
-std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSortedAlphaCells(const std::vector<std::vector<int64_t>> &binomial_table,
-                                                                                            std::unordered_map<CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>::Vertex_handle, size_t> &vertex_handle_index,
-                                                                                            CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>> &delaunay_d, const size_t dim, double maxeps)
+std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSortedAlphaCells(const std::vector<std::vector<int64_t>>& binomial_table,
+                                                                                            std::unordered_map<CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>::Vertex_handle, size_t>& vertex_handle_index,
+                                                                                            CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>& delaunay_d, const size_t dim, double maxeps)
 {
     std::vector<std::pair<int64_t, double>> sortd_d_cell;
 
@@ -211,7 +211,7 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSorte
 }
 
 template <typename DistMatType>
-double SimplexEnumerator<DistMatType>::getAlphaSimplexWeight(const std::vector<size_t> &alpha_simplex)
+double SimplexEnumerator<DistMatType>::getAlphaSimplexWeight(const std::vector<size_t>& alpha_simplex)
 {
     double weight = 0;
     // simplex pt is sorted in descending order
@@ -229,9 +229,9 @@ double SimplexEnumerator<DistMatType>::getAlphaSimplexWeight(const std::vector<s
 // ======================= Geometric virtual enumeration (pseudo-vertex) =======================
 
 template <typename DistMatType>
-void SimplexEnumerator<DistMatType>::prepareFacetWitnessContext(WitnessWorkspace &ws,
-                                                                const std::vector<size_t> &facet_labels,
-                                                                const std::vector<std::vector<size_t>> &pv_rep_lists,
+void SimplexEnumerator<DistMatType>::prepareFacetWitnessContext(WitnessWorkspace& ws,
+                                                                const std::vector<size_t>& facet_labels,
+                                                                const std::vector<std::vector<size_t>>& pv_rep_lists,
                                                                 const size_t originalvtnum, const double maxeps) const
 {
     const size_t K = facet_labels.size();
@@ -260,11 +260,11 @@ void SimplexEnumerator<DistMatType>::prepareFacetWitnessContext(WitnessWorkspace
 
     for (size_t i = 0; i + 1 < K; ++i)
     {
-        const auto &rep_i = *ws.rep_ptrs[i];
+        const auto& rep_i = *ws.rep_ptrs[i];
 
         for (size_t j = i + 1; j < K; ++j)
         {
-            const auto &rep_j = *ws.rep_ptrs[j];
+            const auto& rep_j = *ws.rep_ptrs[j];
 
             for (size_t a = 0; a < rep_i.size(); ++a)
             {
@@ -285,8 +285,8 @@ void SimplexEnumerator<DistMatType>::prepareFacetWitnessContext(WitnessWorkspace
 }
 
 template <typename DistMatType>
-void SimplexEnumerator<DistMatType>::prepareCovtWitnessGroup(WitnessWorkspace &ws, const size_t covt, const size_t facet_label_count,
-                                                             const std::vector<std::vector<size_t>> &pv_rep_lists,
+void SimplexEnumerator<DistMatType>::prepareCovtWitnessGroup(WitnessWorkspace& ws, const size_t covt, const size_t facet_label_count,
+                                                             const std::vector<std::vector<size_t>>& pv_rep_lists,
                                                              const size_t originalvtnum, const double maxeps) const
 {
     const size_t K = facet_label_count;
@@ -301,13 +301,13 @@ void SimplexEnumerator<DistMatType>::prepareCovtWitnessGroup(WitnessWorkspace &w
         ws.rep_ptrs[K] = &pv_rep_lists[covt - originalvtnum];
     }
 
-    const auto &rep_c = *ws.rep_ptrs[K];
+    const auto& rep_c = *ws.rep_ptrs[K];
 
     ws.covt_edges.clear();
 
     for (size_t i = 0; i < K; ++i)
     {
-        const auto &rep_i = *ws.rep_ptrs[i];
+        const auto& rep_i = *ws.rep_ptrs[i];
 
         for (size_t a = 0; a < rep_i.size(); ++a)
         {
@@ -327,32 +327,31 @@ void SimplexEnumerator<DistMatType>::prepareCovtWitnessGroup(WitnessWorkspace &w
 }
 
 template <typename DistMatType>
-double SimplexEnumerator<DistMatType>::getGeometricVirtualSimplexWeight(WitnessWorkspace &ws, const size_t groups,
-                                                                        const double lower_bound, const double maxeps) const
+double SimplexEnumerator<DistMatType>::getGeometricPVSimplexWeight(WitnessWorkspace& ws, const size_t target_simplex_label_count,
+                                                                   const double lower_bound, const double maxeps) const
 {
-    const size_t G = groups;
-    const size_t slab_words = G * G * REP_STRIDE_;
-    if (ws.adj_slab.size() < slab_words)
-        ws.adj_slab.resize(slab_words);
-    std::fill_n(ws.adj_slab.begin(), slab_words, 0ULL);
+    const size_t flattened_adjacency_mask_words = target_simplex_label_count * target_simplex_label_count * MAX_PV_CARDINALITY_;
+    if (ws.flattened_adjacency_mask.size() < flattened_adjacency_mask_words)
+        ws.flattened_adjacency_mask.resize(flattened_adjacency_mask_words);
+    std::fill_n(ws.flattened_adjacency_mask.begin(), flattened_adjacency_mask_words, 0ULL);
 
-    if (ws.candidate_mask.size() < G)
-        ws.candidate_mask.resize(G);
-    if (ws.chosen.size() < G)
-        ws.chosen.resize(G);
-    if (ws.candidate_stack.size() < G)
-        ws.candidate_stack.resize(G);
-    for (auto &level : ws.candidate_stack)
+    if (ws.candidate_local_index_mask.size() < target_simplex_label_count)
+        ws.candidate_local_index_mask.resize(target_simplex_label_count);
+    if (ws.current_local_indices.size() < target_simplex_label_count)
+        ws.current_local_indices.resize(target_simplex_label_count);
+    if (ws.recursion_candidate_local_index_stack.size() < target_simplex_label_count)
+        ws.recursion_candidate_local_index_stack.resize(target_simplex_label_count);
+    for (auto& level : ws.recursion_candidate_local_index_stack)
     {
-        if (level.size() < G)
-            level.resize(G);
+        if (level.size() < target_simplex_label_count)
+            level.resize(target_simplex_label_count);
     }
 
-    uint64_t *slab = ws.adj_slab.data();
+    uint64_t* flattened_adjacency_mask = ws.flattened_adjacency_mask.data();
 
-    const auto adjRow = [slab, G](const size_t g0, const size_t g1, const size_t local0) -> uint64_t &
+    const auto adjacencyMask = [flattened_adjacency_mask, target_simplex_label_count](const size_t g0, const size_t g1, const size_t local0) -> uint64_t &
     {
-        return slab[(g0 * G + g1) * REP_STRIDE_ + local0];
+        return flattened_adjacency_mask[(g0 * target_simplex_label_count + g1) * MAX_PV_CARDINALITY_ + local0];
     };
 
     const auto fullMask = [&ws](const size_t g) -> uint64_t
@@ -364,8 +363,8 @@ double SimplexEnumerator<DistMatType>::getGeometricVirtualSimplexWeight(WitnessW
     uint64_t coverage = 0ULL;
     bool covered = false;
 
-    const auto &fedges = ws.facet_edges;
-    const auto &cedges = ws.covt_edges;
+    const auto& fedges = ws.facet_edges;
+    const auto& cedges = ws.covt_edges;
     size_t fi = 0;
     size_t ci = 0;
 
@@ -379,15 +378,15 @@ double SimplexEnumerator<DistMatType>::getGeometricVirtualSimplexWeight(WitnessW
         else
             take_facet_edge = (fedges[fi].weight <= cedges[ci].weight);
 
-        const EdgeRecord &edge = take_facet_edge ? fedges[fi++] : cedges[ci++];
+        const EdgeRecord& edge = take_facet_edge ? fedges[fi++] : cedges[ci++];
 
-        adjRow(edge.virtualidx0, edge.virtualidx1, edge.localidx0) |= (1ULL << edge.localidx1);
-        adjRow(edge.virtualidx1, edge.virtualidx0, edge.localidx1) |= (1ULL << edge.localidx0);
+        adjacencyMask(edge.virtualidx0, edge.virtualidx1, edge.localidx0) |= (1ULL << edge.localidx1);
+        adjacencyMask(edge.virtualidx1, edge.virtualidx0, edge.localidx1) |= (1ULL << edge.localidx0);
 
         if (!covered)
         {
             coverage |= (1ULL << edge.virtualidx0) | (1ULL << edge.virtualidx1);
-            if (static_cast<size_t>(__builtin_popcountll(coverage)) != G)
+            if (static_cast<size_t>(__builtin_popcountll(coverage)) != target_simplex_label_count)
                 continue;
             covered = true;
         }
@@ -400,33 +399,37 @@ double SimplexEnumerator<DistMatType>::getGeometricVirtualSimplexWeight(WitnessW
         const size_t l0 = edge.localidx0;
         const size_t l1 = edge.localidx1;
 
+        // Anchored search: before inserting this edge, no witness clique had been found.
+        // Therefore any clique that first appears now must include this newest edge.
+        // Pin its two local representatives and pre-intersect every other label's
+        // candidate mask with both endpoint adjacency rows before recursing.
         bool feasible = true;
-        for (size_t g = 0; g < G; ++g)
+        for (size_t g = 0; g < target_simplex_label_count; ++g)
         {
             if (g == g0)
             {
-                ws.candidate_mask[g] = (1ULL << l0);
-                ws.chosen[g] = l0;
+                ws.candidate_local_index_mask[g] = (1ULL << l0);
+                ws.current_local_indices[g] = l0;
                 continue;
             }
             if (g == g1)
             {
-                ws.candidate_mask[g] = (1ULL << l1);
-                ws.chosen[g] = l1;
+                ws.candidate_local_index_mask[g] = (1ULL << l1);
+                ws.current_local_indices[g] = l1;
                 continue;
             }
 
-            ws.chosen[g] = UNCHOSEN_;
-            ws.candidate_mask[g] = fullMask(g) & adjRow(g0, g, l0) & adjRow(g1, g, l1);
+            ws.current_local_indices[g] = UNCHOSEN_;
+            ws.candidate_local_index_mask[g] = fullMask(g) & adjacencyMask(g0, g, l0) & adjacencyMask(g1, g, l1);
 
-            if (ws.candidate_mask[g] == 0ULL)
+            if (ws.candidate_local_index_mask[g] == 0ULL)
             {
                 feasible = false;
                 break;
             }
         }
 
-        if (feasible && findCliqueRecursive(slab, G, ws, ws.candidate_mask, 2))
+        if (feasible && findCliqueRecursive(flattened_adjacency_mask, target_simplex_label_count, ws, ws.candidate_local_index_mask, 2))
             return edge.weight;
     }
 
@@ -434,20 +437,21 @@ double SimplexEnumerator<DistMatType>::getGeometricVirtualSimplexWeight(WitnessW
 }
 
 template <typename DistMatType>
-bool SimplexEnumerator<DistMatType>::findCliqueRecursive(const uint64_t *adj_slab, const size_t groups, WitnessWorkspace &ws,
-                                                         const std::vector<uint64_t> &candidate, const size_t chosen_count) const
+bool SimplexEnumerator<DistMatType>::findCliqueRecursive(const uint64_t* flattened_adjacency_mask, const size_t target_simplex_label_count, WitnessWorkspace& ws,
+                                                         const std::vector<uint64_t>& candidate_local_index_mask,
+                                                         const size_t current_local_index_count) const
 {
-    if (chosen_count == groups)
+    if (current_local_index_count == target_simplex_label_count)
         return true;
 
     size_t pivot = UNCHOSEN_;
     int min_candidates = std::numeric_limits<int>::max();
 
-    for (size_t g = 0; g < groups; ++g)
+    for (size_t g = 0; g < target_simplex_label_count; ++g)
     {
-        if (ws.chosen[g] == UNCHOSEN_)
+        if (ws.current_local_indices[g] == UNCHOSEN_)
         {
-            const int candnum = __builtin_popcountll(candidate[g]);
+            const int candnum = __builtin_popcountll(candidate_local_index_mask[g]);
             if (candnum < min_candidates)
             {
                 min_candidates = candnum;
@@ -459,47 +463,47 @@ bool SimplexEnumerator<DistMatType>::findCliqueRecursive(const uint64_t *adj_sla
     if (pivot == UNCHOSEN_)
         return false;
 
-    auto &next_candidate = ws.candidate_stack[chosen_count];
+    auto& next_candidate_local_index_mask = ws.recursion_candidate_local_index_stack[current_local_index_count];
 
-    uint64_t opts = candidate[pivot];
+    uint64_t opts = candidate_local_index_mask[pivot];
     while (opts != 0ULL)
     {
         const size_t local = static_cast<size_t>(__builtin_ctzll(opts));
         opts &= (opts - 1);
 
-        ws.chosen[pivot] = local;
+        ws.current_local_indices[pivot] = local;
 
         bool feasible = true;
-        for (size_t g = 0; g < groups; ++g)
+        for (size_t g = 0; g < target_simplex_label_count; ++g)
         {
-            next_candidate[g] = candidate[g];
+            next_candidate_local_index_mask[g] = candidate_local_index_mask[g];
 
-            if (g == pivot || ws.chosen[g] != UNCHOSEN_)
+            if (g == pivot || ws.current_local_indices[g] != UNCHOSEN_)
                 continue;
 
-            next_candidate[g] &= adj_slab[(pivot * groups + g) * REP_STRIDE_ + local];
+            next_candidate_local_index_mask[g] &= flattened_adjacency_mask[(pivot * target_simplex_label_count + g) * MAX_PV_CARDINALITY_ + local];
 
-            if (next_candidate[g] == 0ULL)
+            if (next_candidate_local_index_mask[g] == 0ULL)
             {
                 feasible = false;
                 break;
             }
         }
 
-        if (feasible && findCliqueRecursive(adj_slab, groups, ws, next_candidate, chosen_count + 1))
+        if (feasible && findCliqueRecursive(flattened_adjacency_mask, target_simplex_label_count, ws, next_candidate_local_index_mask, current_local_index_count + 1))
             return true;
     }
 
-    ws.chosen[pivot] = UNCHOSEN_;
+    ws.current_local_indices[pivot] = UNCHOSEN_;
     return false;
 }
 
 template <typename DistMatType>
-std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getGeometricVirtualCofacetList(const std::vector<std::pair<int64_t, double>>& sorted_virtual_simplex_list,
-                                                                                                       const std::vector<size_t>& active_vertices,
-                                                                                                       const std::vector<std::unordered_set<size_t>>& virtual_vertex_indices,
-                                                                                                       const robin_hood::unordered_map<uint64_t, double>& virtual_distance_hash,
-                                                                                                       const size_t dim, const double maxeps, const int threadnum)
+std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getGeometricCofacetList(const std::vector<std::pair<int64_t, double>>& sorted_virtual_simplex_list,
+                                                                                                const std::vector<size_t>& active_vertices,
+                                                                                                const std::vector<std::unordered_set<size_t>>& virtual_vertex_indices,
+                                                                                                const robin_hood::unordered_map<uint64_t, double>& virtual_distance_hash,
+                                                                                                const size_t dim, const double maxeps, const int threadnum)
 {
     std::vector<std::vector<std::pair<int64_t, double>>> thread_workspace(threadnum);
     
@@ -557,7 +561,7 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getGeome
                 double lower_bound = weight;
                 for (const auto& vt : simplex_vertices)
                 {
-                    const double d = SimplexUtility::getVirtualLabelDistance(virtual_distance_hash, covt, vt);
+                    const double d = SimplexUtility::getLabelDistance(virtual_distance_hash, covt, vt);
                     if (d > lower_bound)
                         lower_bound = d;
                 }
@@ -572,7 +576,7 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getGeome
                 }
 
                 prepareCovtWitnessGroup(ws, covt, facet_label_count, pv_rep_lists, originalvtnum, maxeps);
-                cofacetweight = getGeometricVirtualSimplexWeight(ws, facet_label_count + 1, lower_bound, maxeps);
+                cofacetweight = getGeometricPVSimplexWeight(ws, facet_label_count + 1, lower_bound, maxeps);
 
                 if (!(cofacetweight < maxeps))
                     continue;

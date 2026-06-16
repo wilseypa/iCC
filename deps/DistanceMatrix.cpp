@@ -3,7 +3,7 @@
 #include <omp.h>
 #include "DistanceMatrix.hpp"
 
-inline double vectors_distance(const std::vector<double> &a, const std::vector<double> &b)
+inline double vectors_distance(const std::vector<double>& a, const std::vector<double>& b)
 {
 #ifdef _GLIBCXX_DEBUG
     if (a.size() != b.size())
@@ -24,7 +24,7 @@ inline double vectors_distance(const std::vector<double> &a, const std::vector<d
     return std::sqrt(squared_distance);
 }
 
-NormalDistMat::NormalDistMat(const std::vector<std::vector<double>> &point_cloud)
+NormalDistMat::NormalDistMat(const std::vector<std::vector<double>>& point_cloud)
 {
 
     if (point_cloud.empty()) 

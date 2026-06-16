@@ -774,10 +774,10 @@ int main(int argc, char** argv)
 //     return 0;
 // }
 
-// int main(int argc, char *argv[])
+// int main(int argc, char* argv[])
 // {
 //     std::ofstream logFile("logfile.txt", std::ios::app);
-//     std::streambuf *originalClogBuffer = std::clog.rdbuf();
+//     std::streambuf* originalClogBuffer = std::clog.rdbuf();
 //     std::clog.rdbuf(logFile.rdbuf());
 
 //     switch (argc)

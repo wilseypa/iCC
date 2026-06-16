@@ -41,9 +41,9 @@ public:
 
     size_t match(MatchingContext& matching_context) override;
 
-    int64_t matchAndGetMinCriticalIndex(MatchingContext &matching_context);
+    int64_t matchAndGetMinCriticalIndex(MatchingContext& matching_context);
 
-    std::vector<std::vector<size_t>> matchAndGetAugPath(MatchingContext &matching_context, std::vector<std::pair<double, double>> &dim_persistent_pair);
+    std::vector<std::vector<size_t>> matchAndGetAugPath(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
 
 private:
     //helper strcut to allow moving the underlying container from a priority_queue
@@ -105,13 +105,13 @@ private:
     //legacy explicit graph representation  
     int threadnum_ = 4;    //for explicit initialization phase
 
-    void parallelMinCofacetInit(MatchingContext &matching_context);
+    void parallelMinCofacetInit(MatchingContext& matching_context);
 
-    int64_t serialFacetAugPath(BipartiteGraph &graph, const size_t facetindex, std::vector<size_t> &aug_path, std::vector<size_t> &cofacet_stack);
+    int64_t serialFacetAugPath(BipartiteGraph& graph, const size_t facetindex, std::vector<size_t>& aug_path, std::vector<size_t>& cofacet_stack);
 
-    size_t serialFacetMatch(MatchingContext &matching_context);
+    size_t serialFacetMatch(MatchingContext& matching_context);
 
-    int64_t serialFacetMatchAndGetMinCriticalIndex(MatchingContext &matching_context);
+    int64_t serialFacetMatchAndGetMinCriticalIndex(MatchingContext& matching_context);
 
-    std::vector<std::vector<size_t>> serialFacetMatchAndGetAugPath(MatchingContext &matching_context);
+    std::vector<std::vector<size_t>> serialFacetMatchAndGetAugPath(MatchingContext& matching_context);
 };

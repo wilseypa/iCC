@@ -42,7 +42,7 @@ readInput::readInput()
   @todo Handle if there is a comma at the end of the line (i.e. "5,5,5," should be <5,5,5>).
  */
 
-std::vector<std::vector<double>> readInput::readCSV(const std::string &filename)
+std::vector<std::vector<double>> readInput::readCSV(const std::string& filename)
 {
 	std::vector<std::vector<double>> result;
 
@@ -85,7 +85,7 @@ std::vector<std::vector<double>> readInput::readCSV(const std::string &filename)
   @return True if the vector was parsed successfully, false otherwise.
  */
 
-bool readInput::parseDoubleVector(const std::string &readline, std::vector<double> &row)
+bool readInput::parseDoubleVector(const std::string& readline, std::vector<double>& row)
 {
 	std::size_t pos = std::string::npos;
 
@@ -134,7 +134,7 @@ bool readInput::parseDoubleVector(const std::string &readline, std::vector<doubl
   @todo A lot.
  */
 
-std::vector<std::vector<double>> readInput::readMAT(const std::string &filename)
+std::vector<std::vector<double>> readInput::readMAT(const std::string& filename)
 {
 	std::vector<std::vector<double>> result;
 	int vectors = 0;
@@ -204,7 +204,7 @@ std::vector<std::vector<double>> readInput::readMAT(const std::string &filename)
  * @param rank
  * @return std::map<std::vector<short>, short>
  */
-std::map<std::vector<short>, short> readInput::readBinaryMap(const std::string &filename, int numProcesses, int rank)
+std::map<std::vector<short>, short> readInput::readBinaryMap(const std::string& filename, int numProcesses, int rank)
 {
 	std::ifstream file(filename, std::ios::in | std::ios::binary);
 	if (!file.is_open())
@@ -234,7 +234,7 @@ std::map<std::vector<short>, short> readInput::readBinaryMap(const std::string &
 
 	for (size_t i = start; i < end; ++i)
 	{
-		file.read(reinterpret_cast<char *>(key.data()), vectorSize * sizeof(short));
+		file.read(reinterpret_cast<char*>(key.data()), vectorSize * sizeof(short));
 		file.read(reinterpret_cast<char *>(&value), sizeof(short));
 		data.emplace(key, value);
 	}
@@ -249,7 +249,7 @@ std::map<std::vector<short>, short> readInput::readBinaryMap(const std::string &
  * @param filename
  * @return std::vector<std::vector<short>>
  */
-std::vector<std::vector<short>> readInput::readBinaryVector(const std::string &filename)
+std::vector<std::vector<short>> readInput::readBinaryVector(const std::string& filename)
 {
 	std::ifstream file(filename, std::ios::in | std::ios::binary);
 
@@ -272,7 +272,7 @@ std::vector<std::vector<short>> readInput::readBinaryVector(const std::string &f
 	while (dim1-- > 0)
 	{
 		std::vector<short> vec(dim2);
-		file.read(reinterpret_cast<char *>(vec.data()), dim2 * sizeof(short));
+		file.read(reinterpret_cast<char*>(vec.data()), dim2 * sizeof(short));
 		data.emplace_back(vec);
 	}
 
@@ -287,7 +287,7 @@ std::vector<std::vector<short>> readInput::readBinaryVector(const std::string &f
   @return True if the stream was initialized successfully, false otherwise.
  */
 
-bool readInput::streamInit(const std::string &filename)
+bool readInput::streamInit(const std::string& filename)
 {
 	pFile = fopen(filename.c_str(), "r");
 
@@ -304,7 +304,7 @@ bool readInput::streamInit(const std::string &filename)
   @return True if the row was read successfully, false otherwise.
  */
 
-bool readInput::streamRead(std::vector<double> &row)
+bool readInput::streamRead(std::vector<double>& row)
 {
 	if (pFile == NULL)
 		return false;

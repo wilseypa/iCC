@@ -5,7 +5,7 @@
 
 #include "ApproximateMorseMatching.hpp"
 
-size_t ApproximateMorseMatching::match(MatchingContext &matching_context)
+size_t ApproximateMorseMatching::match(MatchingContext& matching_context)
 {
     parallelTwoPhaseInit(matching_context.graph);
     parallelFacetDFSMatch(matching_context.graph);
@@ -13,7 +13,7 @@ size_t ApproximateMorseMatching::match(MatchingContext &matching_context)
     return 0;
 }
 
-void ApproximateMorseMatching::parallelTwoPhaseInit(BipartiteGraph &graph)
+void ApproximateMorseMatching::parallelTwoPhaseInit(BipartiteGraph& graph)
 {
     // convert index
     size_t umin = 0;
@@ -29,7 +29,7 @@ void ApproximateMorseMatching::parallelTwoPhaseInit(BipartiteGraph &graph)
 #pragma omp parallel for schedule(dynamic)
     for (size_t i = vmin; i < vmax; i++)
     {
-        for (const auto &uidx : graph.adj_list[i]) // uidx in v adj is in ascending order
+        for (const auto& uidx : graph.adj_list[i]) // uidx in v adj is in ascending order
         {
             auto vit = graph.adj_list[uidx].begin(); // vidx in u adj is in descending order
             if (i == *vit)                           // i == max facet of uidx
@@ -51,7 +51,7 @@ void ApproximateMorseMatching::parallelTwoPhaseInit(BipartiteGraph &graph)
         int64_t min2ndfacet = i;
         int64_t max2ndfacet = 0;
 
-        for (const auto &uidx : graph.adj_list[i]) // uidx in v adj is in ascending order
+        for (const auto& uidx : graph.adj_list[i]) // uidx in v adj is in ascending order
         {
             auto vit = graph.adj_list[uidx].begin(); // vidx in u adj is in descending order
             if (i == *vit)                           // i == max facet of uidx
@@ -107,7 +107,7 @@ void ApproximateMorseMatching::parallelTwoPhaseInit(BipartiteGraph &graph)
     return;
 }
 
-void ApproximateMorseMatching::parallelFacetDFSMatch(BipartiteGraph &graph)
+void ApproximateMorseMatching::parallelFacetDFSMatch(BipartiteGraph& graph)
 {
     auto u = graph.unodes;
     auto v = graph.vnodes;
@@ -155,7 +155,7 @@ void ApproximateMorseMatching::parallelFacetDFSMatch(BipartiteGraph &graph)
 #pragma omp parallel for schedule(dynamic)
         for (size_t i = 0; i < initialunmatched; i++)
         {
-            auto &aug_path_tid = aug_path[omp_get_thread_num()];
+            auto& aug_path_tid = aug_path[omp_get_thread_num()];
 
             size_t vstart = unmatched_v_init[i];
             int64_t augpathlen = facetDfsAugPath(graph, vstart, dfs_flag, look_ahead_flag, aug_path_tid);
@@ -185,7 +185,7 @@ void ApproximateMorseMatching::parallelFacetDFSMatch(BipartiteGraph &graph)
     return;
 }
 
-int64_t ApproximateMorseMatching::facetDfsAugPath(BipartiteGraph &graph, const size_t startnode, std::vector<int> &dfs_flag, std::vector<int> &look_ahead_flag, std::vector<size_t> &aug_path_tid)
+int64_t ApproximateMorseMatching::facetDfsAugPath(BipartiteGraph& graph, const size_t startnode, std::vector<int>& dfs_flag, std::vector<int>& look_ahead_flag, std::vector<size_t>& aug_path_tid)
 {
     int64_t topindex = -1;
     aug_path_tid[++topindex] = startnode;
@@ -195,7 +195,7 @@ int64_t ApproximateMorseMatching::facetDfsAugPath(BipartiteGraph &graph, const s
         size_t vidx = aug_path_tid[topindex];
         int endflag = 0;
         // look ahead, look for v's unmatched neighbor
-        for (const auto &uidx : graph.adj_list[vidx])
+        for (const auto& uidx : graph.adj_list[vidx])
         {
             if (__sync_fetch_and_add(&(look_ahead_flag[uidx]), 1) == 0 && graph.match_list[uidx] < 0)
             {
@@ -208,7 +208,7 @@ int64_t ApproximateMorseMatching::facetDfsAugPath(BipartiteGraph &graph, const s
             }
         }
         // dfs
-        for (const auto &uidx : graph.adj_list[vidx])
+        for (const auto& uidx : graph.adj_list[vidx])
         {
             if (__sync_fetch_and_add(&(dfs_flag[uidx]), 1) == 0)
             {
@@ -230,7 +230,7 @@ int64_t ApproximateMorseMatching::facetDfsAugPath(BipartiteGraph &graph, const s
     return topindex + 1;
 }
 
-void ApproximateMorseMatching::dfsCycleRemoval(BipartiteGraph &graph)
+void ApproximateMorseMatching::dfsCycleRemoval(BipartiteGraph& graph)
 {
     int reverted = 0;
 
@@ -263,7 +263,7 @@ void ApproximateMorseMatching::dfsCycleRemoval(BipartiteGraph &graph)
 
                 child_workspace.clear();
                 // i is d-1 simp
-                for (auto &i : graph.adj_list[top])
+                for (auto& i : graph.adj_list[top])
                 {
                     int64_t imate = graph.match_list[i];
                     if (imate != -1 && imate != top)

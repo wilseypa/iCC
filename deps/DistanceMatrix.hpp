@@ -9,7 +9,7 @@
 struct NormalDistMat
 {
 public:
-    NormalDistMat(const std::vector<std::vector<double>> &point_cloud);
+    NormalDistMat(const std::vector<std::vector<double>>& point_cloud);
 
     inline std::size_t getVertexNumber() const { return dist_mat_.size(); }
     inline double getDistance(const size_t i, const size_t j) const

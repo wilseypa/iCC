@@ -30,7 +30,7 @@ namespace SimplexUtility
         return binom_table;
     }
 
-    inline int64_t getBinomialIndex(const std::vector<std::vector<int64_t>> &binomial_table, const std::vector<size_t> &simplex_vt, const size_t shift) // shift is used for cofacet enum
+    inline int64_t getBinomialIndex(const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<size_t>& simplex_vt, const size_t shift) // shift is used for cofacet enum
     {
         int64_t bindex = 0;
         size_t k = simplex_vt.size();
@@ -47,7 +47,7 @@ namespace SimplexUtility
         return bindex;
     }
 
-    inline int64_t getEdgeBinomialIndex(const std::vector<std::vector<int64_t>> &binomial_table, size_t j, size_t i)
+    inline int64_t getEdgeBinomialIndex(const std::vector<std::vector<int64_t>>& binomial_table, size_t j, size_t i)
     {
         //simplex vts are sorted in descending order, edge (j, i),  j > i 
         return (j > i) ? (binomial_table[j][2] + i) : (binomial_table[i][2] + j);
@@ -80,7 +80,7 @@ namespace SimplexUtility
         return top;
     }
 
-    inline std::vector<size_t> getSimplexVertices(const std::vector<std::vector<int64_t>> &binomial_table, int64_t bindex, size_t vtnum, const size_t dim)
+    inline std::vector<size_t> getSimplexVertices(const std::vector<std::vector<int64_t>>& binomial_table, int64_t bindex, size_t vtnum, const size_t dim)
     {
         // max vertex index = vtnum - 1
         std::vector<size_t> simplex_vt;
@@ -116,9 +116,9 @@ namespace SimplexUtility
     }
 
 
-    inline void sortSimplexByWeightThenIndex(std::vector<std::pair<int64_t, double>> &simplex_list)
+    inline void sortSimplexByWeightThenIndex(std::vector<std::pair<int64_t, double>>& simplex_list)
     {
-        auto sort_lambda = [](const auto &lhs, const auto &rhs)
+        auto sort_lambda = [](const auto& lhs, const auto& rhs)
         { return (lhs.second < rhs.second) || ((lhs.second == rhs.second) && (lhs.first < rhs.first)); };
 
         std::sort(simplex_list.begin(), simplex_list.end(), sort_lambda);
@@ -155,7 +155,7 @@ namespace SimplexUtility
         return facet_bindex;
     }
 
-    inline size_t mstFindRoot(std::vector<size_t> &parent_idx, size_t x)
+    inline size_t mstFindRoot(std::vector<size_t>& parent_idx, size_t x)
     {
         while (parent_idx[x] != x)
         {
@@ -166,7 +166,7 @@ namespace SimplexUtility
         return x;
     }
 
-    inline void mstSetUnion(std::vector<size_t> &parent_idx, size_t x, size_t y)
+    inline void mstSetUnion(std::vector<size_t>& parent_idx, size_t x, size_t y)
     {
         size_t p = mstFindRoot(parent_idx, x);
         size_t q = mstFindRoot(parent_idx, y);
@@ -174,7 +174,7 @@ namespace SimplexUtility
         return;
     }
 
-    inline robin_hood::unordered_map<int64_t, size_t> getActiveEdgeIndexHashTable(const std::vector<std::vector<int64_t>> &binomial_table, const std::vector<std::pair<int64_t, double>> &sorted_edge, const size_t npts)
+    inline robin_hood::unordered_map<int64_t, size_t> getActiveEdgeIndexHashTable(const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<std::pair<int64_t, double>>& sorted_edge, const size_t npts)
     {
         robin_hood::unordered_map<int64_t, size_t> active_edge_index_hash;
         active_edge_index_hash.reserve(sorted_edge.size());
@@ -203,7 +203,7 @@ namespace SimplexUtility
         return active_edge_index_hash;
     }
 
-    inline robin_hood::unordered_map<int64_t, size_t> getActiveSimplexIndexHashTable(const std::vector<int64_t> &graph_match_list, const std::vector<std::pair<int64_t, double>> &facet_list)
+    inline robin_hood::unordered_map<int64_t, size_t> getActiveSimplexIndexHashTable(const std::vector<int64_t>& graph_match_list, const std::vector<std::pair<int64_t, double>>& facet_list)
     {
         robin_hood::unordered_map<int64_t, size_t> active_facet_index_hash;
         active_facet_index_hash.reserve(facet_list.size());
@@ -222,7 +222,7 @@ namespace SimplexUtility
         return active_facet_index_hash;
     }
 
-    inline robin_hood::unordered_map<int64_t, size_t> getSimplexIndexHashTable(const std::vector<std::pair<int64_t, double>> &facet_list)
+    inline robin_hood::unordered_map<int64_t, size_t> getSimplexIndexHashTable(const std::vector<std::pair<int64_t, double>>& facet_list)
     {
         robin_hood::unordered_map<int64_t, size_t> facet_index_hash;
         facet_index_hash.reserve(facet_list.size());
@@ -236,7 +236,7 @@ namespace SimplexUtility
         return facet_index_hash;
     }
 
-    inline double getVirtualLabelDistance(const robin_hood::unordered_map<uint64_t, double> &virtual_distance_hash_table, size_t i, size_t j)
+    inline double getLabelDistance(const robin_hood::unordered_map<uint64_t, double>& virtual_distance_hash_table, size_t i, size_t j)
     {
         if (i > j)
             std::swap(i, j);
@@ -246,7 +246,7 @@ namespace SimplexUtility
         return (it != virtual_distance_hash_table.end()) ? it->second : -1.0;
     }
 
-    inline void updateBinomialTable(std::vector<std::vector<int64_t>> &binomial_table, const size_t originalvtnum, const size_t virtualvtnum, const size_t maxdim)
+    inline void updateBinomialTable(std::vector<std::vector<int64_t>>& binomial_table, const size_t originalvtnum, const size_t virtualvtnum, const size_t maxdim)
     {
         size_t currentvtnum = binomial_table.size() - 1; // current vertex number in binomial table
 

@@ -27,14 +27,14 @@ template class CritCells<Alpha, NormalDistMat>;
 #endif
 
 // template <>
-// CritCells<VR, SparseDistMat>::CritCells(Eigen::SparseMatrix<double> &distMat)
+// CritCells<VR, SparseDistMat>::CritCells(Eigen::SparseMatrix<double>& distMat)
 // {
 //     this->distMatrix = distMat;
 // }
 
 // Delegating ctor: read once, then forward to the by-value ctor
 template <typename ComplexType, typename DistMatType>
-CritCells<ComplexType, DistMatType>::CritCells(const std::string &filename) : CritCells(readInput::readCSV(filename))
+CritCells<ComplexType, DistMatType>::CritCells(const std::string& filename) : CritCells(readInput::readCSV(filename))
 {
 }
 
@@ -48,17 +48,17 @@ CritCells<ComplexType, DistMatType>::CritCells(std::vector<std::vector<double>> 
 
 #ifdef BUILD_LEGACY_ICC //*******************need to use parent_cc to access the CritCells class members***********************//
 
-std::ostream &operator<<(std::ostream &os, const std::map<double, std::vector<std::vector<int>>> &bins)
+std::ostream& operator<<(std::ostream& os, const std::map<double, std::vector<std::vector<int>>>& bins)
 {
     for (const auto &[weight, simplexes] : bins)
     {
         if (!simplexes.empty())
         {
             os << weight << " ";
-            for (const auto &simplex : simplexes)
+            for (const auto& simplex : simplexes)
             {
                 os << "(";
-                for (const auto &i : simplex)
+                for (const auto& i : simplex)
                     os << i << " ";
                 os << ")";
             }
@@ -91,7 +91,7 @@ void CritCells<ComplexType, DistMatType>::ICCLegacy::run_Compute(int maxDim, int
 
             // Bin the batches
             binByWeights(weighted_simplicies, bins);
-            for (auto &it : bins)
+            for (auto& it : bins)
                 it.second = dimMatching(it.second, dim, dim == maxDim);
             auto match_end_time = std::chrono::high_resolution_clock::now();
             std::clog << "Match time: " << std::chrono::duration<double>(match_end_time - match_start_time).count() << " seconds." << std::endl;
@@ -113,7 +113,7 @@ std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatTy
 }
 
 template <typename ComplexType, typename DistMatType>
-void CritCells<ComplexType, DistMatType>::ICCLegacy::binByWeights(std::map<double, std::vector<std::vector<int>>> &weighted_simplicies, std::map<double, std::vector<std::vector<int>>> &bins) // Merged higher dim feature to bins
+void CritCells<ComplexType, DistMatType>::ICCLegacy::binByWeights(std::map<double, std::vector<std::vector<int>>>& weighted_simplicies, std::map<double, std::vector<std::vector<int>>>& bins) // Merged higher dim feature to bins
 {
     for (auto &[weight, simplexes] : weighted_simplicies)
         std::move(simplexes.begin(), simplexes.end(), std::back_inserter(bins[weight]));
@@ -121,7 +121,7 @@ void CritCells<ComplexType, DistMatType>::ICCLegacy::binByWeights(std::map<doubl
 }
 
 template <typename ComplexType, typename DistMatType>
-std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatType>::ICCLegacy::dsimplices_batches(ComplexType &complex, size_t dim, size_t batch_size) // Worker is invokation counter
+std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatType>::ICCLegacy::dsimplices_batches(ComplexType& complex, size_t dim, size_t batch_size) // Worker is invokation counter
 {
     std::map<double, std::vector<std::vector<int>>> weighted_simplexes;
     if (!complex.is_initialized)
@@ -136,10 +136,10 @@ std::map<double, std::vector<std::vector<int>>> CritCells<ComplexType, DistMatTy
 }
 
 template <typename ComplexType, typename DistMatType>
-std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::ICCLegacy::dimMatching(std::vector<std::vector<int>> &simplexes, size_t dim, bool final)
+std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::ICCLegacy::dimMatching(std::vector<std::vector<int>>& simplexes, size_t dim, bool final)
 {
     std::vector<std::vector<int>> critCells, simps, cofaces;
-    for (auto &simplex : simplexes)
+    for (auto& simplex : simplexes)
     {
         if (simplex.size() == dim + 1)
             cofaces.emplace_back(std::move(simplex));
@@ -182,8 +182,8 @@ std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::ICCLegacy::di
 #endif
 
 template <typename ComplexType, typename DistMatType>
-void CritCells<ComplexType, DistMatType>::buildInterface(BipartiteGraph &bi_graph, const std::vector<std::pair<int64_t, double>> &cofacet_list,
-                                                         const robin_hood::unordered_map<int64_t, size_t> &active_facet_index, const std::vector<std::vector<int64_t>> &binomial_table, const size_t dim)
+void CritCells<ComplexType, DistMatType>::buildInterface(BipartiteGraph& bi_graph, const std::vector<std::pair<int64_t, double>>& cofacet_list,
+                                                         const robin_hood::unordered_map<int64_t, size_t>& active_facet_index, const std::vector<std::vector<int64_t>>& binomial_table, const size_t dim)
 {
     // size_t npt = this->distMatrix.size();
     auto u = bi_graph.unodes;
