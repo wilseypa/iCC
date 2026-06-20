@@ -77,7 +77,8 @@ private:
     int64_t implicitFacetCompressedAugPath(const std::vector<std::vector<int64_t>>& binomial_table, const BipartiteGraph& bi_graph,
                                            const std::vector<std::pair<int64_t, double>>& facet_list,
                                            const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash_table,
-                                           const size_t facetgraphindex, size_t npts, size_t interfacedimension);
+                                           const std::vector<size_t>& start_cofacet_indices,
+                                           size_t npts, size_t interfacedimension);
 
     void enqueueReducedCompressedColumnTail(const std::vector<std::vector<int64_t>>& binomial_table,
                                             const BipartiteGraph& bi_graph,
