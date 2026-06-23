@@ -39,11 +39,9 @@ template <typename DistMatType>
 std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSortedVRCofacets(const std::vector<std::pair<int64_t, double>>& sorted_simplex_list, const size_t dim, const double maxeps, const int threadnum)
 {
     // dim == simplex dimension == cofacet dimension - 1
-    std::vector<std::pair<int64_t, double>> cofacet_list;
-
     size_t npts = binomial_table_.size() - 1;
 
-    std::vector<std::vector<std::pair<size_t, double>>> thread_workspace(threadnum);
+    std::vector<std::vector<std::pair<int64_t, double>>> thread_workspace(threadnum);
 
     omp_set_num_threads(threadnum);
 
@@ -78,14 +76,7 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSorte
         }
     }
 
-    for (const auto& thread_cofacets : thread_workspace)
-    {
-        cofacet_list.insert(cofacet_list.end(), thread_cofacets.begin(), thread_cofacets.end());
-    }
-
-    SimplexUtility::sortSimplexByWeightThenIndex(cofacet_list);
-
-    return cofacet_list;
+    return SimplexUtility::sortAndMergeSimplexChunks(thread_workspace, threadnum);
 }
 
 #ifdef BUILD_ALPHA_COMPLEX
@@ -599,11 +590,5 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getGeome
         }
     }
 
-    std::vector<std::pair<int64_t, double>> sorted_cofacets;
-    for (const auto& thread_cofacets : thread_workspace)
-        sorted_cofacets.insert(sorted_cofacets.end(), thread_cofacets.begin(), thread_cofacets.end());
-
-    SimplexUtility::sortSimplexByWeightThenIndex(sorted_cofacets);
-
-    return sorted_cofacets;
+    return SimplexUtility::sortAndMergeSimplexChunks(thread_workspace, threadnum);
 }

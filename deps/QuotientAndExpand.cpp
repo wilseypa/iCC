@@ -598,15 +598,7 @@ std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getSorte
         }
     }
 
-    std::vector<std::pair<int64_t, double>> sorted_edges;
-    for (const auto& thread_edges : thread_edge_workspace)
-    {
-        sorted_edges.insert(sorted_edges.end(), thread_edges.begin(), thread_edges.end());
-    }
-
-    SimplexUtility::sortSimplexByWeightThenIndex(sorted_edges);
-
-    return sorted_edges;
+    return SimplexUtility::sortAndMergeSimplexChunks(thread_edge_workspace, threadnum);
 }
 
 template <typename DistMatType>
