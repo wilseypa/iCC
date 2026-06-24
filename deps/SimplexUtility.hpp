@@ -135,24 +135,6 @@ namespace SimplexUtility
         const auto sort_lambda = [](const auto& lhs, const auto& rhs)
         { return (lhs.second < rhs.second) || ((lhs.second == rhs.second) && (lhs.first < rhs.first)); };
 
-        size_t total_size = 0;
-        size_t non_empty_chunk_count = 0;
-        size_t largest_chunk_index = 0;
-        for (size_t i = 0; i < simplex_chunks.size(); ++i)
-        {
-            const auto chunk_size = simplex_chunks[i].size();
-            if (chunk_size == 0) continue;
-
-            if (chunk_size > simplex_chunks[largest_chunk_index].size())
-                largest_chunk_index = i;
-
-            ++non_empty_chunk_count;
-            total_size += chunk_size;
-        }
-
-        if (total_size == 0)
-            return {};
-
         const int worker_count = threadnum > 0 ? threadnum : 1;
 
 #pragma omp parallel for schedule(dynamic) num_threads(worker_count)
@@ -161,51 +143,41 @@ namespace SimplexUtility
             std::sort(simplex_chunks[i].begin(), simplex_chunks[i].end(), sort_lambda);
         }
 
-        if (non_empty_chunk_count == 1)
-            return std::move(simplex_chunks[largest_chunk_index]);
-
-        std::vector<SimplexPair> simplex_list = std::move(simplex_chunks[largest_chunk_index]);
-        simplex_list.reserve(total_size);
-
-        std::vector<std::pair<size_t, size_t>> ranges;
-        ranges.reserve(non_empty_chunk_count);
-        ranges.emplace_back(0, simplex_list.size());
-
+        size_t total_size = 0;
+        size_t first_non_empty_chunk_index = simplex_chunks.size();
         for (size_t i = 0; i < simplex_chunks.size(); ++i)
         {
-            if (i == largest_chunk_index || simplex_chunks[i].empty()) continue;
+            const auto chunk_size = simplex_chunks[i].size();
+            if (chunk_size == 0)
+                continue;
 
+            if (first_non_empty_chunk_index == simplex_chunks.size())
+                first_non_empty_chunk_index = i;
+            total_size += chunk_size;
+        }
+
+        if (total_size == 0)
+            return {};
+
+        std::vector<SimplexPair> simplex_list = std::move(simplex_chunks[first_non_empty_chunk_index]);
+        std::vector<SimplexPair>().swap(simplex_chunks[first_non_empty_chunk_index]);
+
+        for (size_t i = first_non_empty_chunk_index + 1; i < simplex_chunks.size(); ++i)
+        {
             auto& chunk = simplex_chunks[i];
+            if (chunk.empty()) continue;
+
             const size_t range_begin = simplex_list.size();
             simplex_list.insert(simplex_list.end(),
                                 std::make_move_iterator(chunk.begin()),
                                 std::make_move_iterator(chunk.end()));
-            ranges.emplace_back(range_begin, simplex_list.size());
 
             std::vector<SimplexPair>().swap(chunk);
-        }
 
-        while (ranges.size() > 1)
-        {
-            const size_t merge_pair_count = ranges.size() / 2;
-            std::vector<std::pair<size_t, size_t>> merged_ranges((ranges.size() + 1) / 2);
-
-#pragma omp parallel for schedule(dynamic) num_threads(worker_count)
-            for (size_t i = 0; i < merge_pair_count; ++i)
-            {
-                const auto left = ranges[2 * i];
-                const auto right = ranges[2 * i + 1];
-                std::inplace_merge(simplex_list.begin() + static_cast<std::ptrdiff_t>(left.first),
-                                   simplex_list.begin() + static_cast<std::ptrdiff_t>(left.second),
-                                   simplex_list.begin() + static_cast<std::ptrdiff_t>(right.second),
-                                   sort_lambda);
-                merged_ranges[i] = {left.first, right.second};
-            }
-
-            if ((ranges.size() & 1ULL) != 0ULL)
-                merged_ranges.back() = ranges.back();
-
-            ranges.swap(merged_ranges);
+            std::inplace_merge(simplex_list.begin(),
+                               simplex_list.begin() + static_cast<std::ptrdiff_t>(range_begin),
+                               simplex_list.end(),
+                               sort_lambda);
         }
 
         return simplex_list;
