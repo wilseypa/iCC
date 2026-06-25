@@ -1,7 +1,6 @@
 #pragma once
 
 #include <algorithm>
-#include <cstddef>
 #include <cstdint>
 #include <iterator>
 #include <stdexcept>
@@ -143,42 +142,19 @@ namespace SimplexUtility
             std::sort(simplex_chunks[i].begin(), simplex_chunks[i].end(), sort_lambda);
         }
 
-        size_t total_size = 0;
-        size_t first_non_empty_chunk_index = simplex_chunks.size();
-        for (size_t i = 0; i < simplex_chunks.size(); ++i)
+        std::vector<SimplexPair> simplex_list;
+        for (auto& chunk : simplex_chunks)
         {
-            const auto chunk_size = simplex_chunks[i].size();
-            if (chunk_size == 0)
-                continue;
-
-            if (first_non_empty_chunk_index == simplex_chunks.size())
-                first_non_empty_chunk_index = i;
-            total_size += chunk_size;
-        }
-
-        if (total_size == 0)
-            return {};
-
-        std::vector<SimplexPair> simplex_list = std::move(simplex_chunks[first_non_empty_chunk_index]);
-        std::vector<SimplexPair>().swap(simplex_chunks[first_non_empty_chunk_index]);
-
-        for (size_t i = first_non_empty_chunk_index + 1; i < simplex_chunks.size(); ++i)
-        {
-            auto& chunk = simplex_chunks[i];
             if (chunk.empty()) continue;
 
-            const size_t range_begin = simplex_list.size();
             simplex_list.insert(simplex_list.end(),
                                 std::make_move_iterator(chunk.begin()),
                                 std::make_move_iterator(chunk.end()));
 
             std::vector<SimplexPair>().swap(chunk);
-
-            std::inplace_merge(simplex_list.begin(),
-                               simplex_list.begin() + static_cast<std::ptrdiff_t>(range_begin),
-                               simplex_list.end(),
-                               sort_lambda);
         }
+
+        std::sort(simplex_list.begin(), simplex_list.end(), sort_lambda);
 
         return simplex_list;
     }
