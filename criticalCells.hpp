@@ -22,6 +22,7 @@
 
 #include "BipartiteGraph.hpp"
 #include "DistanceMatrix.hpp"
+#include "SimplexList.hpp"
 
 /****************************************************** */
 // temp dummy struct for alpha complex
@@ -105,7 +106,7 @@ public:
 #endif
     /*legacy end*/
 
-    void buildInterface(BipartiteGraph& bi_graph, const std::vector<std::pair<int64_t, double>>& cofacet_list,
+    void buildInterface(BipartiteGraph& bi_graph, const SimplexList& cofacet_list,
                         const robin_hood::unordered_map<int64_t, size_t>& active_facet_index, const std::vector<std::vector<int64_t>>& binomial_table, const size_t dim);
 
     void morseVRTest(size_t maxdim, double maxeps, int threadnumber);

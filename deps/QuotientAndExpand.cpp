@@ -1,6 +1,7 @@
 #include <unordered_map>
 #include <stdexcept>
 #include <iostream>
+#include <limits>
 
 #include "omp.h"
 
@@ -53,7 +54,8 @@ void QuotientAndExpand<DistMatType>::runPiecewisePH(const std::vector<double>& e
                     ++second;
                     for (; second != index_set.end(); ++second)
                     {
-                        maxdist = std::max(maxdist, dist_mat_.getDistance(*first, *second));
+                        const double distance = dist_mat_.getDistance(*first, *second);
+                        maxdist = std::max(maxdist, distance);
                     }
                 }
 
@@ -319,7 +321,8 @@ QuotientAndExpand<DistMatType>::trimPVCandidates(const WindowState& win_state, c
             ++second;
             for (; second != index_set.end(); ++second)
             {
-                maxdist = std::max(maxdist, dist_mat_.getDistance(*first, *second));
+                const double distance = dist_mat_.getDistance(*first, *second);
+                maxdist = std::max(maxdist, distance);
             }
         }
 
@@ -515,7 +518,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getNonMe
 }
 
 template <typename DistMatType>
-double QuotientAndExpand<DistMatType>::computeVirtualDistance(const size_t i, const size_t j, const std::vector<std::unordered_set<size_t>>& pv_index_sets)
+FiltrationValueType QuotientAndExpand<DistMatType>::computeVirtualDistance(const size_t i, const size_t j, const std::vector<std::unordered_set<size_t>>& pv_index_sets)
 {
     const size_t originalvtnum = dist_mat_.getVertexNumber();
 
@@ -530,12 +533,14 @@ double QuotientAndExpand<DistMatType>::computeVirtualDistance(const size_t i, co
     const std::unordered_set<size_t>& vtset_i = (i < originalvtnum) ? temp_i_set : pv_index_sets[i - originalvtnum];
     const std::unordered_set<size_t>& vtset_j = (j < originalvtnum) ? temp_j_set : pv_index_sets[j - originalvtnum];
 
-    double mindist = std::numeric_limits<double>::max();
+    FiltrationValueType mindist = std::numeric_limits<FiltrationValueType>::max();
     for (const auto& vi : vtset_i)
     {
         for (const auto& vj : vtset_j)
         {
-            mindist = std::min(mindist, dist_mat_.getDistance(vi, vj));
+            const FiltrationValueType distance = dist_mat_.getDistance(vi, vj);
+            if (distance < mindist)
+                mindist = distance;
         }
     }
 
@@ -543,13 +548,14 @@ double QuotientAndExpand<DistMatType>::computeVirtualDistance(const size_t i, co
 }
 
 template <typename DistMatType>
-robin_hood::unordered_map<uint64_t, double> QuotientAndExpand<DistMatType>::getVirtualDistanceHashTable(const std::vector<size_t>& active_vertices, const std::vector<std::unordered_set<size_t>>& pv_index_sets, int threadnum)
+robin_hood::unordered_map<uint64_t, FiltrationValueType> QuotientAndExpand<DistMatType>::getVirtualDistanceHashTable(const std::vector<size_t>& active_vertices, const std::vector<std::unordered_set<size_t>>& pv_index_sets, int threadnum)
 {
-    omp_set_num_threads(threadnum);
+    const int worker_count = threadnum > 0 ? threadnum : 1;
+    omp_set_num_threads(worker_count);
 
-    std::vector<robin_hood::unordered_map<uint64_t, double>> thread_hash_tables(threadnum);
+    std::vector<robin_hood::unordered_map<uint64_t, FiltrationValueType>> thread_hash_tables(static_cast<size_t>(worker_count));
 
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(dynamic) num_threads(worker_count)
     for (size_t i = 0; i < active_vertices.size(); ++i)
     {
         size_t threadid = omp_get_thread_num();
@@ -559,12 +565,12 @@ robin_hood::unordered_map<uint64_t, double> QuotientAndExpand<DistMatType>::getV
         for (size_t j = i + 1; j < active_vertices.size(); ++j)
         {
             uint64_t key = (static_cast<uint64_t>(active_vertices[i]) << 32) | static_cast<uint64_t>(active_vertices[j]);
-            double dist = computeVirtualDistance(active_vertices[i], active_vertices[j], pv_index_sets);
+            FiltrationValueType dist = computeVirtualDistance(active_vertices[i], active_vertices[j], pv_index_sets);
             thread_hash_table.emplace(key, dist);
         }
     }
 
-    robin_hood::unordered_map<uint64_t, double> virtual_distance_hash_table;
+    robin_hood::unordered_map<uint64_t, FiltrationValueType> virtual_distance_hash_table;
     for (const auto& thread_hash_table : thread_hash_tables)
     {
         virtual_distance_hash_table.insert(thread_hash_table.begin(), thread_hash_table.end());
@@ -574,14 +580,15 @@ robin_hood::unordered_map<uint64_t, double> QuotientAndExpand<DistMatType>::getV
 }
 
 template <typename DistMatType>
-std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getSortedVirtualEdgeList(const std::vector<size_t>& active_vertices,
-                                                                                             const robin_hood::unordered_map<uint64_t, double>& virtual_distance_hash_table, const double maxeps, int threadnum)
+SimplexList QuotientAndExpand<DistMatType>::getSortedVirtualEdgeList(const std::vector<size_t>& active_vertices,
+                                                                     const robin_hood::unordered_map<uint64_t, FiltrationValueType>& virtual_distance_hash_table, const double maxeps, int threadnum)
 {
-    omp_set_num_threads(threadnum);
+    const int worker_count = threadnum > 0 ? threadnum : 1;
+    omp_set_num_threads(worker_count);
 
-    std::vector<std::vector<std::pair<int64_t, double>>> thread_edge_workspace(threadnum);
+    std::vector<SimplexList> thread_edge_workspace(static_cast<size_t>(worker_count));
 
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(dynamic) num_threads(worker_count)
     for (size_t i = 0; i < active_vertices.size(); ++i)
     {
         int threadid = omp_get_thread_num();
@@ -589,7 +596,7 @@ std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getSorte
 
         for (size_t j = i + 1; j < active_vertices.size(); ++j)
         {
-            double weight = SimplexUtility::getLabelDistance(virtual_distance_hash_table, active_vertices[i], active_vertices[j]);
+            FiltrationValueType weight = SimplexUtility::getLabelDistance(virtual_distance_hash_table, active_vertices[i], active_vertices[j]);
             if (weight > 0 && weight < maxeps)
             {
                 int64_t bindex = SimplexUtility::getEdgeBinomialIndex(this->binomial_table_, active_vertices[j], active_vertices[i]);
@@ -602,7 +609,7 @@ std::vector<std::pair<int64_t, double>> QuotientAndExpand<DistMatType>::getSorte
 }
 
 template <typename DistMatType>
-robin_hood::unordered_map<int64_t, size_t> QuotientAndExpand<DistMatType>::getVirtualActiveEdgeIndexHashTable(const std::vector<std::pair<int64_t, double>>& sorted_virtual_edge, const size_t pvnum)
+robin_hood::unordered_map<int64_t, size_t> QuotientAndExpand<DistMatType>::getVirtualActiveEdgeIndexHashTable(const SimplexList& sorted_virtual_edge, const size_t pvnum)
 {
     robin_hood::unordered_map<int64_t, size_t> active_edge_hash_table;
     active_edge_hash_table.reserve(sorted_virtual_edge.size());
@@ -656,7 +663,8 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runQuoti
             ++second;
             for (; second != index_set.end(); ++second)
             {
-                maxdist = std::max(maxdist, dist_mat_.getDistance(*first, *second));
+                const double distance = dist_mat_.getDistance(*first, *second);
+                maxdist = std::max(maxdist, distance);
             }
         }
 
@@ -808,7 +816,8 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::trimInde
             ++second;
             for (; second != index_set.end(); ++second)
             {
-                maxdist = std::max(maxdist, dist_mat_.getDistance(*first, *second));
+                const double distance = dist_mat_.getDistance(*first, *second);
+                maxdist = std::max(maxdist, distance);
             }
         }
 

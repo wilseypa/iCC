@@ -347,7 +347,7 @@ MaximumMorseMatching::MatchSupportInfo MaximumMorseMatching::implicitMatchAndCol
 }
 
 
-int64_t MaximumMorseMatching::implicitFacetAugPath(const std::vector<std::vector<int64_t>>& binomial_table, BipartiteGraph& bi_graph, const std::vector<std::pair<int64_t, double>>& facet_list,
+int64_t MaximumMorseMatching::implicitFacetAugPath(const std::vector<std::vector<int64_t>>& binomial_table, BipartiteGraph& bi_graph, const SimplexList& facet_list,
                                                    const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash_table, const size_t facetgraphindex, size_t npts, size_t interfacedimension)
 {
     aug_path_.clear();
@@ -448,7 +448,7 @@ int64_t MaximumMorseMatching::implicitFacetAugPath(const std::vector<std::vector
 
 int64_t MaximumMorseMatching::implicitFacetCompressedAugPath(const std::vector<std::vector<int64_t>>& binomial_table,
                                                              const BipartiteGraph& bi_graph,
-                                                             const std::vector<std::pair<int64_t, double>>& facet_list,
+                                                             const SimplexList& facet_list,
                                                              const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash_table,
                                                              const std::vector<size_t>& start_cofacet_indices,
                                                              size_t npts,
@@ -507,7 +507,7 @@ int64_t MaximumMorseMatching::implicitFacetCompressedAugPath(const std::vector<s
 
 void MaximumMorseMatching::enqueueReducedCompressedColumnTail(const std::vector<std::vector<int64_t>>& binomial_table,
                                                               const BipartiteGraph& bi_graph,
-                                                              const std::vector<std::pair<int64_t, double>>& facet_list,
+                                                              const SimplexList& facet_list,
                                                               const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash_table,
                                                               const size_t facet_list_index,
                                                               const size_t expected_pivot_cofacet,
@@ -1102,7 +1102,7 @@ std::vector< std::vector<size_t> > MaximumMorseMatching::serialFacetMatchAndGetA
 int64_t MaximumMorseMatching::implicitFacetAugPathDebug(
     const std::vector<std::vector<int64_t>>& binomial_table,
     BipartiteGraph& bi_graph,
-    const std::vector<std::pair<int64_t, double>>& facet_list,
+    const SimplexList& facet_list,
     const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash_table,
     const size_t facetgraphindex,
     size_t npts,

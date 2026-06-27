@@ -1,6 +1,9 @@
 #pragma once
 
+#include <cstddef>
 #include <vector>
+
+#include "FiltrationValueType.hpp"
 
 #ifdef BUILD_ALPHA_COMPLEX
 #include <Eigen/Sparse>
@@ -11,14 +14,25 @@ struct NormalDistMat
 public:
     NormalDistMat(const std::vector<std::vector<double>>& point_cloud);
 
-    inline std::size_t getVertexNumber() const { return dist_mat_.size(); }
-    inline double getDistance(const size_t i, const size_t j) const
+    inline std::size_t getVertexNumber() const { return vertex_count_; }
+    inline FiltrationValueType getDistance(const size_t i, const size_t j) const
     {
-        return (i < j) ? this->dist_mat_[i][j] : this->dist_mat_[j][i];
+        if (i == j)
+            return 0.0f;
+
+        const size_t hi = (i < j) ? j : i;
+        const size_t lo = (i < j) ? i : j;
+        return dist_mat_[triangularIndex(hi, lo)];
     };
 
 private:
-    std::vector<std::vector<double>> dist_mat_;
+    static inline size_t triangularIndex(const size_t hi, const size_t lo)
+    {
+        return (hi * (hi - 1)) / 2 + lo;
+    }
+
+    size_t vertex_count_ = 0;
+    std::vector<FiltrationValueType> dist_mat_;
 };
 
 struct SparseDistMat

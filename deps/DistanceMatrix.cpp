@@ -3,7 +3,7 @@
 #include <omp.h>
 #include "DistanceMatrix.hpp"
 
-inline double vectors_distance(const std::vector<double>& a, const std::vector<double>& b)
+inline FiltrationValueType vectors_distance(const std::vector<double>& a, const std::vector<double>& b)
 {
 #ifdef _GLIBCXX_DEBUG
     if (a.size() != b.size())
@@ -21,7 +21,7 @@ inline double vectors_distance(const std::vector<double>& a, const std::vector<d
         const double diff = a[i] - b[i];
         squared_distance += diff * diff;
     }
-    return std::sqrt(squared_distance);
+    return static_cast<FiltrationValueType>(std::sqrt(squared_distance));
 }
 
 NormalDistMat::NormalDistMat(const std::vector<std::vector<double>>& point_cloud)
@@ -32,14 +32,14 @@ NormalDistMat::NormalDistMat(const std::vector<std::vector<double>>& point_cloud
         throw std::invalid_argument("Input point cloud is empty.");
     }
 
-    this->dist_mat_.resize(point_cloud.size(), std::vector<double>(point_cloud.size(), 0.0));
+    vertex_count_ = point_cloud.size();
+    dist_mat_.assign((vertex_count_ * (vertex_count_ - 1)) / 2, 0.0f);
 #pragma omp parallel for
-    for (size_t i = 0; i < point_cloud.size() - 1; i++)
+    for (size_t i = 0; i < vertex_count_ - 1; i++)
     {
-        for (size_t j = i + 1; j < point_cloud.size(); j++)
+        for (size_t j = i + 1; j < vertex_count_; j++)
         {
-            this->dist_mat_[i][j] = vectors_distance(point_cloud[i], point_cloud[j]);
-            // distMatrix[j][i] = dist_mat[i][j] ; // Symmetric matrix
+            dist_mat_[triangularIndex(j, i)] = vectors_distance(point_cloud[i], point_cloud[j]);
         }
     }
 }

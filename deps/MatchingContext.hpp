@@ -3,6 +3,7 @@
 #include "BipartiteGraph.hpp"
 
 #include "robin_hood.h"
+#include "SimplexList.hpp"
 
 #include <vector>
 #include <cstdint>
@@ -26,8 +27,8 @@ struct MatchingContext
 
     // References to data needed by the algorithms
     std::vector<std::vector<int64_t>>& binomial_table;
-    std::vector<std::pair<int64_t, double>>& sorted_facets;
-    std::vector<std::pair<int64_t, double>>& sorted_cofacets;
+    SimplexList& sorted_facets;
+    SimplexList& sorted_cofacets;
 
     // Hash tables required for implicit graph lookups
     const robin_hood::unordered_map<int64_t, size_t>& facet_bindex_to_list_index;
@@ -35,8 +36,8 @@ struct MatchingContext
 
     MatchingContext (BipartiteGraph& bi_graph,
                      std::vector<std::vector<int64_t>>& binomial_table,
-                     std::vector<std::pair<int64_t, double>>& sorted_facets,
-                     std::vector<std::pair<int64_t, double>>& sorted_cofacets,
+                     SimplexList& sorted_facets,
+                     SimplexList& sorted_cofacets,
                      const robin_hood::unordered_map<int64_t, size_t>& facet_hash = emptyMap(),
                      const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash = emptyMap())
     : graph(bi_graph),
@@ -49,8 +50,8 @@ struct MatchingContext
 
     MatchingContext (BipartiteGraph& bi_graph,
                      std::vector<std::vector<int64_t>>& binomial_table,
-                     std::vector<std::pair<int64_t, double>>& sorted_facets,
-                     std::vector<std::pair<int64_t, double>>& sorted_cofacets,
+                     SimplexList& sorted_facets,
+                     SimplexList& sorted_cofacets,
                      const robin_hood::unordered_map<int64_t, size_t>& facet_hash,
                      const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash,
                      const size_t num_points,

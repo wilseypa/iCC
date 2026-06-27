@@ -182,7 +182,7 @@ std::vector<std::vector<int>> CritCells<ComplexType, DistMatType>::ICCLegacy::di
 #endif
 
 template <typename ComplexType, typename DistMatType>
-void CritCells<ComplexType, DistMatType>::buildInterface(BipartiteGraph& bi_graph, const std::vector<std::pair<int64_t, double>>& cofacet_list,
+void CritCells<ComplexType, DistMatType>::buildInterface(BipartiteGraph& bi_graph, const SimplexList& cofacet_list,
                                                          const robin_hood::unordered_map<int64_t, size_t>& active_facet_index, const std::vector<std::vector<int64_t>>& binomial_table, const size_t dim)
 {
     // size_t npt = this->distMatrix.size();

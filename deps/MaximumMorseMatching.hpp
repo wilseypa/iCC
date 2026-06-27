@@ -6,6 +6,7 @@
 
 #include "MatchingStrategy.hpp"
 #include "BipartiteGraph.hpp"
+#include "SimplexList.hpp"
 
 class MaximumMorseMatching : public MatchingStrategy
 {
@@ -70,19 +71,19 @@ private:
     std::vector<size_t> pq_workspace_;
 
     int64_t implicitFacetAugPath(const std::vector<std::vector<int64_t>>& binomial_table, BipartiteGraph& bi_graph, 
-                                 const std::vector<std::pair<int64_t, double>>& facet_list, 
+                                 const SimplexList& facet_list,
                                  const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash_table, const size_t facetgraphindex, 
                                  size_t npts, size_t interfacedimension);
 
     int64_t implicitFacetCompressedAugPath(const std::vector<std::vector<int64_t>>& binomial_table, const BipartiteGraph& bi_graph,
-                                           const std::vector<std::pair<int64_t, double>>& facet_list,
+                                           const SimplexList& facet_list,
                                            const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash_table,
                                            const std::vector<size_t>& start_cofacet_indices,
                                            size_t npts, size_t interfacedimension);
 
     void enqueueReducedCompressedColumnTail(const std::vector<std::vector<int64_t>>& binomial_table,
                                             const BipartiteGraph& bi_graph,
-                                            const std::vector<std::pair<int64_t, double>>& facet_list,
+                                            const SimplexList& facet_list,
                                             const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash_table,
                                             const size_t facet_list_index,
                                             const size_t pivot_cofacet,
@@ -100,7 +101,7 @@ private:
                                            std::vector<size_t>& cofacet_trace);
     
 
-    int64_t implicitFacetAugPathDebug(const std::vector<std::vector<int64_t>>& binomial_table, BipartiteGraph& bi_graph, const std::vector<std::pair<int64_t, double>>& facet_list, 
+    int64_t implicitFacetAugPathDebug(const std::vector<std::vector<int64_t>>& binomial_table, BipartiteGraph& bi_graph, const SimplexList& facet_list,
                                  const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash_table, const size_t facetgraphindex, size_t npts, size_t interfacedimension);
 
     //legacy explicit graph representation  
