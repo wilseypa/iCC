@@ -17,7 +17,6 @@
 
 #include "SimplexUtility.hpp"
 #include "DistanceMatrix.hpp"
-#include "SimplexList.hpp"
 
 // Forward-declare complex type tags
 struct VR;
@@ -30,23 +29,23 @@ public:
     SimplexEnumerator(const DistMatType& dist_mat, const std::vector<std::vector<int64_t>>& binomial_table)
         : dist_mat_(dist_mat), binomial_table_(binomial_table) {}
 
-    SimplexList getSortedVREdges(const double maxeps);
+    std::vector<std::pair<int64_t, double>> getSortedVREdges(const double maxeps);
 
-    SimplexList getSortedVRCofacets(const SimplexList& sorted_simplex, const size_t dim, const double maxeps, const int threadnum);
+    std::vector<std::pair<int64_t, double>> getSortedVRCofacets(const std::vector<std::pair<int64_t, double>>& sorted_simplex, const size_t dim, const double maxeps, const int threadnum);
 
 #ifdef BUILD_ALPHA_COMPLEX
-    SimplexList getSortedAlphaCells(const std::vector<std::vector<int64_t>>& binomial_table,
+    std::vector<std::pair<int64_t, double>> getSortedAlphaCells(const std::vector<std::vector<int64_t>>& binomial_table,
                                     std::unordered_map<CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>::Vertex_handle, size_t>& vertex_handle_index,
                                     CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>& delaunay_d, const size_t dim, double maxeps);
 #endif
 
-    // Geometric enumeration for complex with pseudo-vertices (virtual vertices).
-    // Each pv represents a set of original vertices, and simplex weight is the smallest
+    // Geometric enumeration for quotient complexes with pseudo-vertices.
+    // Each PV represents a set of original vertices, and simplex weight is the smallest
     // clique realization weight among representative choices.
-    SimplexList getGeometricCofacetList(const SimplexList& sorted_virtual_simplex_list,
-                                        const std::vector<size_t>& active_vertices,
-                                        const std::vector<std::unordered_set<size_t>>& virtual_vertex_indices,
-                                        const robin_hood::unordered_map<uint64_t, FiltrationValueType>& virtual_distance_hash,
+    std::vector<std::pair<int64_t, double>> getGeometricCofacetList(const std::vector<std::pair<int64_t, double>>& sorted_quotient_simplex_list,
+                                        const std::vector<size_t>& active_labels,
+                                        const std::vector<std::unordered_set<size_t>>& pv_index_sets,
+                                        const robin_hood::unordered_map<uint64_t, double>& label_distance_hash,
                                         const size_t dim, const double maxeps, const int threadnum);
 
 
@@ -55,7 +54,7 @@ private:
     const std::vector<std::vector<int64_t>>& binomial_table_;
 
 #ifdef BUILD_ALPHA_COMPLEX
-    FiltrationValueType getAlphaSimplexWeight(const std::vector<size_t>& alpha_simplex);
+    double getAlphaSimplexWeight(const std::vector<size_t>& alpha_simplex);
 #endif
 
     // Local representative choices are encoded in uint64_t masks; PV cardinality must stay below this cap.
@@ -64,8 +63,8 @@ private:
 
     struct EdgeRecord
     {
-        FiltrationValueType weight;
-        uint8_t virtualidx0, virtualidx1;
+        double weight;
+        uint8_t groupidx0, groupidx1;
         uint8_t localidx0, localidx1;
 
         bool operator<(const EdgeRecord& edge) const { return weight < edge.weight; }
@@ -94,8 +93,8 @@ private:
                                  const std::vector<std::vector<size_t>>& pv_rep_lists,
                                  const size_t originalvtnum, const double maxeps) const;
 
-    FiltrationValueType getGeometricPVSimplexWeight(WitnessWorkspace& ws, const size_t target_simplex_label_count,
-                                                const FiltrationValueType lower_bound, const double maxeps) const;
+    double getGeometricPVSimplexWeight(WitnessWorkspace& ws, const size_t target_simplex_label_count,
+                                                const double lower_bound, const double maxeps) const;
 
     bool findCliqueRecursive(const uint64_t* flattened_adjacency_mask, const size_t target_simplex_label_count, WitnessWorkspace& ws,
                              const std::vector<uint64_t>& candidate_local_index_mask,
@@ -109,7 +108,7 @@ extern template class SimplexEnumerator<NormalDistMat>;
 
 // template <typename DistMatType>
 // template <typename ComplexType>
-// SimplexList SimplexEnumerator<DistMatType>::getSortedCofacets(const SimplexList& sorted_simplex, const size_t dim, const double maxeps, const int threadnum)
+// std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSortedCofacets(const std::vector<std::pair<int64_t, double>>& sorted_simplex, const size_t dim, const double maxeps, const int threadnum)
 // {
 //     if constexpr (std::is_same_v<ComplexType, VR>)
 //     {
@@ -127,7 +126,7 @@ extern template class SimplexEnumerator<NormalDistMat>;
 
 // template <typename DistMatType>
 // template <typename ComplexType>
-// SimplexList SimplexEnumerator<DistMatType>::getSortedEdges(const double maxeps)
+// std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSortedEdges(const double maxeps)
 // {
 //     if constexpr (std::is_same_v<ComplexType, VR>)
 //     {

@@ -9,11 +9,11 @@ template class SimplexEnumerator<NormalDistMat>;
 // template class SimplexEnumerator<SparseDistMat>;
 
 template <typename DistMatType>
-SimplexList SimplexEnumerator<DistMatType>::getSortedVREdges(const double maxeps)
+std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSortedVREdges(const double maxeps)
 {
     //********************use openmp later************************//
 
-    SimplexList sorted_edge;
+    std::vector<std::pair<int64_t, double>> sorted_edge;
 
     size_t npt = dist_mat_.getVertexNumber();
 
@@ -21,7 +21,7 @@ SimplexList SimplexEnumerator<DistMatType>::getSortedVREdges(const double maxeps
     {
         for (size_t j = i + 1; j < npt; j++)
         {
-            FiltrationValueType weight = dist_mat_.getDistance(i, j);
+            double weight = dist_mat_.getDistance(i, j);
             if (weight < maxeps)
             {
                 int64_t bindex = SimplexUtility::getEdgeBinomialIndex(binomial_table_, j, i);
@@ -36,13 +36,13 @@ SimplexList SimplexEnumerator<DistMatType>::getSortedVREdges(const double maxeps
 }
 
 template <typename DistMatType>
-SimplexList SimplexEnumerator<DistMatType>::getSortedVRCofacets(const SimplexList& sorted_simplex_list, const size_t dim, const double maxeps, const int threadnum)
+std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSortedVRCofacets(const std::vector<std::pair<int64_t, double>>& sorted_simplex_list, const size_t dim, const double maxeps, const int threadnum)
 {
     // dim == simplex dimension == cofacet dimension - 1
     size_t npts = binomial_table_.size() - 1;
 
     const int worker_count = threadnum > 0 ? threadnum : 1;
-    std::vector<SimplexList> thread_workspace(static_cast<size_t>(worker_count));
+    std::vector<std::vector<std::pair<int64_t, double>>> thread_workspace(static_cast<size_t>(worker_count));
 
     omp_set_num_threads(worker_count);
 
@@ -53,22 +53,22 @@ SimplexList SimplexEnumerator<DistMatType>::getSortedVRCofacets(const SimplexLis
         auto& thread_cofacets = thread_workspace[threadid];
 
         const int64_t bindex = sorted_simplex_list[i].first;
-        const FiltrationValueType weight = sorted_simplex_list[i].second;
+        const double weight = sorted_simplex_list[i].second;
 
         std::vector<size_t> simplex_vertices = SimplexUtility::getSimplexVertices(binomial_table_, bindex, npts, dim);
 
         const size_t minvt = simplex_vertices.back(); // sorted in descending order
         for (size_t covt = 0; covt < minvt; ++covt)
         {
-            FiltrationValueType newweight = 0.0f;
+            double newweight = 0.0;
             for (const auto& vt : simplex_vertices)
             {
-                const FiltrationValueType distance = dist_mat_.getDistance(covt, vt);
+                const double distance = dist_mat_.getDistance(covt, vt);
                 if (distance > newweight)
                     newweight = distance;
             }
 
-            FiltrationValueType cofacetweight = newweight > weight ? newweight : weight;
+            double cofacetweight = newweight > weight ? newweight : weight;
 
             if (newweight < maxeps)
             {
@@ -84,11 +84,11 @@ SimplexList SimplexEnumerator<DistMatType>::getSortedVRCofacets(const SimplexLis
 
 #ifdef BUILD_ALPHA_COMPLEX
 template <typename DistMatType>
-SimplexList SimplexEnumerator<DistMatType>::getSortedAlphaCells(const std::vector<std::vector<int64_t>>& binomial_table,
+std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getSortedAlphaCells(const std::vector<std::vector<int64_t>>& binomial_table,
                                                                 std::unordered_map<CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>::Vertex_handle, size_t>& vertex_handle_index,
                                                                 CGAL::Delaunay_triangulation<CGAL::Epick_d<CGAL::Dynamic_dimension_tag>>& delaunay_d, const size_t dim, double maxeps)
 {
-    SimplexList sortd_d_cell;
+    std::vector<std::pair<int64_t, double>> sortd_d_cell;
 
     if (dim == 0)
         return sortd_d_cell;
@@ -118,7 +118,7 @@ SimplexList SimplexEnumerator<DistMatType>::getSortedAlphaCells(const std::vecto
             }
             std::sort(simplex_pt.begin(), simplex_pt.end(), std::greater<size_t>());
             int64_t bindex = SimplexUtility::getBinomialIndex(binomial_table, simplex_pt, 0);
-            FiltrationValueType weight = getAlphaSimplexWeight(simplex_pt);
+            double weight = getAlphaSimplexWeight(simplex_pt);
             if (weight < maxeps)
                 sortd_d_cell.emplace_back(bindex, weight);
             simplex_pt.clear();
@@ -138,7 +138,7 @@ SimplexList SimplexEnumerator<DistMatType>::getSortedAlphaCells(const std::vecto
             }
             std::sort(simplex_pt.begin(), simplex_pt.end(), std::greater<size_t>());
             int64_t bindex = SimplexUtility::getBinomialIndex(binomial_table, simplex_pt, 0);
-            FiltrationValueType weight = getAlphaSimplexWeight(simplex_pt);
+            double weight = getAlphaSimplexWeight(simplex_pt);
             if (weight < maxeps)
                 sortd_d_cell.emplace_back(bindex, weight);
             simplex_pt.clear();
@@ -192,7 +192,7 @@ SimplexList SimplexEnumerator<DistMatType>::getSortedAlphaCells(const std::vecto
             }
 
             cell_bindex_lookup.insert(bindex);
-            FiltrationValueType weight = getAlphaSimplexWeight(cell_pt);
+            double weight = getAlphaSimplexWeight(cell_pt);
             if (weight < maxeps)
                 sortd_d_cell.emplace_back(bindex, weight);
             cell_pt.clear(); // clean up the pt array for d cell
@@ -205,15 +205,15 @@ SimplexList SimplexEnumerator<DistMatType>::getSortedAlphaCells(const std::vecto
 }
 
 template <typename DistMatType>
-FiltrationValueType SimplexEnumerator<DistMatType>::getAlphaSimplexWeight(const std::vector<size_t>& alpha_simplex)
+double SimplexEnumerator<DistMatType>::getAlphaSimplexWeight(const std::vector<size_t>& alpha_simplex)
 {
-    FiltrationValueType weight = 0.0f;
+    double weight = 0.0;
     // simplex pt is sorted in descending order
     for (auto rfirst = alpha_simplex.rbegin(); rfirst != alpha_simplex.rend() - 1; rfirst++)
     {
         for (auto rsecond = rfirst + 1; rsecond != alpha_simplex.rend(); rsecond++)
         {
-            const FiltrationValueType distance = dist_mat_.getDistance(*rfirst, *rsecond);
+            const double distance = dist_mat_.getDistance(*rfirst, *rsecond);
             if (distance > weight)
                 weight = distance;
         }
@@ -222,7 +222,7 @@ FiltrationValueType SimplexEnumerator<DistMatType>::getAlphaSimplexWeight(const 
 }
 #endif
 
-// ======================= Geometric virtual enumeration (pseudo-vertex) =======================
+// ======================= Geometric PV enumeration =======================
 
 template <typename DistMatType>
 void SimplexEnumerator<DistMatType>::prepareFacetWitnessContext(WitnessWorkspace& ws,
@@ -266,7 +266,7 @@ void SimplexEnumerator<DistMatType>::prepareFacetWitnessContext(WitnessWorkspace
             {
                 for (size_t b = 0; b < rep_j.size(); ++b)
                 {
-                    const FiltrationValueType w = dist_mat_.getDistance(rep_i[a], rep_j[b]);
+                    const double w = dist_mat_.getDistance(rep_i[a], rep_j[b]);
                     if (w < maxeps)
                     {
                         ws.facet_edges.push_back({w, static_cast<uint8_t>(i), static_cast<uint8_t>(j),
@@ -309,7 +309,7 @@ void SimplexEnumerator<DistMatType>::prepareCovtWitnessGroup(WitnessWorkspace& w
         {
             for (size_t b = 0; b < rep_c.size(); ++b)
             {
-                const FiltrationValueType w = dist_mat_.getDistance(rep_i[a], rep_c[b]);
+                const double w = dist_mat_.getDistance(rep_i[a], rep_c[b]);
                 if (w < maxeps)
                 {
                     ws.covt_edges.push_back({w, static_cast<uint8_t>(i), static_cast<uint8_t>(K),
@@ -323,8 +323,8 @@ void SimplexEnumerator<DistMatType>::prepareCovtWitnessGroup(WitnessWorkspace& w
 }
 
 template <typename DistMatType>
-FiltrationValueType SimplexEnumerator<DistMatType>::getGeometricPVSimplexWeight(WitnessWorkspace& ws, const size_t target_simplex_label_count,
-                                                                            const FiltrationValueType lower_bound, const double maxeps) const
+double SimplexEnumerator<DistMatType>::getGeometricPVSimplexWeight(WitnessWorkspace& ws, const size_t target_simplex_label_count,
+                                                                            const double lower_bound, const double maxeps) const
 {
     const size_t flattened_adjacency_mask_words = target_simplex_label_count * target_simplex_label_count * MAX_PV_CARDINALITY_;
     if (ws.flattened_adjacency_mask.size() < flattened_adjacency_mask_words)
@@ -376,12 +376,12 @@ FiltrationValueType SimplexEnumerator<DistMatType>::getGeometricPVSimplexWeight(
 
         const EdgeRecord& edge = take_facet_edge ? fedges[fi++] : cedges[ci++];
 
-        adjacencyMask(edge.virtualidx0, edge.virtualidx1, edge.localidx0) |= (1ULL << edge.localidx1);
-        adjacencyMask(edge.virtualidx1, edge.virtualidx0, edge.localidx1) |= (1ULL << edge.localidx0);
+        adjacencyMask(edge.groupidx0, edge.groupidx1, edge.localidx0) |= (1ULL << edge.localidx1);
+        adjacencyMask(edge.groupidx1, edge.groupidx0, edge.localidx1) |= (1ULL << edge.localidx0);
 
         if (!covered)
         {
-            coverage |= (1ULL << edge.virtualidx0) | (1ULL << edge.virtualidx1);
+            coverage |= (1ULL << edge.groupidx0) | (1ULL << edge.groupidx1);
             if (static_cast<size_t>(__builtin_popcountll(coverage)) != target_simplex_label_count)
                 continue;
             covered = true;
@@ -390,8 +390,8 @@ FiltrationValueType SimplexEnumerator<DistMatType>::getGeometricPVSimplexWeight(
         if (edge.weight < lower_bound)
             continue;
 
-        const size_t g0 = edge.virtualidx0;
-        const size_t g1 = edge.virtualidx1;
+        const size_t g0 = edge.groupidx0;
+        const size_t g1 = edge.groupidx1;
         const size_t l0 = edge.localidx0;
         const size_t l1 = edge.localidx1;
 
@@ -429,7 +429,7 @@ FiltrationValueType SimplexEnumerator<DistMatType>::getGeometricPVSimplexWeight(
             return edge.weight;
     }
 
-    return std::numeric_limits<FiltrationValueType>::infinity();
+    return std::numeric_limits<double>::infinity();
 }
 
 template <typename DistMatType>
@@ -495,22 +495,22 @@ bool SimplexEnumerator<DistMatType>::findCliqueRecursive(const uint64_t* flatten
 }
 
 template <typename DistMatType>
-SimplexList SimplexEnumerator<DistMatType>::getGeometricCofacetList(const SimplexList& sorted_virtual_simplex_list,
-                                                                    const std::vector<size_t>& active_vertices,
-                                                                    const std::vector<std::unordered_set<size_t>>& virtual_vertex_indices,
-                                                                    const robin_hood::unordered_map<uint64_t, FiltrationValueType>& virtual_distance_hash,
+std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getGeometricCofacetList(const std::vector<std::pair<int64_t, double>>& sorted_quotient_simplex_list,
+                                                                    const std::vector<size_t>& active_labels,
+                                                                    const std::vector<std::unordered_set<size_t>>& pv_index_sets,
+                                                                    const robin_hood::unordered_map<uint64_t, double>& label_distance_hash,
                                                                     const size_t dim, const double maxeps, const int threadnum)
 {
     const int worker_count = threadnum > 0 ? threadnum : 1;
-    std::vector<SimplexList> thread_workspace(static_cast<size_t>(worker_count));
+    std::vector<std::vector<std::pair<int64_t, double>>> thread_workspace(static_cast<size_t>(worker_count));
     
     const size_t originalvtnum = dist_mat_.getVertexNumber();
-    const size_t npts = originalvtnum + virtual_vertex_indices.size(); // original vertex number + virtual vertex number
+    const size_t npts = originalvtnum + pv_index_sets.size(); // original vertex number + PV label count
 
-    std::vector<std::vector<size_t>> pv_rep_lists(virtual_vertex_indices.size());
-    for (size_t i = 0; i < virtual_vertex_indices.size(); ++i)
+    std::vector<std::vector<size_t>> pv_rep_lists(pv_index_sets.size());
+    for (size_t i = 0; i < pv_index_sets.size(); ++i)
     {
-        pv_rep_lists[i].assign(virtual_vertex_indices[i].begin(), virtual_vertex_indices[i].end());
+        pv_rep_lists[i].assign(pv_index_sets[i].begin(), pv_index_sets[i].end());
         std::sort(pv_rep_lists[i].begin(), pv_rep_lists[i].end());
     }
 
@@ -519,46 +519,46 @@ SimplexList SimplexEnumerator<DistMatType>::getGeometricCofacetList(const Simple
     omp_set_num_threads(worker_count);
 
 #pragma omp parallel for schedule(dynamic) num_threads(worker_count)
-    for (size_t i = 0; i < sorted_virtual_simplex_list.size(); ++i)
+    for (size_t i = 0; i < sorted_quotient_simplex_list.size(); ++i)
     {
         const int threadid = omp_get_thread_num();
         auto& thread_cofacets = thread_workspace[threadid];
         auto& ws = witness_workspaces[threadid];
 
-        const int64_t bindex = sorted_virtual_simplex_list[i].first;
-        const FiltrationValueType weight = sorted_virtual_simplex_list[i].second;
+        const int64_t bindex = sorted_quotient_simplex_list[i].first;
+        const double weight = sorted_quotient_simplex_list[i].second;
 
         SimplexUtility::getSimplexVerticesInPlace(binomial_table_, ws.facet_vertices, bindex, npts, dim);
         const auto& simplex_vertices = ws.facet_vertices;
 
         const size_t minfacetvt = simplex_vertices.back();
 
-        const auto iter = std::lower_bound(active_vertices.begin(), active_vertices.end(), minfacetvt);
+        const auto iter = std::lower_bound(active_labels.begin(), active_labels.end(), minfacetvt);
 
-        if (iter == active_vertices.end() || *iter != minfacetvt)
-            throw std::out_of_range("vertex not found in active vertex list");
+        if (iter == active_labels.end() || *iter != minfacetvt)
+            throw std::out_of_range("label not found in active label list");
 
-        const size_t vtpos = static_cast<size_t>(std::distance(active_vertices.begin(), iter));
+        const size_t vtpos = static_cast<size_t>(std::distance(active_labels.begin(), iter));
 
         if (vtpos == 0)
             continue;
 
-        const bool hasvirtual = (simplex_vertices.front() >= originalvtnum);
+        const bool has_pv_label = (simplex_vertices.front() >= originalvtnum);
         const size_t facet_label_count = dim + 1;
         bool witness_context_ready = false;
 
         for (size_t j = 0; j < vtpos; ++j)
         {
-            const size_t covt = active_vertices[j];
+            const size_t covt = active_labels[j];
 
-            FiltrationValueType cofacetweight = 0.0f;
+            double cofacetweight = 0.0;
 
-            if (hasvirtual)
+            if (has_pv_label)
             {
-                FiltrationValueType lower_bound = weight;
+                double lower_bound = weight;
                 for (const auto& vt : simplex_vertices)
                 {
-                    const FiltrationValueType d = SimplexUtility::getLabelDistance(virtual_distance_hash, covt, vt);
+                    const double d = SimplexUtility::getLabelDistance(label_distance_hash, covt, vt);
                     if (d > lower_bound)
                         lower_bound = d;
                 }
@@ -583,7 +583,7 @@ SimplexList SimplexEnumerator<DistMatType>::getGeometricCofacetList(const Simple
                 cofacetweight = weight;
                 for (const auto& vt : simplex_vertices)
                 {
-                    const FiltrationValueType distance = dist_mat_.getDistance(covt, vt);
+                    const double distance = dist_mat_.getDistance(covt, vt);
                     if (distance > cofacetweight)
                         cofacetweight = distance;
                 }

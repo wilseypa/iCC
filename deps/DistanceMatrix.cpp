@@ -3,7 +3,7 @@
 #include <omp.h>
 #include "DistanceMatrix.hpp"
 
-inline FiltrationValueType vectors_distance(const std::vector<double>& a, const std::vector<double>& b)
+inline double vectors_distance(const std::vector<double>& a, const std::vector<double>& b)
 {
 #ifdef _GLIBCXX_DEBUG
     if (a.size() != b.size())
@@ -21,7 +21,7 @@ inline FiltrationValueType vectors_distance(const std::vector<double>& a, const 
         const double diff = a[i] - b[i];
         squared_distance += diff * diff;
     }
-    return static_cast<FiltrationValueType>(std::sqrt(squared_distance));
+    return std::sqrt(squared_distance);
 }
 
 NormalDistMat::NormalDistMat(const std::vector<std::vector<double>>& point_cloud)
@@ -33,7 +33,7 @@ NormalDistMat::NormalDistMat(const std::vector<std::vector<double>>& point_cloud
     }
 
     vertex_count_ = point_cloud.size();
-    dist_mat_.assign((vertex_count_ * (vertex_count_ - 1)) / 2, 0.0f);
+    dist_mat_.assign((vertex_count_ * (vertex_count_ - 1)) / 2, 0.0);
 #pragma omp parallel for
     for (size_t i = 0; i < vertex_count_ - 1; i++)
     {

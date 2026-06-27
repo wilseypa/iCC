@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "robin_hood.h"
-#include "SimplexList.hpp"
 
 namespace SimplexUtility
 {
@@ -26,9 +25,12 @@ namespace SimplexUtility
             binom_table[i][0] = 1;
             for (size_t j = 1; j < (maxdim + 2); j++)
             {
-                binom_table[i][j] = binom_table[i - 1][j - 1] + binom_table[i - 1][j];
-                if (binom_table[i][j] < 0)
+                const int64_t upper_left = binom_table[i - 1][j - 1];
+                const int64_t upper = binom_table[i - 1][j];
+                if (upper_left > std::numeric_limits<int64_t>::max() - upper)
                     throw std::overflow_error("Binomial Overflow Error!");
+
+                binom_table[i][j] = upper_left + upper;
             }
         }
 
@@ -121,105 +123,28 @@ namespace SimplexUtility
     }
 
 
-    inline bool simplexEntryLess(const FiltrationValueType lhs_weight, const int64_t lhs_bindex,
-                                 const FiltrationValueType rhs_weight, const int64_t rhs_bindex)
+    inline void sortSimplexByWeightThenIndex(std::vector<std::pair<int64_t, double>>& simplex_list)
     {
-        return (lhs_weight < rhs_weight) || ((lhs_weight == rhs_weight) && (lhs_bindex < rhs_bindex));
-    }
+        auto sort_lambda = [](const auto& lhs, const auto& rhs)
+        { return (lhs.second < rhs.second) || ((lhs.second == rhs.second) && (lhs.first < rhs.first)); };
 
-    template <typename IndexType>
-    inline void sortSimplexByWeightThenIndexTyped(SimplexList& simplex_list)
-    {
-        const size_t n = simplex_list.size();
-        if (n < 2)
-            return;
-
-        std::vector<IndexType> order(n);
-        for (size_t i = 0; i < n; ++i)
-            order[i] = static_cast<IndexType>(i);
-
-        std::sort(order.begin(), order.end(),
-                  [&simplex_list](const IndexType lhs, const IndexType rhs)
-                  {
-                      const size_t li = static_cast<size_t>(lhs);
-                      const size_t ri = static_cast<size_t>(rhs);
-                      return simplexEntryLess(simplex_list.weights[li], simplex_list.bindices[li],
-                                              simplex_list.weights[ri], simplex_list.bindices[ri]);
-                  });
-
-        std::vector<IndexType> old_to_new(n);
-        for (size_t new_pos = 0; new_pos < n; ++new_pos)
-            old_to_new[static_cast<size_t>(order[new_pos])] = static_cast<IndexType>(new_pos);
-
-        std::vector<IndexType>().swap(order);
-
-        for (size_t i = 0; i < n; ++i)
-        {
-            while (static_cast<size_t>(old_to_new[i]) != i)
-            {
-                const size_t next = static_cast<size_t>(old_to_new[i]);
-                std::swap(simplex_list.bindices[i], simplex_list.bindices[next]);
-                std::swap(simplex_list.weights[i], simplex_list.weights[next]);
-                std::swap(old_to_new[i], old_to_new[next]);
-            }
-        }
-    }
-
-    inline void sortSimplexByWeightThenIndex(SimplexList& simplex_list)
-    {
-        if (simplex_list.size() <= static_cast<size_t>(std::numeric_limits<uint32_t>::max()))
-            sortSimplexByWeightThenIndexTyped<uint32_t>(simplex_list);
-        else
-            sortSimplexByWeightThenIndexTyped<size_t>(simplex_list);
+        std::sort(simplex_list.begin(), simplex_list.end(), sort_lambda);
 
         return;
     }
 
-    inline SimplexList mergeSortedSimplexLists(const SimplexList& lhs, const SimplexList& rhs)
+    template <typename SimplexPair>
+    inline std::vector<SimplexPair> sortAndMergeSimplexChunks(std::vector<std::vector<SimplexPair>>& simplex_chunks, int threadnum)
     {
-        SimplexList merged;
-        merged.reserve(lhs.size() + rhs.size());
+        const auto sort_lambda = [](const auto& lhs, const auto& rhs)
+        { return (lhs.second < rhs.second) || ((lhs.second == rhs.second) && (lhs.first < rhs.first)); };
 
-        size_t li = 0;
-        size_t ri = 0;
-
-        while (li < lhs.size() && ri < rhs.size())
-        {
-            if (simplexEntryLess(lhs.weights[li], lhs.bindices[li], rhs.weights[ri], rhs.bindices[ri]))
-            {
-                merged.emplace_back(lhs.bindices[li], lhs.weights[li]);
-                ++li;
-            }
-            else
-            {
-                merged.emplace_back(rhs.bindices[ri], rhs.weights[ri]);
-                ++ri;
-            }
-        }
-
-        while (li < lhs.size())
-        {
-            merged.emplace_back(lhs.bindices[li], lhs.weights[li]);
-            ++li;
-        }
-
-        while (ri < rhs.size())
-        {
-            merged.emplace_back(rhs.bindices[ri], rhs.weights[ri]);
-            ++ri;
-        }
-
-        return merged;
-    }
-
-    inline SimplexList sortAndMergeSimplexChunks(std::vector<SimplexList>& simplex_chunks, int threadnum)
-    {
         const int worker_count = threadnum > 0 ? threadnum : 1;
 
 #pragma omp parallel for schedule(dynamic) num_threads(worker_count)
         for (size_t i = 0; i < simplex_chunks.size(); ++i)
         {
-            sortSimplexByWeightThenIndex(simplex_chunks[i]);
+            std::sort(simplex_chunks[i].begin(), simplex_chunks[i].end(), sort_lambda);
         }
 
         size_t total_size = 0;
@@ -238,16 +163,25 @@ namespace SimplexUtility
         if (total_size == 0)
             return {};
 
-        SimplexList simplex_list = std::move(simplex_chunks[first_non_empty_chunk_index]);
-        SimplexList().swap(simplex_chunks[first_non_empty_chunk_index]);
+        std::vector<SimplexPair> simplex_list = std::move(simplex_chunks[first_non_empty_chunk_index]);
+        std::vector<SimplexPair>().swap(simplex_chunks[first_non_empty_chunk_index]);
 
         for (size_t i = first_non_empty_chunk_index + 1; i < simplex_chunks.size(); ++i)
         {
             auto& chunk = simplex_chunks[i];
             if (chunk.empty()) continue;
 
-            simplex_list = mergeSortedSimplexLists(simplex_list, chunk);
-            SimplexList().swap(chunk);
+            const size_t range_begin = simplex_list.size();
+            simplex_list.insert(simplex_list.end(),
+                                std::make_move_iterator(chunk.begin()),
+                                std::make_move_iterator(chunk.end()));
+
+            std::vector<SimplexPair>().swap(chunk);
+
+            std::inplace_merge(simplex_list.begin(),
+                               simplex_list.begin() + static_cast<std::ptrdiff_t>(range_begin),
+                               simplex_list.end(),
+                               sort_lambda);
         }
 
         return simplex_list;
@@ -301,7 +235,7 @@ namespace SimplexUtility
         return;
     }
 
-    inline robin_hood::unordered_map<int64_t, size_t> getActiveEdgeIndexHashTable(const std::vector<std::vector<int64_t>>& binomial_table, const SimplexList& sorted_edge, const size_t npts)
+    inline robin_hood::unordered_map<int64_t, size_t> getActiveEdgeIndexHashTable(const std::vector<std::vector<int64_t>>& binomial_table, const std::vector<std::pair<int64_t, double>>& sorted_edge, const size_t npts)
     {
         robin_hood::unordered_map<int64_t, size_t> active_edge_index_hash;
         active_edge_index_hash.reserve(sorted_edge.size());
@@ -330,7 +264,7 @@ namespace SimplexUtility
         return active_edge_index_hash;
     }
 
-    inline robin_hood::unordered_map<int64_t, size_t> getActiveSimplexIndexHashTable(const std::vector<int64_t>& graph_match_list, const SimplexList& facet_list)
+    inline robin_hood::unordered_map<int64_t, size_t> getActiveSimplexIndexHashTable(const std::vector<int64_t>& graph_match_list, const std::vector<std::pair<int64_t, double>>& facet_list)
     {
         robin_hood::unordered_map<int64_t, size_t> active_facet_index_hash;
         active_facet_index_hash.reserve(facet_list.size());
@@ -349,7 +283,7 @@ namespace SimplexUtility
         return active_facet_index_hash;
     }
 
-    inline robin_hood::unordered_map<int64_t, size_t> getSimplexIndexHashTable(const SimplexList& facet_list)
+    inline robin_hood::unordered_map<int64_t, size_t> getSimplexIndexHashTable(const std::vector<std::pair<int64_t, double>>& facet_list)
     {
         robin_hood::unordered_map<int64_t, size_t> facet_index_hash;
         facet_index_hash.reserve(facet_list.size());
@@ -363,38 +297,43 @@ namespace SimplexUtility
         return facet_index_hash;
     }
 
-    inline FiltrationValueType getLabelDistance(const robin_hood::unordered_map<uint64_t, FiltrationValueType>& virtual_distance_hash_table, size_t i, size_t j)
+    inline double getLabelDistance(const robin_hood::unordered_map<uint64_t, double>& label_distance_hash_table, size_t i, size_t j)
     {
         if (i > j)
             std::swap(i, j);
 
         const uint64_t key = (static_cast<uint64_t>(i) << 32) | static_cast<uint64_t>(j);
-        const auto it = virtual_distance_hash_table.find(key);
-        return (it != virtual_distance_hash_table.end()) ? it->second : -1.0f;
+        const auto it = label_distance_hash_table.find(key);
+        return (it != label_distance_hash_table.end()) ? it->second : -1.0;
     }
 
-    inline void updateBinomialTable(std::vector<std::vector<int64_t>>& binomial_table, const size_t originalvtnum, const size_t virtualvtnum, const size_t maxdim)
+    inline void updateBinomialTable(std::vector<std::vector<int64_t>>& binomial_table, const size_t originalvtnum, const size_t pvnum, const size_t maxdim)
     {
-        size_t currentvtnum = binomial_table.size() - 1; // current vertex number in binomial table
+        const size_t currentvtnum = binomial_table.size() - 1; // current vertex number in binomial table
+        const size_t targetvtnum = originalvtnum + pvnum;
 
-        if (currentvtnum >= originalvtnum + virtualvtnum)
+        if (currentvtnum >= targetvtnum)
             return;
 
-        for (size_t i = 0; i < virtualvtnum; i++)
+        const size_t rows_to_add = targetvtnum - currentvtnum;
+        for (size_t i = 0; i < rows_to_add; i++)
         {
             binomial_table.emplace_back(maxdim + 1 + 1, 0);
         }
 
         // std::cout<<"binomial table size = "<<binomial_table.size()<<'\n';
 
-        for (size_t i = 0; i < virtualvtnum; i++)
+        for (size_t row = currentvtnum + 1; row <= targetvtnum; row++)
         {
-            binomial_table[currentvtnum + 1 + i][0] = 1;
+            binomial_table[row][0] = 1;
             for (size_t j = 1; j < (maxdim + 1 + 1); j++)
             {
-                binomial_table[currentvtnum + 1 + i][j] = binomial_table[currentvtnum + 1 + i - 1][j - 1] + binomial_table[currentvtnum + 1 + i - 1][j];
-                if (binomial_table[i][j] < 0)
+                const int64_t upper_left = binomial_table[row - 1][j - 1];
+                const int64_t upper = binomial_table[row - 1][j];
+                if (upper_left > std::numeric_limits<int64_t>::max() - upper)
                     throw std::overflow_error("Binomial Overflow Error!");
+
+                binomial_table[row][j] = upper_left + upper;
             }
         }
 

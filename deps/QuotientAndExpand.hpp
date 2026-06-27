@@ -1,15 +1,18 @@
 #pragma once
 
+#include <cstdint>
+#include <numeric>
 #include <unordered_set>
-
 #include <algorithm>
+#include <utility>
+#include <vector>
 
 #include "robin_hood.h"
 
 #include "DistanceMatrix.hpp"
 #include "BipartiteGraph.hpp"
 #include "MatchingContext.hpp"
-#include "SimplexList.hpp"
+#include "SimplexUtility.hpp"
 
 template <typename DistMatType>
 class QuotientAndExpand
@@ -26,7 +29,7 @@ public:
     void runExpand(const std::vector<std::unordered_set<size_t>>& pv_index_sets, const size_t maxdim, const double maxeps, const int thread_number);
 
 private:
-    static constexpr int MAX_SIZE_ = 64; // virtual vertex size cap
+    static constexpr int MAX_SIZE_ = 64; // PV size cap
 
     DistMatType& dist_mat_;
     std::vector<std::vector<int64_t>>& binomial_table_;
@@ -100,6 +103,12 @@ private:
         std::unordered_set<size_t> flat_index_set;
     };
 
+    struct QuotientEdgeData
+    {
+        robin_hood::unordered_map<uint64_t, double> label_distance_hash;
+        std::vector<std::pair<int64_t, double>> sorted_edges;
+    };
+
     std::vector<std::unordered_set<size_t>> runWindow(const WindowState& win_state, const size_t maxdim, const double eps_lo, const double eps_hi,
                                                       const int thread_number, const bool collect_pv, const bool verbose);
 
@@ -119,21 +128,20 @@ private:
                                                                    const size_t origin_vt_num,
                                                                    const bool verbose);
 
-    FiltrationValueType computeVirtualDistance(const size_t i, const size_t j, const std::vector<std::unordered_set<size_t>>& pv_index_sets);
+    double computeLabelDistance(const size_t i, const size_t j, const std::vector<std::unordered_set<size_t>>& pv_index_sets);
 
-    robin_hood::unordered_map<uint64_t, FiltrationValueType> getVirtualDistanceHashTable(const std::vector<size_t>& active_vertices, const std::vector<std::unordered_set<size_t>>& pv_index_sets, int threadnum);
+    QuotientEdgeData buildQuotientEdges(const std::vector<size_t>& active_labels,
+                                         const std::vector<std::unordered_set<size_t>>& pv_index_sets,
+                                         const double maxeps, int threadnum);
 
-    SimplexList getSortedVirtualEdgeList(const std::vector<size_t>& active_vertices,
-                                         const robin_hood::unordered_map<uint64_t, FiltrationValueType>& virtual_distance_hash_table, const double maxeps, int threadnum);
-
-    robin_hood::unordered_map<int64_t, size_t> getVirtualActiveEdgeIndexHashTable(const SimplexList& sorted_virtual_edge, const size_t pvnum);
+    robin_hood::unordered_map<int64_t, size_t> getQuotientActiveEdgeIndexHashTable(const std::vector<std::pair<int64_t, double>>& sorted_quotient_edge, const size_t pvnum);
 
     //legacy QE
     std::vector<std::unordered_set<size_t>> getPVIndexSets(const size_t maxdim, const double initeps, const int thread_number);
 
     std::vector<std::unordered_set<size_t>> trimIndexSets(std::vector<std::unordered_set<size_t>>& pv_support_vertex_sets, const double initeps);
 
-    std::vector<size_t> getActiveVertexIndices(const std::vector<std::unordered_set<size_t>>& pv_index_sets); // list of active indices to construct edges and cofaces
+    std::vector<size_t> getActiveLabelIndices(const std::vector<std::unordered_set<size_t>>& pv_index_sets); // labels used to construct quotient edges and cofacets
 };
 
 extern template class QuotientAndExpand<NormalDistMat>;
