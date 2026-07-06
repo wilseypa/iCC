@@ -111,7 +111,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
 
     const size_t original_vt_num = win_state.original_vertex_number;
     const size_t pv_num = win_state.pv_flat_index_set_list.size();
-    const size_t npts = original_vt_num + pv_num;
+    const size_t total_label_count = original_vt_num + pv_num;
 
     SimplexUtility::updateBinomialTable(binomial_table_, original_vt_num, pv_num, maxdim);
 
@@ -155,7 +155,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
     };
 
     const auto printSimplexInfo =
-        [this, npts, &printIndexList](const char* prefix, const int64_t simplex_bindex, const size_t simplex_dim)
+        [this, total_label_count, &printIndexList](const char* prefix, const int64_t simplex_bindex, const size_t simplex_dim)
     {
         std::cout << "    " << prefix << " labels: ";
         if (simplex_bindex < 0)
@@ -164,7 +164,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
             return;
         }
 
-        const auto simplex_labels = SimplexUtility::getSimplexVertices(binomial_table_, simplex_bindex, npts, simplex_dim);
+        const auto simplex_labels = SimplexUtility::getSimplexVertices(binomial_table_, simplex_bindex, total_label_count, simplex_dim);
         printIndexList(simplex_labels);
         std::cout << '\n';
     };
@@ -219,7 +219,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
         auto cofacet_hash = SimplexUtility::getSimplexIndexHashTable(sorted_quotient_cofacet);
 
         MatchingContext matching_context(bi_graph, binomial_table_, sorted_quotient_simplex, sorted_quotient_cofacet,
-                                         active_simplex_hash, cofacet_hash, npts, dim);
+                                         active_simplex_hash, cofacet_hash, total_label_count, dim);
 
 
         if (collect_pv)
@@ -442,13 +442,13 @@ void QuotientAndExpand<DistMatType>::collectProtectedIndices(const MatchingConte
                                                              std::unordered_set<size_t>& protected_indices)
 {
     const size_t origin_vt_num = dist_mat_.getVertexNumber();
-    const size_t npts = matching_context.npts;
+    const size_t total_label_count = matching_context.total_label_count;
     const size_t facet_dim = matching_context.dim - 1;
 
     for (const auto protected_facet_list_idx : match_support_info.protected_facet_list_indices)
     {
         const auto facet_bindex = matching_context.sorted_facets[protected_facet_list_idx].first;
-        const auto facet_vertices = SimplexUtility::getSimplexVertices(matching_context.binomial_table, facet_bindex, npts, facet_dim);
+        const auto facet_vertices = SimplexUtility::getSimplexVertices(matching_context.binomial_table, facet_bindex, total_label_count, facet_dim);
 
         for (const auto vertex : facet_vertices)
         {
@@ -468,7 +468,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getNonMe
     std::vector<std::unordered_set<size_t>> pv_support_label_sets;
     pv_support_label_sets.reserve(raw_pv_support_cofacet_indices.size());
 
-    const size_t npts = matching_context.npts;
+    const size_t total_label_count = matching_context.total_label_count;
     const size_t dim = matching_context.dim;
 
     for (const auto& pv_support : raw_pv_support_cofacet_indices)
@@ -482,7 +482,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getNonMe
         for (auto cofacetidx : pv_support)
         {
             auto bindex = matching_context.sorted_cofacets[cofacetidx].first;
-            auto simplex_vertices = SimplexUtility::getSimplexVertices(matching_context.binomial_table, bindex, npts, dim);
+            auto simplex_vertices = SimplexUtility::getSimplexVertices(matching_context.binomial_table, bindex, total_label_count, dim);
 
             if (simplex_vertices.front() >= origin_vt_num)
             {
@@ -674,7 +674,7 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
 {
     const size_t originalvtnum = dist_mat_.getVertexNumber(); // number of original vertices
     const size_t pvnum = pv_index_sets.size();
-    const size_t npts = originalvtnum + pvnum; // original vertices + PV labels
+    const size_t total_label_count = originalvtnum + pvnum;
 
     std::cout << "***********PV num = " << pvnum << "*****************" << '\n';
 
@@ -709,7 +709,7 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
         bi_graph.updateDimensionImplicit(sorted_quotient_cofacet.size(), sorted_quotient_simplex.size());
 
         MatchingContext matching_context(bi_graph, binomial_table_, sorted_quotient_simplex, sorted_quotient_cofacet,
-                                         active_facet_hash, cofacet_hash, npts, dim);
+                                         active_facet_hash, cofacet_hash, total_label_count, dim);
 
         std::cout << "in expand phase (implicit). dim = " << dim
                   << "  cofacet num = " << sorted_quotient_cofacet.size()

@@ -75,7 +75,7 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context,
     auto u = bi_graph.unodes;
     auto v = bi_graph.vnodes;
     auto dim = matching_context.dim;    //interface dim
-    auto npts = matching_context.npts;    //number of points: original + virtual
+    auto total_label_count = matching_context.total_label_count;
 
     //init workspace
     cofacet_indices_.reserve(dim < 5 ? 32 : 64);
@@ -119,7 +119,7 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context,
         //covert list index to graph index
         size_t facetgraphidx = facet_list_index + u;
 
-        SimplexUtility::getCofacetListIndicesInPlace(binom_table, cofacet_hash, cofacet_indices_, vertex_workspace_, facetbindex, npts, dim-1);
+        SimplexUtility::getCofacetListIndicesInPlace(binom_table, cofacet_hash, cofacet_indices_, vertex_workspace_, facetbindex, total_label_count, dim-1);
 
         if (cofacet_indices_.empty())
         {
@@ -135,7 +135,7 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context,
 
         if (bi_graph.match_list[mincofacetidx] < 0)
         {
-            SimplexUtility::getFacetListIndicesInPlace(binom_table, facet_hash, facet_indices_, vertex_workspace_, cofacet_list[mincofacetidx].first, npts, dim);
+            SimplexUtility::getFacetListIndicesInPlace(binom_table, facet_hash, facet_indices_, vertex_workspace_, cofacet_list[mincofacetidx].first, total_label_count, dim);
             
             if (!facet_indices_.empty())
             {
@@ -158,13 +158,13 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context,
                         continue;
                     }
 
-                    // printGhostPair(binom_table, npts, dim, facetweight, cofacetweight, facetbindex, cofacet_list[mincofacetidx].first);
+                    // printGhostPair(binom_table, total_label_count, dim, facetweight, cofacetweight, facetbindex, cofacet_list[mincofacetidx].first);
                 }
             }
         }
 
         const int64_t terminalcofacet = implicitFacetCompressedAugPath(binom_table, bi_graph, facet_list,
-                                                                       cofacet_hash, cofacet_indices_, npts, dim);
+                                                                       cofacet_hash, cofacet_indices_, total_label_count, dim);
 
         if (terminalcofacet < 0)
         {
@@ -211,7 +211,7 @@ MaximumMorseMatching::MatchSupportInfo MaximumMorseMatching::implicitMatchAndCol
     auto u = bi_graph.unodes;
     auto v = bi_graph.vnodes;
     auto dim = matching_context.dim;    //interface dim (cofacet dim)
-    auto npts = matching_context.npts;  //total vertex count
+    auto total_label_count = matching_context.total_label_count;
 
     // init workspace (same pattern as implicitMatch)
     cofacet_indices_.reserve(dim < 5 ? 32 : 64);
@@ -264,7 +264,7 @@ MaximumMorseMatching::MatchSupportInfo MaximumMorseMatching::implicitMatchAndCol
 
         // compute immediate cofacets of this facet (list indices)
         SimplexUtility::getCofacetListIndicesInPlace(binom_table, cofacet_hash, cofacet_indices_, vertex_workspace_,
-                                                     facetbindex, npts, dim - 1);
+                                                     facetbindex, total_label_count, dim - 1);
 
         //if active and have no cofacets 
         if (cofacet_indices_.empty())
@@ -282,7 +282,7 @@ MaximumMorseMatching::MatchSupportInfo MaximumMorseMatching::implicitMatchAndCol
         if (bi_graph.match_list[mincofacetidx] < 0)
         {
             SimplexUtility::getFacetListIndicesInPlace(binom_table, facet_hash, facet_indices_, vertex_workspace_,
-                                                       cofacet_list[mincofacetidx].first, npts, dim);
+                                                       cofacet_list[mincofacetidx].first, total_label_count, dim);
 
             if (!facet_indices_.empty())
             {
@@ -301,13 +301,13 @@ MaximumMorseMatching::MatchSupportInfo MaximumMorseMatching::implicitMatchAndCol
                         continue;
                     }
 
-                    // printGhostPair(binom_table, npts, dim, facetweight, cofacetweight, facetbindex, cofacet_list[mincofacetidx].first);
+                    // printGhostPair(binom_table, total_label_count, dim, facetweight, cofacetweight, facetbindex, cofacet_list[mincofacetidx].first);
                 }
             }
         }
 
         const int64_t terminalcofacet = implicitFacetCompressedAugPath(binom_table, bi_graph, facet_list,
-                                                                       cofacet_hash, cofacet_indices_, npts, dim);
+                                                                       cofacet_hash, cofacet_indices_, total_label_count, dim);
 
         if (terminalcofacet < 0)
         {
@@ -621,7 +621,7 @@ std::vector<size_t> MaximumMorseMatching::collectReducedColumnSupport(const Matc
     auto& bi_graph = matching_context.graph;
     const size_t u = bi_graph.unodes;
     const size_t dim = matching_context.dim;
-    const size_t npts = matching_context.npts;
+    const size_t total_label_count = matching_context.total_label_count;
 
     facet_indices_.clear();
 
@@ -634,7 +634,7 @@ std::vector<size_t> MaximumMorseMatching::collectReducedColumnSupport(const Matc
     // initialize with boundary of terminal cofacet
     SimplexUtility::getFacetListIndicesInPlace(
         binom_table, facet_hash, facet_indices_, vertex_workspace_,
-        cofacet_list[terminalcofacet].first, npts, dim);
+        cofacet_list[terminalcofacet].first, total_label_count, dim);
 
     for (size_t fi : facet_indices_) facet_queue.push(fi);  //list indices
 
@@ -688,14 +688,14 @@ void MaximumMorseMatching::enqueueReducedCofacetBoundaryTail(const MatchingConte
     auto& bi_graph = matching_context.graph;
     const size_t u = bi_graph.unodes;
     const size_t dim = matching_context.dim;
-    const size_t npts = matching_context.npts;
+    const size_t total_label_count = matching_context.total_label_count;
 
     SimplexUtility::getFacetListIndicesInPlace(binom_table,
                                                facet_hash,
                                                facet_indices_,
                                                vertex_workspace_,
                                                cofacet_list[cofacet_list_index].first,
-                                               npts,
+                                               total_label_count,
                                                dim);
 
     const auto max_facet_iter = std::max_element(facet_indices_.begin(), facet_indices_.end());

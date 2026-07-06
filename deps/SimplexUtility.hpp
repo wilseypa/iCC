@@ -166,6 +166,11 @@ namespace SimplexUtility
         std::vector<SimplexPair> simplex_list = std::move(simplex_chunks[first_non_empty_chunk_index]);
         std::vector<SimplexPair>().swap(simplex_chunks[first_non_empty_chunk_index]);
 
+        // reserve the exact final size once. without this, the inserts below grow the
+        // vector geometrically, leaving up to 2x capacity overhang on the final list,
+        // which persists through the whole matching phase of this dimension
+        simplex_list.reserve(total_size);
+
         for (size_t i = first_non_empty_chunk_index + 1; i < simplex_chunks.size(); ++i)
         {
             auto& chunk = simplex_chunks[i];
@@ -369,38 +374,46 @@ namespace SimplexUtility
 
 
     inline void getCofacetListIndicesInPlace(const std::vector<std::vector<int64_t>>& binomial_table, const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash_table, 
-                                  std::vector<size_t>& cofacet_indices, std::vector<size_t>& facet_vertices_workspace, int64_t facetbidx,  size_t npts, size_t facetdim)
+                                  std::vector<size_t>& cofacet_indices, std::vector<size_t>& facet_vertices_workspace, int64_t facetbidx,  size_t total_label_ct, size_t facetdim)
     {
         cofacet_indices.clear();
 
-        getSimplexVerticesInPlace(binomial_table, facet_vertices_workspace, facetbidx, npts, facetdim);
+        getSimplexVerticesInPlace(binomial_table, facet_vertices_workspace, facetbidx, total_label_ct, facetdim);
 
-        const size_t maxvt = facet_vertices_workspace.front();
-        const size_t minvt = facet_vertices_workspace.back();
-
-        //range skipping
-        for (size_t covt = 0; covt < minvt; ++covt)
+        const size_t m = facet_vertices_workspace.size();
+        const auto appendIfActive = [&](const int64_t cofacetbindex)
         {
-            int64_t cofacetbindex = computeCofacetBindex(binomial_table, facet_vertices_workspace, covt, facetdim + 1);
             auto it = cofacet_hash_table.find(cofacetbindex);
-            if (it != cofacet_hash_table.end()) cofacet_indices.push_back(it -> second);
+            if (it != cofacet_hash_table.end()) cofacet_indices.push_back(it->second);
+        };
+
+        int64_t base = getBinomialIndex(binomial_table, facet_vertices_workspace, 1);
+
+        // co-vertex below the minimum facet vertex occupy slot 0; all facet vertices are already shifted.
+        for (size_t covt = 0; covt < facet_vertices_workspace.back(); ++covt)
+        {
+            appendIfActive(base + binomial_table[covt][1]);
         }
 
-        for (size_t covt = minvt + 1; covt < maxvt; ++covt)
+        for (size_t i = m - 1; i > 0; --i)
         {
-            if (!std::binary_search(facet_vertices_workspace.begin(), facet_vertices_workspace.end(), covt, std::greater<size_t>()))    //descending order
+            const size_t vt = facet_vertices_workspace[i];
+            const size_t pos = m - 1 - i;
+            base += binomial_table[vt][pos + 1] - binomial_table[vt][pos + 1 + 1];
+
+            // gap between vt == facet_vertices_workspace[i] and facet_vertices_workspace[i - 1]
+            // ascending order of covt
+            for (size_t covt = vt + 1; covt < facet_vertices_workspace[i - 1]; ++covt)
             {
-                int64_t cofacetbindex = computeCofacetBindex(binomial_table, facet_vertices_workspace, covt, facetdim + 1);
-                auto it = cofacet_hash_table.find(cofacetbindex);
-                if (it != cofacet_hash_table.end()) cofacet_indices.push_back(it->second);
+                appendIfActive(base + binomial_table[covt][pos + 1]);
             }
         }
 
-        for (size_t covt = maxvt + 1; covt < npts; ++covt)
+        const size_t maxvt = facet_vertices_workspace.front();
+        base += binomial_table[maxvt][m] - binomial_table[maxvt][m + 1];
+        for (size_t covt = maxvt + 1; covt < total_label_ct; ++covt)
         {
-            int64_t cofacetbindex = computeCofacetBindex(binomial_table, facet_vertices_workspace, covt, facetdim + 1);
-            auto it = cofacet_hash_table.find(cofacetbindex);
-            if (it != cofacet_hash_table.end()) cofacet_indices.push_back(it -> second);
+            appendIfActive(base + binomial_table[covt][m + 1]);
         }
 
         return;

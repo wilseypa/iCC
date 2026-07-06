@@ -20,7 +20,7 @@ namespace    //for explicit/legacy
 struct MatchingContext
 {
     //default values for explicit/legacy implementation
-    const size_t npts = 0;    //total number of vertices (original + virtual)
+    const size_t total_label_count = 0;    //total labels: original vertices + virtual/PV labels
     const size_t dim = 0;    //current dim of interface (cofacet dim)
 
     BipartiteGraph& graph;
@@ -40,7 +40,9 @@ struct MatchingContext
                      std::vector<std::pair<int64_t, double>>& sorted_cofacets,
                      const robin_hood::unordered_map<int64_t, size_t>& facet_hash = emptyMap(),
                      const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash = emptyMap())
-    : graph(bi_graph),
+    : total_label_count(0),
+      dim(0),
+      graph(bi_graph),
       binomial_table(binomial_table),
       sorted_facets(sorted_facets),
       sorted_cofacets(sorted_cofacets),
@@ -54,16 +56,16 @@ struct MatchingContext
                      std::vector<std::pair<int64_t, double>>& sorted_cofacets,
                      const robin_hood::unordered_map<int64_t, size_t>& facet_hash,
                      const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash,
-                     const size_t num_points,
+                     const size_t total_label_count_in,
                      const size_t current_dim)
-    : graph(bi_graph),
+    : total_label_count(total_label_count_in),
+      dim(current_dim),
+      graph(bi_graph),
       binomial_table(binomial_table),
       sorted_facets(sorted_facets),
       sorted_cofacets(sorted_cofacets),
       facet_bindex_to_list_index(facet_hash),
-      cofacet_bindex_to_list_index(cofacet_hash),
-      npts(num_points),
-      dim(current_dim)
+      cofacet_bindex_to_list_index(cofacet_hash)
       {}
     
 };
