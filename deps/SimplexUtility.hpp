@@ -389,7 +389,7 @@ namespace SimplexUtility
 
         int64_t base = getBinomialIndex(binomial_table, facet_vertices_workspace, 1);
 
-        // co-vertex below the minimum facet vertex occupy slot 0; all facet vertices are already shifted.
+        // Co-vertices below the minimum facet vertex occupy slot 1; all facet vertices are shifted.
         for (size_t covt = 0; covt < facet_vertices_workspace.back(); ++covt)
         {
             appendIfActive(base + binomial_table[covt][1]);
@@ -405,7 +405,7 @@ namespace SimplexUtility
             // ascending order of covt
             for (size_t covt = vt + 1; covt < facet_vertices_workspace[i - 1]; ++covt)
             {
-                appendIfActive(base + binomial_table[covt][pos + 1]);
+                appendIfActive(base + binomial_table[covt][pos + 1 + 1]);
             }
         }
 
