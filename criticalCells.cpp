@@ -302,7 +302,7 @@ void CritCells<ComplexType, DistMatType>::morseVRPH(size_t maxdim, double maxeps
     //get 2-simplices
     auto sorted_cofacet = simplex_enumerator.getSortedVRCofacets(sorted_simplex, 1, maxeps, threadnumber);
 
-    std::vector<std::pair<double, double>> dim_persistent_pairs;
+    std::vector<MaximumMorseMatching::PersistentPairInfo> dim_persistent_pairs;
     
     //use the implicit graph constructor
     BipartiteGraph bi_graph(1, 1, ImplicitConstructionTag{});
@@ -332,9 +332,9 @@ void CritCells<ComplexType, DistMatType>::morseVRPH(size_t maxdim, double maxeps
         }
         else
         {
-            for (const auto& [facetweight, cofacetweight] : dim_persistent_pairs)
+            for (const auto& pair_info : dim_persistent_pairs)
             {
-                std::cout << "  (" << facetweight << ", " << cofacetweight << ")" << std::endl;
+                std::cout << "  (" << pair_info.facet_weight << ", " << pair_info.cofacet_weight << ")" << std::endl;
             }
         }
 

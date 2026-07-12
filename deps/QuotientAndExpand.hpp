@@ -12,7 +12,7 @@
 #include "DistanceMatrix.hpp"
 #include "BipartiteGraph.hpp"
 #include "MatchingContext.hpp"
-#include "SimplexUtility.hpp"
+#include "MaximumMorseMatching.hpp"
 
 template <typename DistMatType>
 class QuotientAndExpand
@@ -115,6 +115,8 @@ private:
     std::vector<SelectedPV> trimPVCandidates(const WindowState& win_state, const std::vector<std::unordered_set<size_t>>& raw_label_sets, const double eps_hi, const double pv_cap_scale);
 
     std::unordered_set<size_t> flattenLabelSet(const WindowState& win_state, const std::unordered_set<size_t>& raw_label_set);
+
+    double getMaxPairwiseDistance(const std::unordered_set<size_t>& index_set) const;
 
     void rebuildWindowState(WindowState& win_state, std::vector<SelectedPV>&& new_pv_list);
 

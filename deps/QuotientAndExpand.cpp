@@ -10,8 +10,100 @@
 #include "MaximumMorseMatching.hpp"
 #include "QuotientAndExpand.hpp"
 
-template class QuotientAndExpand<NormalDistMat>;
-// template class QuotientAndExpand<SparseDistMat>;
+namespace
+{
+    void printSimplexLabels(const std::vector<std::vector<int64_t>>& binomial_table,
+                            const char* prefix,
+                            const int64_t simplex_bindex,
+                            const size_t total_label_count,
+                            const size_t simplex_dim)
+    {
+        std::cout << "    " << prefix << " labels: ";
+        if (simplex_bindex < 0)
+        {
+            std::cout << "(none)\n";
+            return;
+        }
+
+        const auto simplex_labels = SimplexUtility::getSimplexVertices(
+            binomial_table, simplex_bindex, total_label_count, simplex_dim);
+
+        if (simplex_labels.empty())
+        {
+            std::cout << "(empty)";
+        }
+        else
+        {
+            for (size_t i = 0; i < simplex_labels.size(); ++i)
+            {
+                if (i > 0) std::cout << ' ';
+                std::cout << simplex_labels[i];
+            }
+        }
+        std::cout << '\n';
+    }
+
+    void printPersistentPairs(
+        const std::vector<MaximumMorseMatching::PersistentPairInfo>& persistent_pairs,
+        const std::vector<std::vector<int64_t>>& binomial_table,
+        const double eps_lo,
+        const size_t dim,
+        const size_t maxdim,
+        const size_t total_label_count,
+        const bool verbose)
+    {
+        bool printed_any = false;
+        for (const auto& pair_info : persistent_pairs)
+        {
+            const double facetweight = pair_info.facet_weight;
+            const double cofacetweight = pair_info.cofacet_weight;
+            if (!(cofacetweight > eps_lo || cofacetweight < 0)) continue;
+
+            if (verbose)
+            {
+                std::cout << "  (" << facetweight << ", " << cofacetweight << ")" << std::endl;
+
+                if (dim == maxdim)
+                {
+                    printSimplexLabels(binomial_table, "birth facet", pair_info.facet_bindex,
+                                       total_label_count, dim - 1);
+                    printSimplexLabels(binomial_table, "death cofacet", pair_info.cofacet_bindex,
+                                       total_label_count, dim);
+                }
+            }
+            else
+            {
+                std::cout << dim << ", " << facetweight << ", " << cofacetweight << '\n';
+            }
+
+            printed_any = true;
+        }
+
+        if (verbose && !printed_any)
+            std::cout << "  (no new interval or surviving interval from previous eps range)" << std::endl;
+    }
+}
+
+template <typename DistMatType>
+double QuotientAndExpand<DistMatType>::getMaxPairwiseDistance(const std::unordered_set<size_t>& index_set) const
+{
+    if (index_set.size() < 2)
+        return 0.0;
+
+    double maxdist = 0.0;
+    for (auto first = index_set.begin(); first != index_set.end(); ++first)
+    {
+        auto second = first;
+        ++second;
+        for (; second != index_set.end(); ++second)
+        {
+            const double distance = dist_mat_.getDistance(*first, *second);
+            maxdist = std::max(maxdist, distance);
+        }
+    }
+
+    return maxdist;
+}
 
 template <typename DistMatType>
 void QuotientAndExpand<DistMatType>::runPiecewisePH(const std::vector<double>& eps_breaks, const size_t maxdim, const int threadnumber, const double pv_cap_scale, const bool verbose)
@@ -42,30 +134,10 @@ void QuotientAndExpand<DistMatType>::runPiecewisePH(const std::vector<double>& e
 
         if (verbose)
         {
-            const auto getMaxPairwiseDistance = [this](const std::unordered_set<size_t>& index_set)
-            {
-                if (index_set.size() < 2)
-                    return 0.0;
-
-                double maxdist = 0.0;
-                for (auto first = index_set.begin(); first != index_set.end(); ++first)
-                {
-                    auto second = first;
-                    ++second;
-                    for (; second != index_set.end(); ++second)
-                    {
-                        const double distance = dist_mat_.getDistance(*first, *second);
-                        maxdist = std::max(maxdist, distance);
-                    }
-                }
-
-                return maxdist;
-            };
-
             std::cout << "after eps range "<<eps_lo<< "  " <<eps_hi<< "  new pv number = "<<new_pv_count
                       <<"  total pv number = "<<win_state.pv_flat_index_set_list.size()<<std::endl;
 
-            std::cout << "pv flat index sets:" << std::endl;
+            std::cout << "pv flat index set statistics:" << std::endl;
             if (win_state.pv_flat_index_set_list.empty())
             {
                 std::cout << "  (empty)" << std::endl;
@@ -75,27 +147,13 @@ void QuotientAndExpand<DistMatType>::runPiecewisePH(const std::vector<double>& e
                 size_t pv_idx = 0;
                 for (const auto& pv_index_set : win_state.pv_flat_index_set_list)
                 {
-                    std::cout << "  [" << pv_idx++ << "] ";
-                    bool first = true;
-                    for (const auto& flat_index : pv_index_set)
-                    {
-                        if (!first)
-                        {
-                            std::cout << " ";
-                        }
-                        std::cout << flat_index;
-                        first = false;
-                    }
-
-                    std::cout <<"    diameter = "<<getMaxPairwiseDistance(pv_index_set)<<'\n';
+                    std::cout << "  [" << pv_idx++ << "] size = " << pv_index_set.size()
+                              << "  max diameter = " << getMaxPairwiseDistance(pv_index_set) << '\n';
                 }
-                std::cout<<std::endl;
+                std::cout << std::endl;
             }
         }
-
     }
-
-    return;
 }
 
 template <typename DistMatType>
@@ -131,81 +189,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
     
     BipartiteGraph bi_graph(1, 1, ImplicitConstructionTag{});
 
-    std::vector<std::pair<double, double>> dim_persistent_pairs;
-    std::vector<MaximumMorseMatching::PersistentPairInfo> maxdim_persistent_pair_info;
-
-    //****************************diagnose info print **************************/
-
-    const auto printIndexList = [](const std::vector<size_t>& index_list)
-    {
-        if (index_list.empty())
-        {
-            std::cout << "(empty)";
-            return;
-        }
-
-        for (size_t i = 0; i < index_list.size(); ++i)
-        {
-            if (i > 0)
-            {
-                std::cout << " ";
-            }
-            std::cout << index_list[i];
-        }
-    };
-
-    const auto printSimplexInfo =
-        [this, total_label_count, &printIndexList](const char* prefix, const int64_t simplex_bindex, const size_t simplex_dim)
-    {
-        std::cout << "    " << prefix << " labels: ";
-        if (simplex_bindex < 0)
-        {
-            std::cout << "(none)" << '\n';
-            return;
-        }
-
-        const auto simplex_labels = SimplexUtility::getSimplexVertices(binomial_table_, simplex_bindex, total_label_count, simplex_dim);
-        printIndexList(simplex_labels);
-        std::cout << '\n';
-    };
-
-    const auto printPersistentPairs =
-        [eps_lo, maxdim, verbose, &printSimplexInfo](const std::vector<std::pair<double, double>>& persistent_pairs,
-                                                     const std::vector<MaximumMorseMatching::PersistentPairInfo>* persistent_pair_info,
-                                                     const size_t dim)
-    {
-        bool printed_any = false;
-        for (size_t pair_idx = 0; pair_idx < persistent_pairs.size(); ++pair_idx)
-        {
-            const auto& [facetweight, cofacetweight] = persistent_pairs[pair_idx];
-            if (cofacetweight > eps_lo || cofacetweight < 0)
-            {
-                if (verbose)
-                {
-                    std::cout << "  (" << facetweight << ", " << cofacetweight << ")" << std::endl;
-
-                    if (dim == maxdim && persistent_pair_info != nullptr && pair_idx < persistent_pair_info->size())
-                    {
-                        const auto& pair_info = (*persistent_pair_info)[pair_idx];
-                        printSimplexInfo("birth facet", pair_info.facet_bindex, dim - 1);
-                        printSimplexInfo("death cofacet", pair_info.cofacet_bindex, dim);
-                    }
-                }
-                else
-                {
-                    std::cout << dim << ", " << facetweight << ", " << cofacetweight << '\n';
-                }
-
-                printed_any = true;
-            }
-        }
-
-        if (verbose && !printed_any)
-            std::cout << "  (no new interval or surviving interval from previous eps range)" << std::endl;
-    };
-
-    //****************************end of diagnose info print **************************/
-
+    std::vector<MaximumMorseMatching::PersistentPairInfo> dim_persistent_pairs;
 
     std::vector<std::unordered_set<size_t>> untrimmed_pv_label_sets;
 
@@ -221,81 +205,57 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
         MatchingContext matching_context(bi_graph, binomial_table_, sorted_quotient_simplex, sorted_quotient_cofacet,
                                          active_simplex_hash, cofacet_hash, total_label_count, dim);
 
-
+        MaximumMorseMatching::MatchSupportInfo dim_match_support_info;
         if (collect_pv)
         {
             const bool collect_dim_pv_support = (dim == maxdim);
 
-            maxdim_persistent_pair_info.clear();
-            auto dim_match_support_info = morse_matching.implicitMatchAndCollectSupportInfo(
+            dim_match_support_info = morse_matching.implicitMatchAndCollectSupportInfo(
                 matching_context,
                 dim_persistent_pairs,
-                collect_dim_pv_support,
-                collect_dim_pv_support ? &maxdim_persistent_pair_info : nullptr);
+                collect_dim_pv_support);
             collectProtectedIndices(matching_context, dim_match_support_info, protected_indices);
+        }
+        else
+        {
+            morse_matching.implicitMatch(matching_context, dim_persistent_pairs);
+        }
 
-            if (verbose)
+        if (verbose)
+        {
+            std::cout << "in eps range "<<eps_lo<< "  " <<eps_hi<< "    dimension = " <<dim
+                      << "  cofacet num = " << sorted_quotient_cofacet.size()
+                      << "  facet num = " << sorted_quotient_simplex.size() <<'\n'
+                      << "   persistent pairs:" << std::endl;
+        }
+
+        printPersistentPairs(dim_persistent_pairs, binomial_table_, eps_lo, dim, maxdim,
+                             total_label_count, verbose);
+        dim_persistent_pairs.clear();
+
+        if (dim == maxdim)
+        {
+            if (collect_pv)
             {
-                std::cout << "in eps range "<<eps_lo<< "  " <<eps_hi<< "    dimension = " <<dim
-                          << "  cofacet num = " << sorted_quotient_cofacet.size()
-                          << "  facet num = " << sorted_quotient_simplex.size() <<'\n'
-                          << "   persistent pairs:" << std::endl;
-            }
-
-
-            printPersistentPairs(dim_persistent_pairs, collect_dim_pv_support ? &maxdim_persistent_pair_info : nullptr, dim);
-
-            dim_persistent_pairs.clear();
-            maxdim_persistent_pair_info.clear();
-
-            if (collect_dim_pv_support)
-            {
-                untrimmed_pv_label_sets = getNonMergingPVSupport(matching_context,
-                                                                 dim_match_support_info.raw_pv_support_cofacet_indices,
-                                                                 protected_indices,
-                                                                 original_vt_num,
-                                                                 verbose);
-            }
-            else
-            {
-                // facets for the next dimension are the unmatched cofacets from the current dimension
-                active_simplex_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_quotient_cofacet);
-
-                // enumerate next cofacet list
-                sorted_quotient_simplex = simplex_enumerator.getGeometricCofacetList(sorted_quotient_cofacet, active_labels, pv_index_sets, label_distance_hash, dim, eps_hi, threadnumber);
-                std::swap(sorted_quotient_simplex, sorted_quotient_cofacet);
+                untrimmed_pv_label_sets = getNonMergingPVSupport(
+                    matching_context,
+                    dim_match_support_info.raw_pv_support_cofacet_indices,
+                    protected_indices,
+                    original_vt_num,
+                    verbose);
             }
         }
         else
         {
-            maxdim_persistent_pair_info.clear();
-            morse_matching.implicitMatch(
-                matching_context,
-                dim_persistent_pairs,
-                dim == maxdim ? &maxdim_persistent_pair_info : nullptr);
+            // facets for the next dimension are the unmatched cofacets from the current dimension
+            active_simplex_hash = SimplexUtility::getActiveSimplexIndexHashTable(
+                bi_graph.match_list, sorted_quotient_cofacet);
 
-            if (verbose)
-            {
-                std::cout << "in eps range "<<eps_lo<< "  " <<eps_hi<< "    dimension = " <<dim
-                          << "  cofacet num = " << sorted_quotient_cofacet.size()
-                          << "  facet num = " << sorted_quotient_simplex.size() <<'\n'
-                          << "   persistent pairs:" << std::endl;
-            }
-
-            printPersistentPairs(dim_persistent_pairs, dim == maxdim ? &maxdim_persistent_pair_info : nullptr, dim);
-
-            dim_persistent_pairs.clear();
-            maxdim_persistent_pair_info.clear();
-
-            if (dim != maxdim)
-            {
-                // facets for the next dimension are the unmatched cofacets from the current dimension
-                active_simplex_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_quotient_cofacet);
-
-                // enumerate next cofacet list
-                sorted_quotient_simplex = simplex_enumerator.getGeometricCofacetList(sorted_quotient_cofacet, active_labels, pv_index_sets, label_distance_hash, dim, eps_hi, threadnumber);
-                std::swap(sorted_quotient_simplex, sorted_quotient_cofacet);
-            }
+            // enumerate next cofacet list
+            sorted_quotient_simplex = simplex_enumerator.getGeometricCofacetList(
+                sorted_quotient_cofacet, active_labels, pv_index_sets, label_distance_hash,
+                dim, eps_hi, threadnumber);
+            std::swap(sorted_quotient_simplex, sorted_quotient_cofacet);
         }
     }
 
@@ -309,26 +269,6 @@ template <typename DistMatType>
 std::vector<typename QuotientAndExpand<DistMatType>::SelectedPV> 
 QuotientAndExpand<DistMatType>::trimPVCandidates(const WindowState& win_state, const std::vector<std::unordered_set<size_t>>& raw_label_sets, const double eps_hi, const double pv_cap_scale)
 {
-    const auto getMaxPairwiseDistance = [this](const std::unordered_set<size_t>& index_set)
-    {
-        if (index_set.size() < 2)
-            return 0.0;
-
-        double maxdist = 0.0;
-        for (auto first = index_set.begin(); first != index_set.end(); ++first)
-        {
-            auto second = first;
-            ++second;
-            for (; second != index_set.end(); ++second)
-            {
-                const double distance = dist_mat_.getDistance(*first, *second);
-                maxdist = std::max(maxdist, distance);
-            }
-        }
-
-        return maxdist;
-    };
-
     std::vector<SelectedPV> accepted_pv_list;
 
     std::unordered_set<size_t> claimed_labels;
@@ -636,26 +576,6 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runQuoti
     std::vector<std::unordered_set<size_t>> pv_index_sets = trimIndexSets(untrimed_pv_index_sets, initeps);
 
     /********************************debug*******************************/
-    const auto getMaxPairwiseDistance = [this](const std::unordered_set<size_t>& index_set)
-    {
-        if (index_set.size() < 2)
-            return 0.0;
-
-        double maxdist = 0.0;
-        for (auto first = index_set.begin(); first != index_set.end(); ++first)
-        {
-            auto second = first;
-            ++second;
-            for (; second != index_set.end(); ++second)
-            {
-                const double distance = dist_mat_.getDistance(*first, *second);
-                maxdist = std::max(maxdist, distance);
-            }
-        }
-
-        return maxdist;
-    };
-
     for (auto& pv_vts : pv_index_sets)
     {
         std::cout << "size of the vt = " << pv_vts.size()
@@ -699,7 +619,7 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
     // Implicit matching object
     MaximumMorseMatching morse_matching;
 
-    std::vector<std::pair<double, double>> dim_persistent_pairs;
+    std::vector<MaximumMorseMatching::PersistentPairInfo> dim_persistent_pairs;
 
     for (size_t dim = 2; dim <= maxdim; ++dim)
     {
@@ -724,9 +644,9 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
         }
         else
         {
-            for (const auto& [facetweight, cofacetweight] : dim_persistent_pairs)
+            for (const auto& pair_info : dim_persistent_pairs)
             {
-                std::cout << "  (" << facetweight << ", " << cofacetweight << ")" << std::endl;
+                std::cout << "  (" << pair_info.facet_weight << ", " << pair_info.cofacet_weight << ")" << std::endl;
             }
         }
 
@@ -788,26 +708,6 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::trimInde
     //           [](const std::unordered_set<size_t>& lhs, const std::unordered_set<size_t>& rhs)
     //           { return lhs.size() > rhs.size(); });
 
-    const auto getMaxPairwiseDistance = [this](const std::unordered_set<size_t>& index_set)
-    {
-        if (index_set.size() < 2)
-            return 0.0;
-
-        double maxdist = 0.0;
-        for (auto first = index_set.begin(); first != index_set.end(); ++first)
-        {
-            auto second = first;
-            ++second;
-            for (; second != index_set.end(); ++second)
-            {
-                const double distance = dist_mat_.getDistance(*first, *second);
-                maxdist = std::max(maxdist, distance);
-            }
-        }
-
-        return maxdist;
-    };
-
     std::vector<std::unordered_set<size_t>> trimmed_vertex_sets;
 
     std::unordered_set<size_t> claimed_vertices;
@@ -866,7 +766,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getPVInd
     MaximumMorseMatching morse_matching;
 
     // workspace for persistence pairs (optional)
-    std::vector<std::pair<double, double>> dim_persistent_pairs;
+    std::vector<MaximumMorseMatching::PersistentPairInfo> dim_persistent_pairs;
 
     for (size_t dim = 2; dim <= maxdim; ++dim)
     {
@@ -893,9 +793,9 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getPVInd
             }
             else
             {
-                for (const auto& [facetweight, cofacetweight] : dim_persistent_pairs)
+                for (const auto& pair_info : dim_persistent_pairs)
                 {
-                    std::cout << "  (" << facetweight << ", " << cofacetweight << ")" << std::endl;
+                    std::cout << "  (" << pair_info.facet_weight << ", " << pair_info.cofacet_weight << ")" << std::endl;
                 }
             }
 
@@ -922,9 +822,9 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getPVInd
             }
             else
             {
-                for (const auto& [facetweight, cofacetweight] : dim_persistent_pairs)
+                for (const auto& pair_info : dim_persistent_pairs)
                 {
-                    std::cout << "  (" << facetweight << ", " << cofacetweight << ")" << std::endl;
+                    std::cout << "  (" << pair_info.facet_weight << ", " << pair_info.cofacet_weight << ")" << std::endl;
                 }
             }
 
@@ -958,3 +858,6 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getPVInd
 
     return raw_pv_index_sets;
 }
+
+template class QuotientAndExpand<NormalDistMat>;
+// template class QuotientAndExpand<SparseDistMat>;

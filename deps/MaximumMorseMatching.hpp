@@ -29,14 +29,12 @@ public:
     MaximumMorseMatching() {};
 
     size_t implicitMatch(MatchingContext& matching_context,
-                         std::vector<std::pair<double, double>>& dim_persistent_pair,
-                         std::vector<PersistentPairInfo>* persistent_pair_info = nullptr);
+                         std::vector<PersistentPairInfo>& persistent_pairs);
 
 
     MatchSupportInfo implicitMatchAndCollectSupportInfo(MatchingContext& matching_context,
-                                                        std::vector<std::pair<double, double>>& dim_persistent_pair,
-                                                        const bool collect_pv_support,
-                                                        std::vector<PersistentPairInfo>* persistent_pair_info = nullptr);
+                                                        std::vector<PersistentPairInfo>& persistent_pairs,
+                                                        const bool collect_pv_support);
 
     //legacy explicit graph representation  
     MaximumMorseMatching(int threadnum): threadnum_(threadnum) {};
@@ -45,7 +43,7 @@ public:
 
     int64_t matchAndGetMinCriticalIndex(MatchingContext& matching_context);
 
-    std::vector<std::vector<size_t>> matchAndGetAugPath(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair);
+    std::vector<std::vector<size_t>> matchAndGetAugPath(MatchingContext& matching_context);
 
 private:
     //helper strcut to allow moving the underlying container from a priority_queue

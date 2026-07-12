@@ -9,62 +9,8 @@
 #include "MaximumMorseMatching.hpp"
 #include "SimplexUtility.hpp"
 
-namespace
-{
-    void printSimplexVertices(std::ostream& os,
-                            const std::vector<std::vector<int64_t>>& binomial_table,
-                            const int64_t bindex,
-                            const size_t npts,
-                            const size_t simplex_dim)
-    {
-        if (bindex < 0)
-        {
-            os << "{?}";
-            return;
-        }
-
-        const auto simplex_vertices =
-            SimplexUtility::getSimplexVertices(binomial_table, bindex, npts, simplex_dim);
-
-        os << '{';
-        for (size_t i = 0; i < simplex_vertices.size(); ++i)
-        {
-            if (i > 0) os << ',';
-            os << simplex_vertices[i];
-        }
-        os << '}';
-    }
-
-    void printGhostPair(const std::vector<std::vector<int64_t>>& binomial_table,
-                        const size_t npts,
-                        const size_t cofacet_dim,
-                        const double facetweight,
-                        const double cofacetweight,
-                        const int64_t facetbindex,
-                        const int64_t cofacetbindex)
-    {
-        std::cerr << "[ghost pair] cofacet weight != facet weight\n"
-                << "  cofacet dim = " << cofacet_dim << '\n'
-                << "  facet weight = " << facetweight
-                << ", bindex = " << facetbindex
-                << ", vertices = ";
-        printSimplexVertices(std::cerr,
-                            binomial_table,
-                            facetbindex,
-                            npts,
-                            cofacet_dim == 0 ? 0 : cofacet_dim - 1);
-        std::cerr << '\n'
-                << "  cofacet weight = " << cofacetweight
-                << ", bindex = " << cofacetbindex
-                << ", vertices = ";
-        printSimplexVertices(std::cerr, binomial_table, cofacetbindex, npts, cofacet_dim);
-        std::cerr << '\n';
-    }
-}    // helper namespace
-
 size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context,
-                                           std::vector<std::pair<double, double>>& dim_persistent_pair,
-                                           std::vector<PersistentPairInfo>* persistent_pair_info)
+                                           std::vector<PersistentPairInfo>& persistent_pairs)
 {
     auto& binom_table = matching_context.binomial_table;
     auto& cofacet_list = matching_context.sorted_cofacets;
@@ -95,17 +41,6 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context,
 
     size_t ct = 0;    //apparent pair count
 
-    const auto appendPersistentPair =
-        [&](const double facetweight, const double cofacetweight, const int64_t facetbindex, const int64_t cofacetbindex)
-    {
-        dim_persistent_pair.emplace_back(facetweight, cofacetweight);
-
-        if (persistent_pair_info != nullptr)
-        {
-            persistent_pair_info->push_back(PersistentPairInfo{facetweight, cofacetweight, facetbindex, cofacetbindex});
-        }
-    };
-
     //process facet in reverse order
     for (int64_t i = static_cast<int64_t>(v) - 1; i >= 0; --i)
     {
@@ -125,7 +60,7 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context,
         {
             const double facetweight = matching_context.sorted_facets[facet_list_index].second;
             // std::cout <<"interface dim = "<<dim<< "  facet weight = " << facetweight << "  cofacet weight = -1 "<<'\n';
-            appendPersistentPair(facetweight, -1.0, facetbindex, -1);
+            SimplexUtility::appendPersistentPair(persistent_pairs, facetweight, -1.0, facetbindex, -1);
             count += 1;
             continue;
         }
@@ -157,8 +92,6 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context,
 
                         continue;
                     }
-
-                    // printGhostPair(binom_table, total_label_count, dim, facetweight, cofacetweight, facetbindex, cofacet_list[mincofacetidx].first);
                 }
             }
         }
@@ -170,7 +103,7 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context,
         {
             const double facetweight = matching_context.sorted_facets[facet_list_index].second;
             // std::cout <<"interface dim = "<<dim<< "  facet weight = " << facetweight << "  cofacet weight = -1 "<<'\n';
-            appendPersistentPair(facetweight, -1.0, facetbindex, -1);
+            SimplexUtility::appendPersistentPair(persistent_pairs, facetweight, -1.0, facetbindex, -1);
             count += 1;
             continue;
         }
@@ -187,7 +120,8 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context,
 
         if (facetweight != cofacetweight)
         {
-            appendPersistentPair(facetweight, cofacetweight, reduced_facet_bindex, reduced_cofacet_bindex);
+            SimplexUtility::appendPersistentPair(persistent_pairs, facetweight, cofacetweight,
+                                                 reduced_facet_bindex, reduced_cofacet_bindex);
             // std::cout <<"interface dim = "<<dim<< "  facet weight = " << facetweight << "  cofacet weight = " << cofacetweight << '\n';
         }
 
@@ -196,11 +130,9 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context,
     return count;
 }
 
-MaximumMorseMatching::MatchSupportInfo MaximumMorseMatching::implicitMatchAndCollectSupportInfo(
-    MatchingContext& matching_context,
-    std::vector<std::pair<double, double>>& dim_persistent_pair,
-    const bool collect_pv_support,
-    std::vector<PersistentPairInfo>* persistent_pair_info)
+MaximumMorseMatching::MatchSupportInfo MaximumMorseMatching::implicitMatchAndCollectSupportInfo(MatchingContext& matching_context,
+                                                                                                std::vector<PersistentPairInfo>& persistent_pairs,
+                                                                                                const bool collect_pv_support)
 {
     auto& binom_table = matching_context.binomial_table;
     auto& cofacet_list = matching_context.sorted_cofacets;
@@ -228,28 +160,6 @@ MaximumMorseMatching::MatchSupportInfo MaximumMorseMatching::implicitMatchAndCol
 
     // size_t ct = 0;    //apparent pair count
 
-    const auto appendPersistentPair =
-        [&](const double facetweight, const double cofacetweight, const int64_t facetbindex, const int64_t cofacetbindex)
-    {
-        dim_persistent_pair.emplace_back(facetweight, cofacetweight);
-
-        if (persistent_pair_info != nullptr)
-        {
-            persistent_pair_info->push_back(PersistentPairInfo{
-                facetweight,
-                cofacetweight,
-                facetbindex,
-                cofacetbindex,
-            });
-        }
-    };
-
-    const auto appendProtectedFacet =
-        [&](const size_t facet_list_index)
-    {
-        match_support_info.protected_facet_list_indices.push_back(facet_list_index);
-    };
-    
     // process facets in reverse order
     for (int64_t i = static_cast<int64_t>(v) - 1; i >= 0; --i)
     {
@@ -270,8 +180,8 @@ MaximumMorseMatching::MatchSupportInfo MaximumMorseMatching::implicitMatchAndCol
         if (cofacet_indices_.empty())
         {
             const double facetweight = matching_context.sorted_facets[facet_list_index].second;
-            appendPersistentPair(facetweight, -1.0, facetbindex, -1);
-            appendProtectedFacet(facet_list_index);
+            SimplexUtility::appendPersistentPair(persistent_pairs, facetweight, -1.0, facetbindex, -1);
+            match_support_info.protected_facet_list_indices.push_back(facet_list_index);
 
             continue;
         }
@@ -300,8 +210,6 @@ MaximumMorseMatching::MatchSupportInfo MaximumMorseMatching::implicitMatchAndCol
 
                         continue;
                     }
-
-                    // printGhostPair(binom_table, total_label_count, dim, facetweight, cofacetweight, facetbindex, cofacet_list[mincofacetidx].first);
                 }
             }
         }
@@ -312,8 +220,8 @@ MaximumMorseMatching::MatchSupportInfo MaximumMorseMatching::implicitMatchAndCol
         if (terminalcofacet < 0)
         {
             const double facetweight = matching_context.sorted_facets[facet_list_index].second;
-            appendPersistentPair(facetweight, -1.0, facetbindex, -1);
-            appendProtectedFacet(facet_list_index);
+            SimplexUtility::appendPersistentPair(persistent_pairs, facetweight, -1.0, facetbindex, -1);
+            match_support_info.protected_facet_list_indices.push_back(facet_list_index);
 
             continue;
         }
@@ -337,7 +245,8 @@ MaximumMorseMatching::MatchSupportInfo MaximumMorseMatching::implicitMatchAndCol
 
         if (facetweight != cofacetweight)
         {
-            appendPersistentPair(facetweight, cofacetweight, reduced_facet_bindex, reduced_cofacet_bindex);
+            SimplexUtility::appendPersistentPair(persistent_pairs, facetweight, cofacetweight,
+                                                 reduced_facet_bindex, reduced_cofacet_bindex);
             // std::cout <<"interface dim = "<<dim<< "  facet weight = " << facetweight << "  cofacet weight = " << cofacetweight << '\n';
         }
 
@@ -789,7 +698,7 @@ int64_t MaximumMorseMatching::matchAndGetMinCriticalIndex(MatchingContext& match
     return serialFacetMatchAndGetMinCriticalIndex(matching_context);
 }
 
-std::vector< std::vector<size_t> > MaximumMorseMatching::matchAndGetAugPath(MatchingContext& matching_context, std::vector<std::pair<double, double>>& dim_persistent_pair)
+std::vector< std::vector<size_t> > MaximumMorseMatching::matchAndGetAugPath(MatchingContext& matching_context)
 {
     //get gradient path for quotient from augmenting path
     parallelMinCofacetInit(matching_context);

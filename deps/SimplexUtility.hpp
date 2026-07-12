@@ -312,6 +312,16 @@ namespace SimplexUtility
         return (it != label_distance_hash_table.end()) ? it->second : -1.0;
     }
 
+    template <typename PersistentPairInfo>
+    inline void appendPersistentPair(std::vector<PersistentPairInfo>& persistent_pairs,
+                                     const double facetweight,
+                                     const double cofacetweight,
+                                     const int64_t facetbindex,
+                                     const int64_t cofacetbindex)
+    {
+        persistent_pairs.push_back(PersistentPairInfo{facetweight, cofacetweight, facetbindex, cofacetbindex});
+    }
+
     inline void updateBinomialTable(std::vector<std::vector<int64_t>>& binomial_table, const size_t originalvtnum, const size_t pvnum, const size_t maxdim)
     {
         const size_t currentvtnum = binomial_table.size() - 1; // current vertex number in binomial table
