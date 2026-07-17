@@ -144,11 +144,11 @@ void QuotientAndExpand<DistMatType>::runPiecewisePH(const std::vector<double>& e
             }
             else
             {
-                size_t pv_idx = 0;
-                for (const auto& pv_index_set : win_state.pv_flat_index_set_list)
+                for (size_t pv_idx = 0; pv_idx < win_state.pv_flat_index_set_list.size(); ++pv_idx)
                 {
-                    std::cout << "  [" << pv_idx++ << "] size = " << pv_index_set.size()
-                              << "  max diameter = " << getMaxPairwiseDistance(pv_index_set) << '\n';
+                    const auto& pv_index_set = win_state.pv_flat_index_set_list[pv_idx];
+                    std::cout << "  [" << pv_idx << "] size = " << pv_index_set.size()
+                              << "  max diameter = " << win_state.pv_diameter_list[pv_idx] << '\n';
                 }
                 std::cout << std::endl;
             }
@@ -198,6 +198,8 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
 
     for (size_t dim = 2; dim <= maxdim; ++dim)
     {
+        const bool is_top_dimension = (dim == maxdim);
+
         bi_graph.updateDimensionImplicit(sorted_quotient_cofacet.size(), sorted_quotient_simplex.size());
 
         auto cofacet_hash = SimplexUtility::getSimplexIndexHashTable(sorted_quotient_cofacet);
@@ -208,12 +210,9 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
         MaximumMorseMatching::MatchSupportInfo dim_match_support_info;
         if (collect_pv)
         {
-            const bool collect_dim_pv_support = (dim == maxdim);
-
-            dim_match_support_info = morse_matching.implicitMatchAndCollectSupportInfo(
-                matching_context,
-                dim_persistent_pairs,
-                collect_dim_pv_support);
+            dim_match_support_info = morse_matching.implicitMatchAndCollectSupportInfo(matching_context,
+                                                                                       dim_persistent_pairs,
+                                                                                       is_top_dimension);
             collectProtectedIndices(matching_context, dim_match_support_info, protected_indices);
         }
         else
@@ -229,32 +228,29 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
                       << "   persistent pairs:" << std::endl;
         }
 
-        printPersistentPairs(dim_persistent_pairs, binomial_table_, eps_lo, dim, maxdim,
-                             total_label_count, verbose);
+        printPersistentPairs(dim_persistent_pairs, binomial_table_, eps_lo, dim, maxdim, total_label_count, verbose);
         dim_persistent_pairs.clear();
 
-        if (dim == maxdim)
+        if (is_top_dimension && collect_pv)
         {
-            if (collect_pv)
-            {
-                untrimmed_pv_label_sets = getNonMergingPVSupport(
-                    matching_context,
-                    dim_match_support_info.raw_pv_support_cofacet_indices,
-                    protected_indices,
-                    original_vt_num,
-                    verbose);
-            }
+            untrimmed_pv_label_sets = getNonMergingPVSupport(matching_context,
+                                                             dim_match_support_info.raw_pv_support_cofacet_indices,
+                                                             protected_indices,
+                                                             original_vt_num,
+                                                             verbose);
         }
-        else
+
+        if (!is_top_dimension)
         {
             // facets for the next dimension are the unmatched cofacets from the current dimension
-            active_simplex_hash = SimplexUtility::getActiveSimplexIndexHashTable(
-                bi_graph.match_list, sorted_quotient_cofacet);
+            active_simplex_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_quotient_cofacet);
 
             // enumerate next cofacet list
-            sorted_quotient_simplex = simplex_enumerator.getGeometricCofacetList(
-                sorted_quotient_cofacet, active_labels, pv_index_sets, label_distance_hash,
-                dim, eps_hi, threadnumber);
+            sorted_quotient_simplex = simplex_enumerator.getGeometricCofacetList(sorted_quotient_cofacet,
+                                                                                 active_labels,
+                                                                                 pv_index_sets,
+                                                                                 label_distance_hash,
+                                                                                 dim, eps_hi, threadnumber);
             std::swap(sorted_quotient_simplex, sorted_quotient_cofacet);
         }
     }
@@ -269,7 +265,7 @@ template <typename DistMatType>
 std::vector<typename QuotientAndExpand<DistMatType>::SelectedPV> 
 QuotientAndExpand<DistMatType>::trimPVCandidates(const WindowState& win_state, const std::vector<std::unordered_set<size_t>>& raw_label_sets, const double eps_hi, const double pv_cap_scale)
 {
-    std::vector<SelectedPV> accepted_pv_list;
+    std::vector<SelectedPV> selected_new_pv_list;
 
     std::unordered_set<size_t> claimed_labels;
 
@@ -295,15 +291,16 @@ QuotientAndExpand<DistMatType>::trimPVCandidates(const WindowState& win_state, c
 
             if (flat_index_set.size() >= MAX_SIZE_) continue;
 
-            if (getMaxPairwiseDistance(flat_index_set) > (pv_cap_scale * eps_hi)) continue;
+            const double diameter = getMaxPairwiseDistance(flat_index_set);
+            if (diameter > (pv_cap_scale * eps_hi)) continue;
 
             claimed_labels.insert(label_set.begin(), label_set.end());
 
-            accepted_pv_list.push_back(SelectedPV{std::move(flat_index_set)});
+            selected_new_pv_list.push_back(SelectedPV{std::move(flat_index_set), diameter});
         }
     }
 
-    return accepted_pv_list;
+    return selected_new_pv_list;
 }
 
 template <typename DistMatType>
@@ -365,9 +362,11 @@ void QuotientAndExpand<DistMatType>::rebuildWindowState(WindowState& win_state, 
 
     size_t next_pv_label = origin_vt_num + old_pv_num;
     win_state.pv_flat_index_set_list.reserve(old_pv_num + new_pv_list.size());
+    win_state.pv_diameter_list.reserve(old_pv_num + new_pv_list.size());
     for (auto& new_pv : new_pv_list)
     {
         win_state.pv_flat_index_set_list.push_back(std::move(new_pv.flat_index_set));
+        win_state.pv_diameter_list.push_back(new_pv.diameter);
         active_label_list.push_back(next_pv_label++);
     }
 
@@ -449,8 +448,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getNonMe
     }
     if (verbose)
     {
-        std::cout << "pv support cofacets size = " << raw_pv_support_cofacet_indices.size() << '\n';
-        std::cout << "protected indices size = " << protected_indices.size() << '\n';
+        std::cout << "raw pv support cofacets size = " << raw_pv_support_cofacet_indices.size() << '\n';
         std::cout << "pv support label sets with no pv/protected contents size = " << pv_support_label_sets.size() << '\n';
     }
 

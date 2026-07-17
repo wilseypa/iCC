@@ -82,6 +82,8 @@ private:
         size_t original_vertex_number = 0;
 
         std::vector<std::unordered_set<size_t>> pv_flat_index_set_list;
+        // Kept in the same order as pv_flat_index_set_list.
+        std::vector<double> pv_diameter_list;
 
         // active labels in the current window:
         // original vertices: 0 .. original_vertex_number-1
@@ -90,7 +92,7 @@ private:
 
         WindowState() = default;
 
-        explicit WindowState(size_t npts): original_vertex_number(npts), pv_flat_index_set_list(), active_label_list(npts)
+        explicit WindowState(size_t npts): original_vertex_number(npts), pv_flat_index_set_list(), pv_diameter_list(), active_label_list(npts)
         {
             std::iota(active_label_list.begin(), active_label_list.end(), 0);
         }
@@ -98,9 +100,9 @@ private:
 
     struct SelectedPV
     {
-        // flattened to original vertex indices; keep this as a struct so
-        // additional per-PV metadata can be restored later if needed.
+        // Flattened to original vertex indices and its max pairwise distance.
         std::unordered_set<size_t> flat_index_set;
+        double diameter = 0.0;
     };
 
     struct QuotientEdgeData
