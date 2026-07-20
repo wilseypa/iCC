@@ -79,8 +79,7 @@ private:
         std::vector<EdgeRecord> facet_edges;
         std::vector<EdgeRecord> covt_edges;
         std::vector<uint64_t> flattened_adjacency_mask;                  // (group0, group1, local0) -> local1 bitmask
-        std::vector<uint64_t> candidate_local_index_mask;                // group -> candidate local representatives
-        std::vector<std::vector<uint64_t>> recursion_candidate_local_index_stack;
+        std::vector<std::vector<uint64_t>> recursion_candidate_local_index_mask_stack; // recursion depth -> group candidate masks
         std::vector<size_t> current_local_indices;                       // group -> selected local representative
     };
 
@@ -97,7 +96,6 @@ private:
                                                 const double lower_bound, const double maxeps) const;
 
     bool findCliqueRecursive(const uint64_t* flattened_adjacency_mask, const size_t target_simplex_label_count, WitnessWorkspace& ws,
-                             const std::vector<uint64_t>& candidate_local_index_mask,
                              const size_t current_local_index_count) const;
 };
 

@@ -331,17 +331,17 @@ double SimplexEnumerator<DistMatType>::getGeometricPVSimplexWeight(WitnessWorksp
         ws.flattened_adjacency_mask.resize(flattened_adjacency_mask_words);
     std::fill_n(ws.flattened_adjacency_mask.begin(), flattened_adjacency_mask_words, 0ULL);
 
-    if (ws.candidate_local_index_mask.size() < target_simplex_label_count)
-        ws.candidate_local_index_mask.resize(target_simplex_label_count);
     if (ws.current_local_indices.size() < target_simplex_label_count)
         ws.current_local_indices.resize(target_simplex_label_count);
-    if (ws.recursion_candidate_local_index_stack.size() < target_simplex_label_count)
-        ws.recursion_candidate_local_index_stack.resize(target_simplex_label_count);
-    for (auto& level : ws.recursion_candidate_local_index_stack)
+    if (ws.recursion_candidate_local_index_mask_stack.size() < target_simplex_label_count)
+        ws.recursion_candidate_local_index_mask_stack.resize(target_simplex_label_count);
+    for (auto& level : ws.recursion_candidate_local_index_mask_stack)
     {
         if (level.size() < target_simplex_label_count)
             level.resize(target_simplex_label_count);
     }
+
+    auto& initial_candidate_local_index_mask = ws.recursion_candidate_local_index_mask_stack[0];
 
     uint64_t* flattened_adjacency_mask = ws.flattened_adjacency_mask.data();
 
@@ -404,28 +404,28 @@ double SimplexEnumerator<DistMatType>::getGeometricPVSimplexWeight(WitnessWorksp
         {
             if (g == g0)
             {
-                ws.candidate_local_index_mask[g] = (1ULL << l0);
+                initial_candidate_local_index_mask[g] = (1ULL << l0);
                 ws.current_local_indices[g] = l0;
                 continue;
             }
             if (g == g1)
             {
-                ws.candidate_local_index_mask[g] = (1ULL << l1);
+                initial_candidate_local_index_mask[g] = (1ULL << l1);
                 ws.current_local_indices[g] = l1;
                 continue;
             }
 
             ws.current_local_indices[g] = UNCHOSEN_;
-            ws.candidate_local_index_mask[g] = fullMask(g) & adjacencyMask(g0, g, l0) & adjacencyMask(g1, g, l1);
+            initial_candidate_local_index_mask[g] = fullMask(g) & adjacencyMask(g0, g, l0) & adjacencyMask(g1, g, l1);
 
-            if (ws.candidate_local_index_mask[g] == 0ULL)
+            if (initial_candidate_local_index_mask[g] == 0ULL)
             {
                 feasible = false;
                 break;
             }
         }
 
-        if (feasible && findCliqueRecursive(flattened_adjacency_mask, target_simplex_label_count, ws, ws.candidate_local_index_mask, 2))
+        if (feasible && findCliqueRecursive(flattened_adjacency_mask, target_simplex_label_count, ws, 2))
             return edge.weight;
     }
 
@@ -434,11 +434,14 @@ double SimplexEnumerator<DistMatType>::getGeometricPVSimplexWeight(WitnessWorksp
 
 template <typename DistMatType>
 bool SimplexEnumerator<DistMatType>::findCliqueRecursive(const uint64_t* flattened_adjacency_mask, const size_t target_simplex_label_count, WitnessWorkspace& ws,
-                                                         const std::vector<uint64_t>& candidate_local_index_mask,
                                                          const size_t current_local_index_count) const
 {
     if (current_local_index_count == target_simplex_label_count)
         return true;
+
+    const size_t current_mask_index = current_local_index_count - 2;
+    const size_t next_mask_index = current_local_index_count - 1;
+    const auto& candidate_local_index_mask = ws.recursion_candidate_local_index_mask_stack[current_mask_index];
 
     size_t pivot = UNCHOSEN_;
     int min_candidates = std::numeric_limits<int>::max();
@@ -459,7 +462,7 @@ bool SimplexEnumerator<DistMatType>::findCliqueRecursive(const uint64_t* flatten
     if (pivot == UNCHOSEN_)
         return false;
 
-    auto& next_candidate_local_index_mask = ws.recursion_candidate_local_index_stack[current_local_index_count];
+    auto& next_candidate_local_index_mask = ws.recursion_candidate_local_index_mask_stack[next_mask_index];
 
     uint64_t opts = candidate_local_index_mask[pivot];
     while (opts != 0ULL)
@@ -486,7 +489,7 @@ bool SimplexEnumerator<DistMatType>::findCliqueRecursive(const uint64_t* flatten
             }
         }
 
-        if (feasible && findCliqueRecursive(flattened_adjacency_mask, target_simplex_label_count, ws, next_candidate_local_index_mask, current_local_index_count + 1))
+        if (feasible && findCliqueRecursive(flattened_adjacency_mask, target_simplex_label_count, ws, current_local_index_count + 1))
             return true;
     }
 
