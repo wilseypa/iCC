@@ -334,9 +334,29 @@ double promptPVCapScale()
         double value = 0.0;
         char extra = '\0';
 
-        if (!(parser >> value) || (parser >> extra) || value <= 0.0)
+        if (!(parser >> value) || (parser >> extra) || !std::isfinite(value) || value <= 0.0)
         {
             std::cout << "  Please enter a positive number.\n";
+            continue;
+        }
+
+        return value;
+    }
+}
+
+double promptPVMinSeparation()
+{
+    while (true)
+    {
+        const std::string line = promptRequiredLine(
+            "Input minimum inter-PV separation scale (>=0; 0 disables): ");
+        std::stringstream parser(line);
+        double value = 0.0;
+        char extra = '\0';
+
+        if (!(parser >> value) || (parser >> extra) || !std::isfinite(value) || value < 0.0)
+        {
+            std::cout << "  Please enter a nonnegative number.\n";
             continue;
         }
 
@@ -448,7 +468,8 @@ void printRunConfiguration(const std::string& tool,
                            const size_t eps_interval_count,
                            const double eps_interval_scale,
                            const double maxeps,
-                           const double pv_cap_scale)
+                           const double pv_cap_scale,
+                           const double pv_min_separation)
 {
     const std::string normalized_tool = normalizeTool(tool);
 
@@ -472,6 +493,7 @@ void printRunConfiguration(const std::string& tool,
             std::cout << "  epsilon interval scale: " << eps_interval_scale << '\n';
         }
         std::cout << "  pv cap scale: " << pv_cap_scale << '\n';
+        std::cout << "  pv minimum separation scale: " << pv_min_separation << '\n';
     }
     else
     {
@@ -487,11 +509,13 @@ bool promptConfirmation(const std::string& tool,
                         const size_t eps_interval_count,
                         const double eps_interval_scale,
                         const double maxeps,
-                        const double pv_cap_scale)
+                        const double pv_cap_scale,
+                        const double pv_min_separation)
 {
     while (true)
     {
-        printRunConfiguration(tool, filename, maxdim, threadnumber, eps_breaks, eps_interval_count, eps_interval_scale, maxeps, pv_cap_scale);
+        printRunConfiguration(tool, filename, maxdim, threadnumber, eps_breaks, eps_interval_count,
+                              eps_interval_scale, maxeps, pv_cap_scale, pv_min_separation);
 
         const std::string answer = promptRequiredLine("Proceed? [y/n]: ");
         if (answer == "y" || answer == "Y" || answer == "yes" || answer == "YES" || answer == "Yes")
@@ -510,8 +534,8 @@ void validateEpsilonBreaks(const std::vector<double>& eps_breaks)
 
     for (const double eps : eps_breaks)
     {
-        if (eps <= 0.0)
-            throw std::invalid_argument("--eps-breaks values must be positive.");
+        if (!std::isfinite(eps) || eps <= 0.0)
+            throw std::invalid_argument("--eps-breaks values must be finite and positive.");
     }
 
     for (size_t i = 1; i < eps_breaks.size(); ++i)
@@ -529,7 +553,8 @@ void validateRunOptions(const std::string& tool,
                         const size_t eps_interval_count,
                         const double eps_interval_scale,
                         const double maxeps,
-                        const double pv_cap_scale)
+                        const double pv_cap_scale,
+                        const double pv_min_separation)
 {
     const std::string normalized_tool = normalizeTool(tool);
 
@@ -561,13 +586,15 @@ void validateRunOptions(const std::string& tool,
         if (has_automatic_intervals && !isValidEpsilonIntervalScale(eps_interval_scale))
             throw std::invalid_argument("--eps-interval-scale must be a finite number greater than or equal to 1.0.");
 
-        if (pv_cap_scale <= 0.0)
-            throw std::invalid_argument("--pv-cap-scale is required and must be positive when --tool piecewise is selected.");
+        if (!std::isfinite(pv_cap_scale) || pv_cap_scale <= 0.0)
+            throw std::invalid_argument("--pv-cap-scale is required and must be finite and positive when --tool piecewise is selected.");
+        if (!std::isfinite(pv_min_separation) || pv_min_separation < 0.0)
+            throw std::invalid_argument("--pv-min-separation must be finite and nonnegative.");
     }
     else
     {
-        if (maxeps <= 0.0)
-            throw std::invalid_argument("--max-eps is required and must be positive when --tool ph is selected.");
+        if (!std::isfinite(maxeps) || maxeps <= 0.0)
+            throw std::invalid_argument("--max-eps is required and must be finite and positive when --tool ph is selected.");
     }
 }
 
@@ -580,15 +607,19 @@ int runTool(const std::string& tool,
             const double eps_interval_scale,
             const double maxeps,
             const double pv_cap_scale,
+            const double pv_min_separation,
             const bool print_configuration,
             const bool verbose)
 {
     const std::string normalized_tool = normalizeTool(tool);
 
-    validateRunOptions(normalized_tool, filename, maxdim, threadnumber, eps_breaks, eps_interval_count, eps_interval_scale, maxeps, pv_cap_scale);
+    validateRunOptions(normalized_tool, filename, maxdim, threadnumber, eps_breaks, eps_interval_count,
+                       eps_interval_scale, maxeps, pv_cap_scale, pv_min_separation);
 
     if (print_configuration && verbose)
-        printRunConfiguration(normalized_tool, filename, maxdim, threadnumber, eps_breaks, eps_interval_count, eps_interval_scale, maxeps, pv_cap_scale);
+        printRunConfiguration(normalized_tool, filename, maxdim, threadnumber, eps_breaks,
+                              eps_interval_count, eps_interval_scale, maxeps, pv_cap_scale,
+                              pv_min_separation);
 
     CritCells<VR, NormalDistMat> icc(filename);
 
@@ -611,7 +642,8 @@ int runTool(const std::string& tool,
 
     const auto st0 = std::chrono::high_resolution_clock::now();
     if (normalized_tool == PIECEWISE_PH_TOOL)
-        icc.morsePiecewisePH(maxdim, resolved_eps_breaks, threadnumber, pv_cap_scale, verbose);
+        icc.morsePiecewisePH(maxdim, resolved_eps_breaks, threadnumber, pv_cap_scale,
+                             pv_min_separation, verbose);
     else
         icc.morseVRPH(maxdim, maxeps, threadnumber);
     const auto st1 = std::chrono::high_resolution_clock::now();
@@ -636,6 +668,7 @@ int runInteractive()
     double eps_interval_scale = DEFAULT_EPS_INTERVAL_SCALE;
     double maxeps = 0.0;
     double pv_cap_scale = 0.0;
+    double pv_min_separation = 0.0;
 
     if (isPiecewisePHTool(tool))
     {
@@ -650,19 +683,22 @@ int runInteractive()
         }
 
         pv_cap_scale = promptPVCapScale();
+        pv_min_separation = promptPVMinSeparation();
     }
     else
     {
         maxeps = promptMaxEpsilon();
     }
 
-    if (!promptConfirmation(tool, filename, maxdim, threadnumber, eps_breaks, eps_interval_count, eps_interval_scale, maxeps, pv_cap_scale))
+    if (!promptConfirmation(tool, filename, maxdim, threadnumber, eps_breaks, eps_interval_count,
+                            eps_interval_scale, maxeps, pv_cap_scale, pv_min_separation))
     {
         std::cout << "Run cancelled.\n";
         return 0;
     }
 
-    return runTool(tool, filename, maxdim, threadnumber, eps_breaks, eps_interval_count, eps_interval_scale, maxeps, pv_cap_scale, false, true);
+    return runTool(tool, filename, maxdim, threadnumber, eps_breaks, eps_interval_count,
+                   eps_interval_scale, maxeps, pv_cap_scale, pv_min_separation, false, true);
 }
 
 int runCommandLine(int argc, char** argv)
@@ -679,6 +715,7 @@ int runCommandLine(int argc, char** argv)
     double eps_interval_scale = DEFAULT_EPS_INTERVAL_SCALE;
     double maxeps = 0.0;
     double pv_cap_scale = 0.0;
+    double pv_min_separation = 0.0;
     bool verbose = false;
 
     app.add_option("-t,--tool", tool, "Tool to run: piecewise or ph")
@@ -719,6 +756,11 @@ int runCommandLine(int argc, char** argv)
                    "Required when --tool piecewise. PV diameter cap scale")
         ->check(CLI::PositiveNumber);
 
+    app.add_option("--pv-min-separation", pv_min_separation,
+                   "For --tool piecewise. Minimum inter-PV distance as a fraction of the final epsilon; 0 disables the constraint")
+        ->default_val(0.0)
+        ->check(CLI::NonNegativeNumber);
+
     app.add_option("--max-eps", maxeps,
                    "Required when --tool ph. Maximum epsilon")
         ->check(CLI::PositiveNumber);
@@ -726,7 +768,8 @@ int runCommandLine(int argc, char** argv)
     try
     {
         app.parse(argc, argv);
-        return runTool(tool, filename, maxdim, threadnumber, eps_breaks, eps_interval_count, eps_interval_scale, maxeps, pv_cap_scale, true, verbose);
+        return runTool(tool, filename, maxdim, threadnumber, eps_breaks, eps_interval_count,
+                       eps_interval_scale, maxeps, pv_cap_scale, pv_min_separation, true, verbose);
     }
     catch (const CLI::ParseError& err)
     {

@@ -4,6 +4,7 @@
 #include <utility>
 #include <limits>
 #include <cstdint>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -48,6 +49,15 @@ public:
                                         const robin_hood::unordered_map<uint64_t, double>& label_distance_hash,
                                         const size_t dim, const double maxeps, const int threadnum);
 
+    // Verbose diagnostics use a separate enumerator so the regular path does not allocate
+    // realization storage, pack witnesses, or impose canonical edge tie-breaking.
+    std::vector<std::pair<int64_t, double>> getGeometricCofacetListWithRealizations(
+                                        const std::vector<std::pair<int64_t, double>>& sorted_quotient_simplex_list,
+                                        const std::vector<size_t>& active_labels,
+                                        const std::vector<std::unordered_set<size_t>>& pv_index_sets,
+                                        const robin_hood::unordered_map<uint64_t, double>& label_distance_hash,
+                                        const size_t dim, const double maxeps, const int threadnum,
+                                        robin_hood::unordered_map<int64_t, uint64_t>& pv_realization_out);
 
 private:
     const DistMatType& dist_mat_;
@@ -59,15 +69,24 @@ private:
 
     // Local representative choices are encoded in uint64_t masks; PV cardinality must stay below this cap.
     static constexpr size_t MAX_PV_CARDINALITY_ = 64;
+    static constexpr size_t MAX_PACKED_WITNESS_LABELS_ = sizeof(uint64_t);
     static constexpr size_t UNCHOSEN_ = std::numeric_limits<size_t>::max();
 
+    // Keep edge ordering consistent with simplex ordering: weight first, then
+    // binomial index for deterministic handling of equal-weight edges.
     struct EdgeRecord
     {
         double weight;
+        int64_t edge_bindex;
         uint8_t groupidx0, groupidx1;
         uint8_t localidx0, localidx1;
 
-        bool operator<(const EdgeRecord& edge) const { return weight < edge.weight; }
+        bool operator<(const EdgeRecord& edge) const
+        {
+            if (weight != edge.weight)
+                return weight < edge.weight;
+            return edge_bindex < edge.edge_bindex;
+        }
     };
 
     struct WitnessWorkspace
@@ -83,6 +102,18 @@ private:
         std::vector<size_t> current_local_indices;                       // group -> selected local representative
     };
 
+    struct RecordingWitnessWorkspace : WitnessWorkspace
+    {
+        uint64_t packed_realization = 0ULL;
+        std::vector<std::pair<int64_t, uint64_t>> realizations;
+    };
+
+    template <bool RecordRealization>
+    using SelectedWitnessWorkspace = std::conditional_t<RecordRealization, RecordingWitnessWorkspace, WitnessWorkspace>;
+
+    template <bool RecordRealization>
+    using WitnessWeightResult = std::conditional_t<RecordRealization, std::pair<double, uint64_t>, double>;
+
     void prepareFacetWitnessContext(WitnessWorkspace& ws,
                                     const std::vector<size_t>& facet_labels,
                                     const std::vector<std::vector<size_t>>& pv_rep_lists,
@@ -92,11 +123,22 @@ private:
                                  const std::vector<std::vector<size_t>>& pv_rep_lists,
                                  const size_t originalvtnum, const double maxeps) const;
 
-    double getGeometricPVSimplexWeight(WitnessWorkspace& ws, const size_t target_simplex_label_count,
-                                                const double lower_bound, const double maxeps) const;
+    template <bool RecordRealization>
+    WitnessWeightResult<RecordRealization> getGeometricPVSimplexWeight(SelectedWitnessWorkspace<RecordRealization>& ws,
+                                                                       const size_t target_simplex_label_count,
+                                                                       const double lower_bound) const;
 
     bool findCliqueRecursive(const uint64_t* flattened_adjacency_mask, const size_t target_simplex_label_count, WitnessWorkspace& ws,
                              const size_t current_local_index_count) const;
+
+    template <bool RecordRealization>
+    std::vector<std::pair<int64_t, double>> enumerateGeometricCofacets(
+                                        const std::vector<std::pair<int64_t, double>>& sorted_quotient_simplex_list,
+                                        const std::vector<size_t>& active_labels,
+                                        const std::vector<std::unordered_set<size_t>>& pv_index_sets,
+                                        const robin_hood::unordered_map<uint64_t, double>& label_distance_hash,
+                                        const size_t dim, const double maxeps, const int threadnum,
+                                        robin_hood::unordered_map<int64_t, uint64_t>* pv_realization_out);
 };
 
 // Explicit template instantiations

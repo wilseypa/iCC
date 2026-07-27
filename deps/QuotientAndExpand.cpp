@@ -2,6 +2,8 @@
 #include <stdexcept>
 #include <iostream>
 #include <limits>
+#include <cmath>
+#include <memory>
 
 #include "omp.h"
 
@@ -108,7 +110,33 @@ double QuotientAndExpand<DistMatType>::getMaxPairwiseDistance(const std::unorder
 template <typename DistMatType>
 void QuotientAndExpand<DistMatType>::runPiecewisePH(const std::vector<double>& eps_breaks, const size_t maxdim, const int threadnumber, const double pv_cap_scale, const bool verbose)
 {
+    runPiecewisePH(eps_breaks, maxdim, threadnumber, pv_cap_scale, 0.0, verbose);
+}
+
+template <typename DistMatType>
+void QuotientAndExpand<DistMatType>::runPiecewisePH(const std::vector<double>& eps_breaks, const size_t maxdim, const int threadnumber,
+                                                    const double pv_cap_scale, const double pv_min_separation, const bool verbose)
+{
+    if (!std::isfinite(pv_cap_scale) || pv_cap_scale <= 0.0)
+        throw std::invalid_argument("pv_cap_scale must be finite and greater than 0.");
+    if (!std::isfinite(pv_min_separation) || pv_min_separation < 0.0)
+        throw std::invalid_argument("pv_min_separation must be finite and nonnegative.");
+    if (eps_breaks.empty())
+        throw std::invalid_argument("eps_breaks must contain at least one scale.");
+    for (size_t i = 0; i < eps_breaks.size(); ++i)
+    {
+        if (!std::isfinite(eps_breaks[i]) || eps_breaks[i] <= 0.0)
+            throw std::invalid_argument("eps_breaks values must be finite and positive.");
+        if (i > 0 && eps_breaks[i] <= eps_breaks[i - 1])
+            throw std::invalid_argument("eps_breaks values must be strictly increasing.");
+    }
+    if (!std::isfinite(pv_cap_scale * eps_breaks.back()))
+        throw std::invalid_argument("pv_cap_scale times the final epsilon must be finite.");
+    if (!std::isfinite(pv_min_separation * eps_breaks.back()))
+        throw std::invalid_argument("pv_min_separation times the final epsilon must be finite.");
+
     WindowState win_state(dist_mat_.getVertexNumber());
+    const double min_separation = pv_min_separation * eps_breaks.back();
 
     // from eps_0 = 0 to eps_max
     std::vector<double> full_eps_list;
@@ -127,7 +155,7 @@ void QuotientAndExpand<DistMatType>::runPiecewisePH(const std::vector<double>& e
 
         if (!collect_pv) break;
 
-        auto new_pv_list = trimPVCandidates(win_state, untrimmed_pv_label_sets, eps_hi, pv_cap_scale);
+        auto new_pv_list = trimPVCandidates(win_state, untrimmed_pv_label_sets, eps_hi, pv_cap_scale, min_separation);
         const size_t new_pv_count = new_pv_list.size();
 
         rebuildWindowState(win_state, std::move(new_pv_list));
@@ -184,8 +212,36 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
 
     auto active_simplex_hash = getQuotientActiveEdgeIndexHashTable(sorted_quotient_simplex, pv_num);
 
-    auto sorted_quotient_cofacet = simplex_enumerator.getGeometricCofacetList(sorted_quotient_simplex,
-                                                                              active_labels, pv_index_sets, label_distance_hash, 1, eps_hi, threadnumber);
+    const bool ffi_stats_requested = verbose && (pv_num > 0) && (maxdim >= 3);
+    const bool collect_ffi_stats = ffi_stats_requested && (maxdim < MAX_FFI_PACKED_LABELS_);
+
+    if (ffi_stats_requested && !collect_ffi_stats)
+    {
+        std::cout << "  [ffi] diagnostics skipped: packed witness realizations support max dimension "
+                  << (MAX_FFI_PACKED_LABELS_ - 1) << '\n';
+    }
+
+    struct FfiRealizationState
+    {
+        robin_hood::unordered_map<int64_t, uint64_t> facet_realization_hash;
+        robin_hood::unordered_map<int64_t, uint64_t> cofacet_realization_hash;
+    };
+    std::unique_ptr<FfiRealizationState> ffi_realizations;
+    const auto enumerate_initial_cofacets = [&]()
+    {
+        if (collect_ffi_stats)
+        {
+            ffi_realizations = std::make_unique<FfiRealizationState>();
+            return simplex_enumerator.getGeometricCofacetListWithRealizations(
+                sorted_quotient_simplex, active_labels, pv_index_sets, label_distance_hash,
+                1, eps_hi, threadnumber, ffi_realizations->cofacet_realization_hash);
+        }
+
+        return simplex_enumerator.getGeometricCofacetList(
+            sorted_quotient_simplex, active_labels, pv_index_sets, label_distance_hash,
+            1, eps_hi, threadnumber);
+    };
+    auto sorted_quotient_cofacet = enumerate_initial_cofacets();
     
     BipartiteGraph bi_graph(1, 1, ImplicitConstructionTag{});
 
@@ -203,6 +259,14 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
         bi_graph.updateDimensionImplicit(sorted_quotient_cofacet.size(), sorted_quotient_simplex.size());
 
         auto cofacet_hash = SimplexUtility::getSimplexIndexHashTable(sorted_quotient_cofacet);
+
+        if (collect_ffi_stats && is_top_dimension)
+        {
+            reportFalseFacetIdentificationStats(win_state, sorted_quotient_simplex, sorted_quotient_cofacet,
+                                                ffi_realizations->facet_realization_hash,
+                                                ffi_realizations->cofacet_realization_hash,
+                                                dim, eps_lo, eps_hi, threadnumber);
+        }
 
         MatchingContext matching_context(bi_graph, binomial_table_, sorted_quotient_simplex, sorted_quotient_cofacet,
                                          active_simplex_hash, cofacet_hash, total_label_count, dim);
@@ -245,12 +309,20 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
             // facets for the next dimension are the unmatched cofacets from the current dimension
             active_simplex_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_quotient_cofacet);
 
-            // enumerate next cofacet list
-            sorted_quotient_simplex = simplex_enumerator.getGeometricCofacetList(sorted_quotient_cofacet,
-                                                                                 active_labels,
-                                                                                 pv_index_sets,
-                                                                                 label_distance_hash,
-                                                                                 dim, eps_hi, threadnumber);
+            if (collect_ffi_stats)
+            {
+                std::swap(ffi_realizations->facet_realization_hash,
+                          ffi_realizations->cofacet_realization_hash);
+                sorted_quotient_simplex = simplex_enumerator.getGeometricCofacetListWithRealizations(
+                    sorted_quotient_cofacet, active_labels, pv_index_sets, label_distance_hash,
+                    dim, eps_hi, threadnumber, ffi_realizations->cofacet_realization_hash);
+            }
+            else
+            {
+                sorted_quotient_simplex = simplex_enumerator.getGeometricCofacetList(
+                    sorted_quotient_cofacet, active_labels, pv_index_sets, label_distance_hash,
+                    dim, eps_hi, threadnumber);
+            }
             std::swap(sorted_quotient_simplex, sorted_quotient_cofacet);
         }
     }
@@ -263,9 +335,41 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
 
 template <typename DistMatType>
 std::vector<typename QuotientAndExpand<DistMatType>::SelectedPV> 
-QuotientAndExpand<DistMatType>::trimPVCandidates(const WindowState& win_state, const std::vector<std::unordered_set<size_t>>& raw_label_sets, const double eps_hi, const double pv_cap_scale)
+QuotientAndExpand<DistMatType>::trimPVCandidates(const WindowState& win_state, const std::vector<std::unordered_set<size_t>>& raw_label_sets,
+                                                 const double eps_hi, const double pv_cap_scale, const double min_separation)
 {
     std::vector<SelectedPV> selected_new_pv_list;
+
+    const auto minCrossDistance = [this](const std::unordered_set<size_t>& set_a, const std::unordered_set<size_t>& set_b)
+    {
+        double min_distance = std::numeric_limits<double>::infinity();
+        for (const auto vertex_a : set_a)
+        {
+            for (const auto vertex_b : set_b)
+                min_distance = std::min(min_distance, dist_mat_.getDistance(vertex_a, vertex_b));
+        }
+        return min_distance;
+    };
+
+    const auto isSeparated = [&](const std::unordered_set<size_t>& flat_index_set)
+    {
+        if (min_separation <= 0.0)
+            return true;
+
+        for (const auto& carried_pv : win_state.pv_flat_index_set_list)
+        {
+            if (minCrossDistance(flat_index_set, carried_pv) < min_separation)
+                return false;
+        }
+
+        for (const auto& selected_pv : selected_new_pv_list)
+        {
+            if (minCrossDistance(flat_index_set, selected_pv.flat_index_set) < min_separation)
+                return false;
+        }
+
+        return true;
+    };
 
     std::unordered_set<size_t> claimed_labels;
 
@@ -293,6 +397,8 @@ QuotientAndExpand<DistMatType>::trimPVCandidates(const WindowState& win_state, c
 
             const double diameter = getMaxPairwiseDistance(flat_index_set);
             if (diameter > (pv_cap_scale * eps_hi)) continue;
+
+            if (!isSeparated(flat_index_set)) continue;
 
             claimed_labels.insert(label_set.begin(), label_set.end());
 
@@ -855,6 +961,333 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getPVInd
     }
 
     return raw_pv_index_sets;
+}
+
+template <typename DistMatType>
+void QuotientAndExpand<DistMatType>::reportFalseFacetIdentificationStats(
+    const WindowState& win_state,
+    const std::vector<std::pair<int64_t, double>>& facet_list,
+    const std::vector<std::pair<int64_t, double>>& cofacet_list,
+    const robin_hood::unordered_map<int64_t, uint64_t>& facet_pv_realizations,
+    const robin_hood::unordered_map<int64_t, uint64_t>& cofacet_pv_realizations,
+    const size_t interface_dim,
+    const double eps_lo,
+    const double eps_hi,
+    const int threadnum)
+{
+    const size_t origin_vt_num = win_state.original_vertex_number;
+    const size_t pv_num = win_state.pv_flat_index_set_list.size();
+
+    if (pv_num == 0 || interface_dim < 3 || interface_dim >= MAX_FFI_PACKED_LABELS_)
+        return;
+
+    const size_t total_label_count = origin_vt_num + pv_num;
+    const size_t cofacet_label_count = interface_dim + 1;
+    const size_t facet_label_count = interface_dim;
+
+    // Use the enumerator's deterministic representative ordering so packed local indices
+    // resolve to the same original vertices.
+    std::vector<std::vector<size_t>> pv_rep_lists(pv_num);
+    for (size_t i = 0; i < pv_num; ++i)
+    {
+        pv_rep_lists[i].assign(win_state.pv_flat_index_set_list[i].begin(),
+                               win_state.pv_flat_index_set_list[i].end());
+        std::sort(pv_rep_lists[i].begin(), pv_rep_lists[i].end());
+    }
+
+    const auto facet_hash = SimplexUtility::getSimplexIndexHashTable(facet_list);
+
+    struct FfiStats
+    {
+        size_t cofacets_with_pv = 0;
+        size_t incidence_total = 0;
+        size_t facet_all_original = 0;
+        size_t missing_facet_realization = 0;
+        size_t diff_zero = 0;
+        size_t diff_one = 0;
+        size_t diff_multi_safe = 0;
+        size_t diff_multi_flagged = 0;
+        size_t max_facet = 0;
+        size_t gap_zero = 0;
+
+        std::vector<float> gap_samples;
+
+        double worst_overshoot = 0.0;
+        double worst_overshoot_cofacet_weight = 0.0;
+        double worst_overshoot_facet_weight = 0.0;
+
+        void accumulate(FfiStats& other)
+        {
+            cofacets_with_pv += other.cofacets_with_pv;
+            incidence_total += other.incidence_total;
+            facet_all_original += other.facet_all_original;
+            missing_facet_realization += other.missing_facet_realization;
+            diff_zero += other.diff_zero;
+            diff_one += other.diff_one;
+            diff_multi_safe += other.diff_multi_safe;
+            diff_multi_flagged += other.diff_multi_flagged;
+            max_facet += other.max_facet;
+            gap_zero += other.gap_zero;
+            gap_samples.insert(gap_samples.end(), other.gap_samples.begin(), other.gap_samples.end());
+            std::vector<float>().swap(other.gap_samples);
+
+            if (other.worst_overshoot > worst_overshoot)
+            {
+                worst_overshoot = other.worst_overshoot;
+                worst_overshoot_cofacet_weight = other.worst_overshoot_cofacet_weight;
+                worst_overshoot_facet_weight = other.worst_overshoot_facet_weight;
+            }
+        }
+    };
+
+    const int worker_count = threadnum > 0 ? threadnum : 1;
+    std::vector<FfiStats> thread_stats(static_cast<size_t>(worker_count));
+
+    struct FfiWorkspace
+    {
+        std::vector<size_t> cofacet_labels;
+        std::vector<size_t> cofacet_witnesses;
+        std::vector<size_t> facet_witnesses;
+        std::vector<size_t> restricted_witnesses;
+        std::vector<size_t> differing_positions;
+    };
+    std::vector<FfiWorkspace> thread_workspaces(static_cast<size_t>(worker_count));
+
+    omp_set_num_threads(worker_count);
+
+#pragma omp parallel for schedule(dynamic, 64) num_threads(worker_count)
+    for (size_t ci = 0; ci < cofacet_list.size(); ++ci)
+    {
+        const int threadid = omp_get_thread_num();
+        auto& stats = thread_stats[threadid];
+        auto& workspace = thread_workspaces[threadid];
+
+        const int64_t cofacet_bindex = cofacet_list[ci].first;
+        const double cofacet_weight = cofacet_list[ci].second;
+
+        const auto realization_iter = cofacet_pv_realizations.find(cofacet_bindex);
+        if (realization_iter == cofacet_pv_realizations.end())
+            continue;
+
+        ++stats.cofacets_with_pv;
+        const uint64_t packed_cofacet_realization = realization_iter->second;
+
+        SimplexUtility::getSimplexVerticesInPlace(binomial_table_, workspace.cofacet_labels,
+                                                  cofacet_bindex, total_label_count, interface_dim);
+
+        workspace.cofacet_witnesses.resize(cofacet_label_count);
+        for (size_t group = 0; group < cofacet_label_count; ++group)
+        {
+            const size_t label = workspace.cofacet_labels[group];
+            const size_t local_index = (packed_cofacet_realization >> (8 * group)) & 0xFFULL;
+            workspace.cofacet_witnesses[group] =
+                (label < origin_vt_num) ? label : pv_rep_lists[label - origin_vt_num][local_index];
+        }
+
+        int64_t above = 0;
+        int64_t below = cofacet_bindex;
+        size_t k = interface_dim;
+
+        for (size_t dropped_position = 0; dropped_position < cofacet_label_count; ++dropped_position)
+        {
+            const size_t dropped_label = workspace.cofacet_labels[dropped_position];
+            below -= binomial_table_[dropped_label][k + 1];
+            const int64_t facet_bindex = above + below;
+            above += binomial_table_[dropped_label][k];
+            if (dropped_position + 1 < cofacet_label_count)
+                --k;
+
+            ++stats.incidence_total;
+
+            size_t facet_pv_label_count = 0;
+            for (size_t q = 0; q < facet_label_count; ++q)
+            {
+                const size_t label = workspace.cofacet_labels[q < dropped_position ? q : q + 1];
+                if (label < origin_vt_num)
+                    break;
+                ++facet_pv_label_count;
+            }
+
+            if (facet_pv_label_count == 0)
+            {
+                ++stats.facet_all_original;
+                continue;
+            }
+
+            const auto facet_iter = facet_hash.find(facet_bindex);
+            const auto facet_realization_iter = facet_pv_realizations.find(facet_bindex);
+            if (facet_iter == facet_hash.end() || facet_realization_iter == facet_pv_realizations.end())
+            {
+                ++stats.missing_facet_realization;
+                continue;
+            }
+
+            const double facet_weight = facet_list[facet_iter->second].second;
+            const uint64_t packed_facet_realization = facet_realization_iter->second;
+
+            workspace.facet_witnesses.resize(facet_label_count);
+            workspace.restricted_witnesses.resize(facet_label_count);
+            workspace.differing_positions.clear();
+
+            for (size_t q = 0; q < facet_label_count; ++q)
+            {
+                const size_t cofacet_position = (q < dropped_position) ? q : q + 1;
+                const size_t label = workspace.cofacet_labels[cofacet_position];
+                const size_t facet_local_index = (packed_facet_realization >> (8 * q)) & 0xFFULL;
+
+                workspace.facet_witnesses[q] =
+                    (label < origin_vt_num) ? label : pv_rep_lists[label - origin_vt_num][facet_local_index];
+                workspace.restricted_witnesses[q] = workspace.cofacet_witnesses[cofacet_position];
+
+                if (workspace.facet_witnesses[q] != workspace.restricted_witnesses[q])
+                    workspace.differing_positions.push_back(q);
+            }
+
+            double restricted_weight = 0.0;
+            for (size_t a = 0; a + 1 < facet_label_count; ++a)
+            {
+                for (size_t b = a + 1; b < facet_label_count; ++b)
+                {
+                    restricted_weight = std::max(
+                        restricted_weight,
+                        dist_mat_.getDistance(workspace.restricted_witnesses[a],
+                                              workspace.restricted_witnesses[b]));
+                }
+            }
+
+            const double realization_gap = restricted_weight - facet_weight;
+            stats.gap_samples.push_back(static_cast<float>(realization_gap));
+
+            if (restricted_weight == cofacet_weight)
+                ++stats.max_facet;
+            if (realization_gap == 0.0)
+                ++stats.gap_zero;
+
+            const size_t diff_count = workspace.differing_positions.size();
+            if (diff_count == 0)
+            {
+                ++stats.diff_zero;
+            }
+            else if (diff_count == 1)
+            {
+                ++stats.diff_one;
+            }
+            else
+            {
+                // A clique on Y|F union Z is a one-step filler. Failure of this local
+                // sufficient test is only a flag; a filler chain may still exist.
+                double max_cross_distance = 0.0;
+                for (const auto q : workspace.differing_positions)
+                {
+                    for (size_t r = 0; r < facet_label_count; ++r)
+                    {
+                        max_cross_distance = std::max(
+                            max_cross_distance,
+                            dist_mat_.getDistance(workspace.restricted_witnesses[q],
+                                                  workspace.facet_witnesses[r]));
+                    }
+                }
+
+                if (max_cross_distance <= cofacet_weight)
+                {
+                    ++stats.diff_multi_safe;
+                }
+                else
+                {
+                    ++stats.diff_multi_flagged;
+                    const double overshoot = max_cross_distance - cofacet_weight;
+                    if (overshoot > stats.worst_overshoot)
+                    {
+                        stats.worst_overshoot = overshoot;
+                        stats.worst_overshoot_cofacet_weight = cofacet_weight;
+                        stats.worst_overshoot_facet_weight = facet_weight;
+                    }
+                }
+            }
+        }
+    }
+
+    FfiStats total;
+    for (auto& stats : thread_stats)
+        total.accumulate(stats);
+
+    std::sort(total.gap_samples.begin(), total.gap_samples.end());
+    const auto quantile = [&](const double q) -> double
+    {
+        if (total.gap_samples.empty())
+            return 0.0;
+        const size_t position = std::min(
+            total.gap_samples.size() - 1,
+            static_cast<size_t>(q * (total.gap_samples.size() - 1) + 0.5));
+        return total.gap_samples[position];
+    };
+
+    const size_t pv_incident = total.incidence_total - total.facet_all_original;
+    const size_t measured_pv_incident = total.gap_samples.size();
+    const size_t void_capable = total.diff_multi_safe + total.diff_multi_flagged;
+
+    std::cout << "  [ffi2] top interface dim = " << interface_dim
+              << "  pv cofacets = " << total.cofacets_with_pv
+              << "  incidences = " << total.incidence_total
+              << "  (all-original facets = " << total.facet_all_original << ")\n";
+
+    if (pv_incident > 0)
+    {
+        if (measured_pv_incident > 0)
+        {
+            std::cout << "  [ffi2] realization gap w(Y|F) - w(F): zero = " << total.gap_zero
+                      << " (" << (100.0 * total.gap_zero / measured_pv_incident) << "%)"
+                      << "  p50 = " << quantile(0.50)
+                      << "  p90 = " << quantile(0.90)
+                      << "  p99 = " << quantile(0.99)
+                      << "  max = " << total.gap_samples.back() << '\n';
+
+            std::cout << "  [ffi2] max facet (w(Y|F) == w(T)): " << total.max_facet
+                      << " (" << (100.0 * total.max_facet / measured_pv_incident) << "%)\n";
+
+            std::cout << "  [ffi2] differing PV coordinates: zero = " << total.diff_zero
+                      << "  one = " << total.diff_one
+                      << "  void-capable (multi) = " << void_capable
+                      << " (" << (100.0 * void_capable / measured_pv_incident) << "%)"
+                      << "  clique-certified = " << total.diff_multi_safe
+                      << "  no one-clique certificate = " << total.diff_multi_flagged << '\n';
+        }
+
+        if (total.diff_multi_flagged > 0)
+        {
+            std::cout << "  [ffi2] worst no-clique-certificate incidence: carrier overshoot = " << total.worst_overshoot
+                      << "  w(facet) = " << total.worst_overshoot_facet_weight
+                      << "  w(cofacet) = " << total.worst_overshoot_cofacet_weight << '\n';
+        }
+
+        if (total.missing_facet_realization > 0)
+        {
+            std::cout << "  [ffi2] WARNING: missing facet realizations = "
+                      << total.missing_facet_realization << '\n';
+        }
+
+        std::cout << "  [ffi2-line]"
+                  << " eps_lo=" << eps_lo
+                  << " eps_hi=" << eps_hi
+                  << " dim=" << interface_dim
+                  << " pv_cofacets=" << total.cofacets_with_pv
+                  << " inc=" << total.incidence_total
+                  << " all_orig=" << total.facet_all_original
+                  << " gap_zero=" << total.gap_zero
+                  << " gap_p50=" << quantile(0.50)
+                  << " gap_p90=" << quantile(0.90)
+                  << " gap_p99=" << quantile(0.99)
+                  << " gap_max=" << (total.gap_samples.empty() ? 0.0 : total.gap_samples.back())
+                  << " max_facet=" << total.max_facet
+                  << " diff0=" << total.diff_zero
+                  << " diff1=" << total.diff_one
+                  << " diffm_safe=" << total.diff_multi_safe
+                  << " diffm_flagged=" << total.diff_multi_flagged
+                  << " measured=" << measured_pv_incident
+                  << " missing=" << total.missing_facet_realization
+                  << " void_capable=" << void_capable
+                  << std::endl;
+    }
 }
 
 template class QuotientAndExpand<NormalDistMat>;

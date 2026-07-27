@@ -1,5 +1,6 @@
 #pragma once
 
+#include <concepts>
 #include <cstdint>
 #include <numeric>
 #include <unordered_set>
@@ -21,6 +22,16 @@ public:
     QuotientAndExpand(DistMatType& dist_mat, std::vector<std::vector<int64_t>>& binomial_table, const size_t originalvertexnumber) : dist_mat_(dist_mat), binomial_table_(binomial_table) {}
 
     void runPiecewisePH(const std::vector<double>& eps_breaks, const size_t maxdim, const int thread_number, const double pv_cap_scale, const bool verbose = false);
+    void runPiecewisePH(const std::vector<double>& eps_breaks, const size_t maxdim, const int thread_number, const double pv_cap_scale,
+                        const double pv_min_separation, const bool verbose);
+
+    template <std::floating_point SeparationScale>
+    void runPiecewisePH(const std::vector<double>& eps_breaks, const size_t maxdim, const int thread_number,
+                        const double pv_cap_scale, const SeparationScale pv_min_separation)
+    {
+        runPiecewisePH(eps_breaks, maxdim, thread_number, pv_cap_scale,
+                       static_cast<double>(pv_min_separation), false);
+    }
 
     //legacy QE
 
@@ -30,6 +41,7 @@ public:
 
 private:
     static constexpr int MAX_SIZE_ = 64; // PV size cap
+    static constexpr size_t MAX_FFI_PACKED_LABELS_ = sizeof(uint64_t);
 
     DistMatType& dist_mat_;
     std::vector<std::vector<int64_t>>& binomial_table_;
@@ -114,7 +126,8 @@ private:
     std::vector<std::unordered_set<size_t>> runWindow(const WindowState& win_state, const size_t maxdim, const double eps_lo, const double eps_hi,
                                                       const int thread_number, const bool collect_pv, const bool verbose);
 
-    std::vector<SelectedPV> trimPVCandidates(const WindowState& win_state, const std::vector<std::unordered_set<size_t>>& raw_label_sets, const double eps_hi, const double pv_cap_scale);
+    std::vector<SelectedPV> trimPVCandidates(const WindowState& win_state, const std::vector<std::unordered_set<size_t>>& raw_label_sets,
+                                             const double eps_hi, const double pv_cap_scale, const double min_separation);
 
     std::unordered_set<size_t> flattenLabelSet(const WindowState& win_state, const std::unordered_set<size_t>& raw_label_set);
 
@@ -137,6 +150,16 @@ private:
     QuotientEdgeData buildQuotientEdges(const std::vector<size_t>& active_labels,
                                          const std::vector<std::unordered_set<size_t>>& pv_index_sets,
                                          const double maxeps, int threadnum);
+
+    // Verbose-only top-interface diagnostics. Realizations are compared exactly; the
+    // multi-coordinate carrier-clique test is sufficient, but not necessary, for a filler.
+    void reportFalseFacetIdentificationStats(const WindowState& win_state,
+                                             const std::vector<std::pair<int64_t, double>>& facet_list,
+                                             const std::vector<std::pair<int64_t, double>>& cofacet_list,
+                                             const robin_hood::unordered_map<int64_t, uint64_t>& facet_pv_realizations,
+                                             const robin_hood::unordered_map<int64_t, uint64_t>& cofacet_pv_realizations,
+                                             const size_t interface_dim, const double eps_lo, const double eps_hi,
+                                             const int threadnum);
 
     robin_hood::unordered_map<int64_t, size_t> getQuotientActiveEdgeIndexHashTable(const std::vector<std::pair<int64_t, double>>& sorted_quotient_edge, const size_t pvnum);
 
