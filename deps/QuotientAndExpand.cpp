@@ -1,8 +1,6 @@
 #include <unordered_map>
-#include <stdexcept>
 #include <iostream>
 #include <limits>
-#include <cmath>
 #include <memory>
 
 #include "omp.h"
@@ -108,33 +106,9 @@ double QuotientAndExpand<DistMatType>::getMaxPairwiseDistance(const std::unorder
 }
 
 template <typename DistMatType>
-void QuotientAndExpand<DistMatType>::runPiecewisePH(const std::vector<double>& eps_breaks, const size_t maxdim, const int threadnumber, const double pv_cap_scale, const bool verbose)
-{
-    runPiecewisePH(eps_breaks, maxdim, threadnumber, pv_cap_scale, 0.0, verbose);
-}
-
-template <typename DistMatType>
 void QuotientAndExpand<DistMatType>::runPiecewisePH(const std::vector<double>& eps_breaks, const size_t maxdim, const int threadnumber,
                                                     const double pv_cap_scale, const double pv_min_separation, const bool verbose)
 {
-    if (!std::isfinite(pv_cap_scale) || pv_cap_scale <= 0.0)
-        throw std::invalid_argument("pv_cap_scale must be finite and greater than 0.");
-    if (!std::isfinite(pv_min_separation) || pv_min_separation < 0.0)
-        throw std::invalid_argument("pv_min_separation must be finite and nonnegative.");
-    if (eps_breaks.empty())
-        throw std::invalid_argument("eps_breaks must contain at least one scale.");
-    for (size_t i = 0; i < eps_breaks.size(); ++i)
-    {
-        if (!std::isfinite(eps_breaks[i]) || eps_breaks[i] <= 0.0)
-            throw std::invalid_argument("eps_breaks values must be finite and positive.");
-        if (i > 0 && eps_breaks[i] <= eps_breaks[i - 1])
-            throw std::invalid_argument("eps_breaks values must be strictly increasing.");
-    }
-    if (!std::isfinite(pv_cap_scale * eps_breaks.back()))
-        throw std::invalid_argument("pv_cap_scale times the final epsilon must be finite.");
-    if (!std::isfinite(pv_min_separation * eps_breaks.back()))
-        throw std::invalid_argument("pv_min_separation times the final epsilon must be finite.");
-
     WindowState win_state(dist_mat_.getVertexNumber());
     const double min_separation = pv_min_separation * eps_breaks.back();
 
@@ -1003,14 +977,11 @@ void QuotientAndExpand<DistMatType>::reportFalseFacetIdentificationStats(
         size_t incidence_total = 0;
         size_t facet_all_original = 0;
         size_t missing_facet_realization = 0;
-        size_t diff_zero = 0;
-        size_t diff_one = 0;
         size_t diff_multi_safe = 0;
         size_t diff_multi_flagged = 0;
-        size_t max_facet = 0;
-        size_t gap_zero = 0;
+        size_t gap_ratio_zero = 0;
 
-        std::vector<float> gap_samples;
+        std::vector<float> gap_ratio_samples;
 
         double worst_overshoot = 0.0;
         double worst_overshoot_cofacet_weight = 0.0;
@@ -1022,14 +993,13 @@ void QuotientAndExpand<DistMatType>::reportFalseFacetIdentificationStats(
             incidence_total += other.incidence_total;
             facet_all_original += other.facet_all_original;
             missing_facet_realization += other.missing_facet_realization;
-            diff_zero += other.diff_zero;
-            diff_one += other.diff_one;
             diff_multi_safe += other.diff_multi_safe;
             diff_multi_flagged += other.diff_multi_flagged;
-            max_facet += other.max_facet;
-            gap_zero += other.gap_zero;
-            gap_samples.insert(gap_samples.end(), other.gap_samples.begin(), other.gap_samples.end());
-            std::vector<float>().swap(other.gap_samples);
+            gap_ratio_zero += other.gap_ratio_zero;
+            gap_ratio_samples.insert(gap_ratio_samples.end(),
+                                     other.gap_ratio_samples.begin(),
+                                     other.gap_ratio_samples.end());
+            std::vector<float>().swap(other.gap_ratio_samples);
 
             if (other.worst_overshoot > worst_overshoot)
             {
@@ -1156,23 +1126,13 @@ void QuotientAndExpand<DistMatType>::reportFalseFacetIdentificationStats(
             }
 
             const double realization_gap = restricted_weight - facet_weight;
-            stats.gap_samples.push_back(static_cast<float>(realization_gap));
+            const double realization_gap_ratio = realization_gap / facet_weight;
+            stats.gap_ratio_samples.push_back(static_cast<float>(realization_gap_ratio));
 
-            if (restricted_weight == cofacet_weight)
-                ++stats.max_facet;
-            if (realization_gap == 0.0)
-                ++stats.gap_zero;
+            if (realization_gap_ratio == 0.0)
+                ++stats.gap_ratio_zero;
 
-            const size_t diff_count = workspace.differing_positions.size();
-            if (diff_count == 0)
-            {
-                ++stats.diff_zero;
-            }
-            else if (diff_count == 1)
-            {
-                ++stats.diff_one;
-            }
-            else
+            if (workspace.differing_positions.size() > 1)
             {
                 // A clique on Y|F union Z is a one-step filler. Failure of this local
                 // sufficient test is only a flag; a filler chain may still exist.
@@ -1211,46 +1171,42 @@ void QuotientAndExpand<DistMatType>::reportFalseFacetIdentificationStats(
     for (auto& stats : thread_stats)
         total.accumulate(stats);
 
-    std::sort(total.gap_samples.begin(), total.gap_samples.end());
+    std::sort(total.gap_ratio_samples.begin(), total.gap_ratio_samples.end());
     const auto quantile = [&](const double q) -> double
     {
-        if (total.gap_samples.empty())
+        if (total.gap_ratio_samples.empty())
             return 0.0;
         const size_t position = std::min(
-            total.gap_samples.size() - 1,
-            static_cast<size_t>(q * (total.gap_samples.size() - 1) + 0.5));
-        return total.gap_samples[position];
+            total.gap_ratio_samples.size() - 1,
+            static_cast<size_t>(q * (total.gap_ratio_samples.size() - 1) + 0.5));
+        return total.gap_ratio_samples[position];
     };
 
     const size_t pv_incident = total.incidence_total - total.facet_all_original;
-    const size_t measured_pv_incident = total.gap_samples.size();
+    const size_t measured_pv_incident = total.gap_ratio_samples.size();
     const size_t void_capable = total.diff_multi_safe + total.diff_multi_flagged;
-
-    std::cout << "  [ffi2] top interface dim = " << interface_dim
-              << "  pv cofacets = " << total.cofacets_with_pv
-              << "  incidences = " << total.incidence_total
-              << "  (all-original facets = " << total.facet_all_original << ")\n";
+    const auto percentage = [&](const size_t count) -> double
+    {
+        if (measured_pv_incident == 0)
+            return 0.0;
+        return 100.0 * count / measured_pv_incident;
+    };
 
     if (pv_incident > 0)
     {
         if (measured_pv_incident > 0)
         {
-            std::cout << "  [ffi2] realization gap w(Y|F) - w(F): zero = " << total.gap_zero
-                      << " (" << (100.0 * total.gap_zero / measured_pv_incident) << "%)"
+            std::cout << "  [ffi2] realization gap ratio (w(Y|F) - w(F)) / w(F): zero = "
+                      << percentage(total.gap_ratio_zero) << "%"
                       << "  p50 = " << quantile(0.50)
                       << "  p90 = " << quantile(0.90)
-                      << "  p99 = " << quantile(0.99)
-                      << "  max = " << total.gap_samples.back() << '\n';
+                      << "  p99 = " << quantile(0.99) << '\n';
 
-            std::cout << "  [ffi2] max facet (w(Y|F) == w(T)): " << total.max_facet
-                      << " (" << (100.0 * total.max_facet / measured_pv_incident) << "%)\n";
-
-            std::cout << "  [ffi2] differing PV coordinates: zero = " << total.diff_zero
-                      << "  one = " << total.diff_one
-                      << "  void-capable (multi) = " << void_capable
-                      << " (" << (100.0 * void_capable / measured_pv_incident) << "%)"
-                      << "  clique-certified = " << total.diff_multi_safe
-                      << "  no one-clique certificate = " << total.diff_multi_flagged << '\n';
+            std::cout << "  [ffi2] differing PV coordinates:"
+                      << "  void-capable (multi) = " << percentage(void_capable) << "%"
+                      << "  clique-certified = " << percentage(total.diff_multi_safe) << "%"
+                      << "  no one-clique certificate = "
+                      << percentage(total.diff_multi_flagged) << "%\n";
         }
 
         if (total.diff_multi_flagged > 0)
@@ -1270,22 +1226,18 @@ void QuotientAndExpand<DistMatType>::reportFalseFacetIdentificationStats(
                   << " eps_lo=" << eps_lo
                   << " eps_hi=" << eps_hi
                   << " dim=" << interface_dim
-                  << " pv_cofacets=" << total.cofacets_with_pv
-                  << " inc=" << total.incidence_total
-                  << " all_orig=" << total.facet_all_original
-                  << " gap_zero=" << total.gap_zero
-                  << " gap_p50=" << quantile(0.50)
-                  << " gap_p90=" << quantile(0.90)
-                  << " gap_p99=" << quantile(0.99)
-                  << " gap_max=" << (total.gap_samples.empty() ? 0.0 : total.gap_samples.back())
-                  << " max_facet=" << total.max_facet
-                  << " diff0=" << total.diff_zero
-                  << " diff1=" << total.diff_one
-                  << " diffm_safe=" << total.diff_multi_safe
-                  << " diffm_flagged=" << total.diff_multi_flagged
+                  << " pv_cofacets =" << total.cofacets_with_pv
+                //   << " inc=" << total.incidence_total
+                //   << " all_orig=" << total.facet_all_original
+                  << " gap_ratio_zero_pct=" << percentage(total.gap_ratio_zero)
+                  << " gap_ratio_p50=" << quantile(0.50)
+                  << " gap_ratio_p90=" << quantile(0.90)
+                  << " gap_ratio_p99=" << quantile(0.99)
+                  << " diffm_safe_pct=" << percentage(total.diff_multi_safe)
+                  << " diffm_flagged_pct=" << percentage(total.diff_multi_flagged)
                   << " measured=" << measured_pv_incident
                   << " missing=" << total.missing_facet_realization
-                  << " void_capable=" << void_capable
+                  << " void_capable_pct=" << percentage(void_capable)
                   << std::endl;
     }
 }

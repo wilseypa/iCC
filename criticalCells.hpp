@@ -5,7 +5,6 @@
 #include <map>
 #include <iostream>
 #include <chrono>
-#include <concepts>
 #include <numeric>
 
 #include <set>
@@ -120,17 +119,9 @@ public:
 
     void morseQuotientAndExpand(const size_t maxdim, const double initeps, const double maxeps, const int threadnumber);
 
-    void morsePiecewisePH(const size_t maxdim, const std::vector<double>& eps_breaks, const int thread_number, const double pv_cap_scale, const bool verbose = false);
-    void morsePiecewisePH(const size_t maxdim, const std::vector<double>& eps_breaks, const int thread_number, const double pv_cap_scale,
-                          const double pv_min_separation, const bool verbose);
-
-    template <std::floating_point SeparationScale>
     void morsePiecewisePH(const size_t maxdim, const std::vector<double>& eps_breaks, const int thread_number,
-                          const double pv_cap_scale, const SeparationScale pv_min_separation)
-    {
-        morsePiecewisePH(maxdim, eps_breaks, thread_number, pv_cap_scale,
-                         static_cast<double>(pv_min_separation), false);
-    }
+                          const double pv_cap_scale, const double pv_min_separation = 0.0,
+                          const bool verbose = false);
 
 private:
     std::vector<std::vector<double>> point_cloud_;

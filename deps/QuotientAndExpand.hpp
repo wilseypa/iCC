@@ -1,6 +1,5 @@
 #pragma once
 
-#include <concepts>
 #include <cstdint>
 #include <numeric>
 #include <unordered_set>
@@ -21,17 +20,9 @@ class QuotientAndExpand
 public:
     QuotientAndExpand(DistMatType& dist_mat, std::vector<std::vector<int64_t>>& binomial_table, const size_t originalvertexnumber) : dist_mat_(dist_mat), binomial_table_(binomial_table) {}
 
-    void runPiecewisePH(const std::vector<double>& eps_breaks, const size_t maxdim, const int thread_number, const double pv_cap_scale, const bool verbose = false);
-    void runPiecewisePH(const std::vector<double>& eps_breaks, const size_t maxdim, const int thread_number, const double pv_cap_scale,
-                        const double pv_min_separation, const bool verbose);
-
-    template <std::floating_point SeparationScale>
     void runPiecewisePH(const std::vector<double>& eps_breaks, const size_t maxdim, const int thread_number,
-                        const double pv_cap_scale, const SeparationScale pv_min_separation)
-    {
-        runPiecewisePH(eps_breaks, maxdim, thread_number, pv_cap_scale,
-                       static_cast<double>(pv_min_separation), false);
-    }
+                        const double pv_cap_scale, const double pv_min_separation = 0.0,
+                        const bool verbose = false);
 
     //legacy QE
 

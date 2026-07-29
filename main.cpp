@@ -527,22 +527,29 @@ bool promptConfirmation(const std::string& tool,
     }
 }
 
-void validateEpsilonBreaks(const std::vector<double>& eps_breaks)
+void validateResolvedPiecewisePHInputs(const std::vector<double>& eps_breaks,
+                                       const double pv_cap_scale,
+                                       const double pv_min_separation)
 {
+    if (!std::isfinite(pv_cap_scale) || pv_cap_scale <= 0.0)
+        throw std::invalid_argument("--pv-cap-scale is required and must be finite and positive when --tool piecewise is selected.");
+    if (!std::isfinite(pv_min_separation) || pv_min_separation < 0.0)
+        throw std::invalid_argument("--pv-min-separation must be finite and nonnegative.");
     if (eps_breaks.empty())
-        throw std::invalid_argument("--eps-breaks requires one or more positive numbers when --tool piecewise is selected.");
+        throw std::invalid_argument("Piecewise PH requires at least one resolved epsilon break.");
 
-    for (const double eps : eps_breaks)
+    for (size_t i = 0; i < eps_breaks.size(); ++i)
     {
-        if (!std::isfinite(eps) || eps <= 0.0)
-            throw std::invalid_argument("--eps-breaks values must be finite and positive.");
+        if (!std::isfinite(eps_breaks[i]) || eps_breaks[i] <= 0.0)
+            throw std::invalid_argument("Resolved epsilon breaks must be finite and positive.");
+        if (i > 0 && eps_breaks[i] <= eps_breaks[i - 1])
+            throw std::invalid_argument("Resolved epsilon breaks must be strictly increasing.");
     }
 
-    for (size_t i = 1; i < eps_breaks.size(); ++i)
-    {
-        if (eps_breaks[i] <= eps_breaks[i - 1])
-            throw std::invalid_argument("--eps-breaks values must be strictly increasing.");
-    }
+    if (!std::isfinite(pv_cap_scale * eps_breaks.back()))
+        throw std::invalid_argument("--pv-cap-scale times the final epsilon break must be finite.");
+    if (!std::isfinite(pv_min_separation * eps_breaks.back()))
+        throw std::invalid_argument("--pv-min-separation times the final epsilon break must be finite.");
 }
 
 void validateRunOptions(const std::string& tool,
@@ -552,9 +559,7 @@ void validateRunOptions(const std::string& tool,
                         const std::vector<double>& eps_breaks,
                         const size_t eps_interval_count,
                         const double eps_interval_scale,
-                        const double maxeps,
-                        const double pv_cap_scale,
-                        const double pv_min_separation)
+                        const double maxeps)
 {
     const std::string normalized_tool = normalizeTool(tool);
 
@@ -580,16 +585,8 @@ void validateRunOptions(const std::string& tool,
         if (has_explicit_breaks == has_automatic_intervals)
             throw std::invalid_argument("When --tool piecewise is selected, specify exactly one of --eps-breaks or --eps-interval-count.");
 
-        if (has_explicit_breaks)
-            validateEpsilonBreaks(eps_breaks);
-
         if (has_automatic_intervals && !isValidEpsilonIntervalScale(eps_interval_scale))
             throw std::invalid_argument("--eps-interval-scale must be a finite number greater than or equal to 1.0.");
-
-        if (!std::isfinite(pv_cap_scale) || pv_cap_scale <= 0.0)
-            throw std::invalid_argument("--pv-cap-scale is required and must be finite and positive when --tool piecewise is selected.");
-        if (!std::isfinite(pv_min_separation) || pv_min_separation < 0.0)
-            throw std::invalid_argument("--pv-min-separation must be finite and nonnegative.");
     }
     else
     {
@@ -613,8 +610,8 @@ int runTool(const std::string& tool,
 {
     const std::string normalized_tool = normalizeTool(tool);
 
-    validateRunOptions(normalized_tool, filename, maxdim, threadnumber, eps_breaks, eps_interval_count,
-                       eps_interval_scale, maxeps, pv_cap_scale, pv_min_separation);
+    validateRunOptions(normalized_tool, filename, maxdim, threadnumber, eps_breaks,
+                       eps_interval_count, eps_interval_scale, maxeps);
 
     if (print_configuration && verbose)
         printRunConfiguration(normalized_tool, filename, maxdim, threadnumber, eps_breaks,
@@ -627,6 +624,7 @@ int runTool(const std::string& tool,
     if (normalized_tool == PIECEWISE_PH_TOOL)
     {
         resolved_eps_breaks = resolveEpsilonBreaks(icc, eps_breaks, eps_interval_count, eps_interval_scale);
+        validateResolvedPiecewisePHInputs(resolved_eps_breaks, pv_cap_scale, pv_min_separation);
 
         if (verbose && eps_breaks.empty())
         {
@@ -736,8 +734,8 @@ int runCommandLine(int argc, char** argv)
     app.add_flag("-v,--verbose", verbose, "Show diagnostic output");
 
     // For a std::vector option, CLI11 already accepts one or more values when
-    // the option is present. Conditional requirement and strictly-increasing
-    // validation are handled after parsing in validateRunOptions().
+    // the option is present. Conditional requirement and resolved-value
+    // validation are handled after parsing.
     app.add_option("--eps-breaks", eps_breaks,
                    "For --tool piecewise. Strictly increasing epsilon breaks. Accepts spaces or commas, e.g. '--eps-breaks 1.0 1.4 1.7' or '--eps-breaks=1.0,1.4,1.7'")
         ->delimiter(',')

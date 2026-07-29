@@ -12,7 +12,6 @@
 
 #include "omp.h"
 
-#include <cmath>
 #include <numeric>
 #include <unordered_set>
 #include <type_traits>
@@ -444,37 +443,11 @@ void CritCells<ComplexType, DistMatType>::morseQuotientAndExpand(const size_t ma
 }
 
 template <typename ComplexType, typename DistMatType>
-void CritCells<ComplexType, DistMatType>::morsePiecewisePH(const size_t maxdim, const std::vector<double>& eps_breaks, const int thread_number, const double pv_cap_scale, const bool verbose)
-{
-    morsePiecewisePH(maxdim, eps_breaks, thread_number, pv_cap_scale, 0.0, verbose);
-}
-
-template <typename ComplexType, typename DistMatType>
 void CritCells<ComplexType, DistMatType>::morsePiecewisePH(const size_t maxdim, const std::vector<double>& eps_breaks, const int thread_number,
                                                            const double pv_cap_scale, const double pv_min_separation, const bool verbose)
 {
     if constexpr (std::is_same_v<ComplexType, Alpha>)
         throw std::invalid_argument("Piece-wise PH currently only supports VR complex.");
-
-    if (!std::isfinite(pv_cap_scale) || pv_cap_scale <= 0.0)
-        throw std::invalid_argument("pv_cap_scale must be finite and greater than 0.");
-    if (!std::isfinite(pv_min_separation) || pv_min_separation < 0.0)
-        throw std::invalid_argument("pv_min_separation must be finite and nonnegative.");
-    if (eps_breaks.empty())
-        throw std::invalid_argument("eps_breaks must contain at least one scale.");
-
-    for (size_t i = 0; i < eps_breaks.size(); ++i)
-    {
-        if (!std::isfinite(eps_breaks[i]) || eps_breaks[i] <= 0.0)
-            throw std::invalid_argument("eps_breaks values must be finite and positive.");
-        if (i > 0 && eps_breaks[i] <= eps_breaks[i - 1])
-            throw std::invalid_argument("eps_breaks values must be strictly increasing.");
-    }
-
-    if (!std::isfinite(pv_cap_scale * eps_breaks.back()))
-        throw std::invalid_argument("pv_cap_scale times the final epsilon must be finite.");
-    if (!std::isfinite(pv_min_separation * eps_breaks.back()))
-        throw std::invalid_argument("pv_min_separation times the final epsilon must be finite.");
 
     size_t npts = this->getVertexNumber();
     auto binomial_table = SimplexUtility::getBinomialTable(npts, maxdim);
