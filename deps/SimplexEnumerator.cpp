@@ -525,8 +525,8 @@ template <bool RecordRealization>
 std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::enumerateGeometricCofacets(
     const std::vector<std::pair<int64_t, double>>& sorted_quotient_simplex_list,
     const std::vector<size_t>& active_labels,
-    const std::vector<std::unordered_set<size_t>>& pv_index_sets,
-    const robin_hood::unordered_map<uint64_t, double>& label_distance_hash,
+    const std::vector<std::vector<size_t>>& pv_rep_lists,
+    const robin_hood::unordered_map<uint64_t, double>& pv_label_distance_hash,
     const size_t dim,
     const double maxeps,
     const int threadnum,
@@ -544,14 +544,16 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::enumerat
     std::vector<std::vector<std::pair<int64_t, double>>> thread_workspace(static_cast<size_t>(worker_count));
 
     const size_t originalvtnum = dist_mat_.getVertexNumber();
-    const size_t npts = originalvtnum + pv_index_sets.size();
+    const size_t npts = originalvtnum + pv_rep_lists.size();
 
-    std::vector<std::vector<size_t>> pv_rep_lists(pv_index_sets.size());
-    for (size_t i = 0; i < pv_index_sets.size(); ++i)
+    // Avoid duplicating original-original distances in the PV-specific hash.
+    const auto getQuotientLabelDistance =
+        [this, originalvtnum, &pv_label_distance_hash](const size_t label_i, const size_t label_j)
     {
-        pv_rep_lists[i].assign(pv_index_sets[i].begin(), pv_index_sets[i].end());
-        std::sort(pv_rep_lists[i].begin(), pv_rep_lists[i].end());
-    }
+        if (label_i < originalvtnum && label_j < originalvtnum)
+            return dist_mat_.getDistance(label_i, label_j);
+        return SimplexUtility::getPVLabelDistance(pv_label_distance_hash, label_i, label_j);
+    };
 
     std::vector<SelectedWitnessWorkspace<RecordRealization>> witness_workspaces(static_cast<size_t>(worker_count));
 
@@ -595,7 +597,7 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::enumerat
                 double lower_bound = weight;
                 for (const auto& vt : simplex_vertices)
                 {
-                    const double d = SimplexUtility::getLabelDistance(label_distance_hash, covt, vt);
+                    const double d = getQuotientLabelDistance(covt, vt);
                     if (d > lower_bound)
                         lower_bound = d;
                 }
@@ -677,14 +679,14 @@ template <typename DistMatType>
 std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getGeometricCofacetList(
     const std::vector<std::pair<int64_t, double>>& sorted_quotient_simplex_list,
     const std::vector<size_t>& active_labels,
-    const std::vector<std::unordered_set<size_t>>& pv_index_sets,
-    const robin_hood::unordered_map<uint64_t, double>& label_distance_hash,
+    const std::vector<std::vector<size_t>>& pv_rep_lists,
+    const robin_hood::unordered_map<uint64_t, double>& pv_label_distance_hash,
     const size_t dim,
     const double maxeps,
     const int threadnum)
 {
     return enumerateGeometricCofacets<false>(sorted_quotient_simplex_list, active_labels,
-                                             pv_index_sets, label_distance_hash,
+                                             pv_rep_lists, pv_label_distance_hash,
                                              dim, maxeps, threadnum, nullptr);
 }
 
@@ -692,15 +694,15 @@ template <typename DistMatType>
 std::vector<std::pair<int64_t, double>> SimplexEnumerator<DistMatType>::getGeometricCofacetListWithRealizations(
     const std::vector<std::pair<int64_t, double>>& sorted_quotient_simplex_list,
     const std::vector<size_t>& active_labels,
-    const std::vector<std::unordered_set<size_t>>& pv_index_sets,
-    const robin_hood::unordered_map<uint64_t, double>& label_distance_hash,
+    const std::vector<std::vector<size_t>>& pv_rep_lists,
+    const robin_hood::unordered_map<uint64_t, double>& pv_label_distance_hash,
     const size_t dim,
     const double maxeps,
     const int threadnum,
     robin_hood::unordered_map<int64_t, uint64_t>& pv_realization_out)
 {
     return enumerateGeometricCofacets<true>(sorted_quotient_simplex_list, active_labels,
-                                            pv_index_sets, label_distance_hash,
+                                            pv_rep_lists, pv_label_distance_hash,
                                             dim, maxeps, threadnum, &pv_realization_out);
 }
 

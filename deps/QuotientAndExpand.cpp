@@ -57,7 +57,7 @@ namespace
         {
             const double facetweight = pair_info.facet_weight;
             const double cofacetweight = pair_info.cofacet_weight;
-            if (!(cofacetweight > eps_lo || cofacetweight < 0)) continue;
+            if (!(cofacetweight >= eps_lo || cofacetweight < 0)) continue;
 
             if (verbose)
             {
@@ -106,6 +106,38 @@ double QuotientAndExpand<DistMatType>::getMaxPairwiseDistance(const std::unorder
 }
 
 template <typename DistMatType>
+std::vector<std::vector<size_t>> QuotientAndExpand<DistMatType>::getPVRepresentativeLists(
+    const WindowState& win_state) const
+{
+    std::vector<std::vector<size_t>> pv_rep_lists;
+    pv_rep_lists.reserve(win_state.pv_list.size());
+
+    for (const auto& pv : win_state.pv_list)
+    {
+        pv_rep_lists.emplace_back(pv.flat_index_set.begin(), pv.flat_index_set.end());
+        std::sort(pv_rep_lists.back().begin(), pv_rep_lists.back().end());
+    }
+
+    return pv_rep_lists;
+}
+
+template <typename DistMatType>
+std::vector<std::vector<size_t>> QuotientAndExpand<DistMatType>::getPVRepresentativeLists(
+    const std::vector<std::unordered_set<size_t>>& pv_index_sets) const
+{
+    std::vector<std::vector<size_t>> pv_rep_lists;
+    pv_rep_lists.reserve(pv_index_sets.size());
+
+    for (const auto& pv_index_set : pv_index_sets)
+    {
+        pv_rep_lists.emplace_back(pv_index_set.begin(), pv_index_set.end());
+        std::sort(pv_rep_lists.back().begin(), pv_rep_lists.back().end());
+    }
+
+    return pv_rep_lists;
+}
+
+template <typename DistMatType>
 void QuotientAndExpand<DistMatType>::runPiecewisePH(const std::vector<double>& eps_breaks, const size_t maxdim, const int threadnumber,
                                                     const double pv_cap_scale, const double pv_min_separation, const bool verbose)
 {
@@ -137,20 +169,20 @@ void QuotientAndExpand<DistMatType>::runPiecewisePH(const std::vector<double>& e
         if (verbose)
         {
             std::cout << "after eps range "<<eps_lo<< "  " <<eps_hi<< "  new pv number = "<<new_pv_count
-                      <<"  total pv number = "<<win_state.pv_flat_index_set_list.size()<<std::endl;
+                      <<"  total pv number = "<<win_state.pv_list.size()<<std::endl;
 
             std::cout << "pv flat index set statistics:" << std::endl;
-            if (win_state.pv_flat_index_set_list.empty())
+            if (win_state.pv_list.empty())
             {
                 std::cout << "  (empty)" << std::endl;
             }
             else
             {
-                for (size_t pv_idx = 0; pv_idx < win_state.pv_flat_index_set_list.size(); ++pv_idx)
+                for (size_t pv_idx = 0; pv_idx < win_state.pv_list.size(); ++pv_idx)
                 {
-                    const auto& pv_index_set = win_state.pv_flat_index_set_list[pv_idx];
-                    std::cout << "  [" << pv_idx << "] size = " << pv_index_set.size()
-                              << "  max diameter = " << win_state.pv_diameter_list[pv_idx] << '\n';
+                    const auto& pv = win_state.pv_list[pv_idx];
+                    std::cout << "  [" << pv_idx << "] size = " << pv.flat_index_set.size()
+                              << "  max diameter = " << pv.diameter << '\n';
                 }
                 std::cout << std::endl;
             }
@@ -170,18 +202,19 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
     }
 
     const size_t original_vt_num = win_state.original_vertex_number;
-    const size_t pv_num = win_state.pv_flat_index_set_list.size();
+    const size_t pv_num = win_state.pv_list.size();
     const size_t total_label_count = original_vt_num + pv_num;
 
     SimplexUtility::updateBinomialTable(binomial_table_, original_vt_num, pv_num, maxdim);
 
     SimplexEnumerator<DistMatType> simplex_enumerator(dist_mat_, binomial_table_);
 
-    auto& pv_index_sets = win_state.pv_flat_index_set_list;
-    auto& active_labels = win_state.active_label_list;
+    // Build one deterministic ordering per window for enumeration and packed FFI witnesses.
+    const auto pv_rep_lists = getPVRepresentativeLists(win_state);
+    const auto& active_labels = win_state.active_label_list;
 
-    auto quotient_edge_data = buildQuotientEdges(active_labels, pv_index_sets, eps_hi, threadnumber);
-    auto label_distance_hash = std::move(quotient_edge_data.label_distance_hash);
+    auto quotient_edge_data = buildQuotientEdges(active_labels, pv_rep_lists, eps_hi, threadnumber);
+    auto pv_label_distance_hash = std::move(quotient_edge_data.pv_label_distance_hash);
     auto sorted_quotient_simplex = std::move(quotient_edge_data.sorted_edges);
 
     auto active_simplex_hash = getQuotientActiveEdgeIndexHashTable(sorted_quotient_simplex, pv_num);
@@ -207,12 +240,12 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
         {
             ffi_realizations = std::make_unique<FfiRealizationState>();
             return simplex_enumerator.getGeometricCofacetListWithRealizations(
-                sorted_quotient_simplex, active_labels, pv_index_sets, label_distance_hash,
+                sorted_quotient_simplex, active_labels, pv_rep_lists, pv_label_distance_hash,
                 1, eps_hi, threadnumber, ffi_realizations->cofacet_realization_hash);
         }
 
         return simplex_enumerator.getGeometricCofacetList(
-            sorted_quotient_simplex, active_labels, pv_index_sets, label_distance_hash,
+            sorted_quotient_simplex, active_labels, pv_rep_lists, pv_label_distance_hash,
             1, eps_hi, threadnumber);
     };
     auto sorted_quotient_cofacet = enumerate_initial_cofacets();
@@ -236,7 +269,8 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
 
         if (collect_ffi_stats && is_top_dimension)
         {
-            reportFalseFacetIdentificationStats(win_state, sorted_quotient_simplex, sorted_quotient_cofacet,
+            reportFalseFacetIdentificationStats(win_state, pv_rep_lists,
+                                                sorted_quotient_simplex, sorted_quotient_cofacet,
                                                 ffi_realizations->facet_realization_hash,
                                                 ffi_realizations->cofacet_realization_hash,
                                                 dim, eps_lo, eps_hi, threadnumber);
@@ -288,13 +322,13 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
                 std::swap(ffi_realizations->facet_realization_hash,
                           ffi_realizations->cofacet_realization_hash);
                 sorted_quotient_simplex = simplex_enumerator.getGeometricCofacetListWithRealizations(
-                    sorted_quotient_cofacet, active_labels, pv_index_sets, label_distance_hash,
+                    sorted_quotient_cofacet, active_labels, pv_rep_lists, pv_label_distance_hash,
                     dim, eps_hi, threadnumber, ffi_realizations->cofacet_realization_hash);
             }
             else
             {
                 sorted_quotient_simplex = simplex_enumerator.getGeometricCofacetList(
-                    sorted_quotient_cofacet, active_labels, pv_index_sets, label_distance_hash,
+                    sorted_quotient_cofacet, active_labels, pv_rep_lists, pv_label_distance_hash,
                     dim, eps_hi, threadnumber);
             }
             std::swap(sorted_quotient_simplex, sorted_quotient_cofacet);
@@ -330,9 +364,9 @@ QuotientAndExpand<DistMatType>::trimPVCandidates(const WindowState& win_state, c
         if (min_separation <= 0.0)
             return true;
 
-        for (const auto& carried_pv : win_state.pv_flat_index_set_list)
+        for (const auto& carried_pv : win_state.pv_list)
         {
-            if (minCrossDistance(flat_index_set, carried_pv) < min_separation)
+            if (minCrossDistance(flat_index_set, carried_pv.flat_index_set) < min_separation)
                 return false;
         }
 
@@ -398,7 +432,7 @@ std::unordered_set<size_t> QuotientAndExpand<DistMatType>::flattenLabelSet(const
         }
         else
         {
-            const auto& pv_indices = win_state.pv_flat_index_set_list[label - origin_vt_num];
+            const auto& pv_indices = win_state.pv_list[label - origin_vt_num].flat_index_set;
             flat_index_set.insert(pv_indices.begin(), pv_indices.end());
         }
     }
@@ -416,7 +450,7 @@ void QuotientAndExpand<DistMatType>::rebuildWindowState(WindowState& win_state, 
         return;
 
     const size_t origin_vt_num = win_state.original_vertex_number;
-    const size_t old_pv_num = win_state.pv_flat_index_set_list.size();
+    const size_t old_pv_num = win_state.pv_list.size();
 
     std::vector<bool> is_newly_covered(origin_vt_num, false);
     for (const auto& new_pv : new_pv_list)
@@ -441,12 +475,10 @@ void QuotientAndExpand<DistMatType>::rebuildWindowState(WindowState& win_state, 
     }
 
     size_t next_pv_label = origin_vt_num + old_pv_num;
-    win_state.pv_flat_index_set_list.reserve(old_pv_num + new_pv_list.size());
-    win_state.pv_diameter_list.reserve(old_pv_num + new_pv_list.size());
+    win_state.pv_list.reserve(old_pv_num + new_pv_list.size());
     for (auto& new_pv : new_pv_list)
     {
-        win_state.pv_flat_index_set_list.push_back(std::move(new_pv.flat_index_set));
-        win_state.pv_diameter_list.push_back(new_pv.diameter);
+        win_state.pv_list.push_back(std::move(new_pv));
         active_label_list.push_back(next_pv_label++);
     }
 
@@ -536,30 +568,36 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getNonMe
 }
 
 template <typename DistMatType>
-double QuotientAndExpand<DistMatType>::computeLabelDistance(const size_t i, const size_t j, const std::vector<std::unordered_set<size_t>>& pv_index_sets)
+double QuotientAndExpand<DistMatType>::computeLabelDistance(
+    const size_t i,
+    const size_t j,
+    const std::vector<std::vector<size_t>>& pv_rep_lists)
 {
     const size_t originalvtnum = dist_mat_.getVertexNumber();
-
-    // passed in as i < j
 
     if (i < originalvtnum && j < originalvtnum)
         return dist_mat_.getDistance(i, j);
 
-    const std::unordered_set<size_t> temp_i_set = (i < originalvtnum) ? std::unordered_set<size_t>{i} : std::unordered_set<size_t>();
-    const std::unordered_set<size_t> temp_j_set = (j < originalvtnum) ? std::unordered_set<size_t>{j} : std::unordered_set<size_t>();
-
-    const std::unordered_set<size_t>& vtset_i = (i < originalvtnum) ? temp_i_set : pv_index_sets[i - originalvtnum];
-    const std::unordered_set<size_t>& vtset_j = (j < originalvtnum) ? temp_j_set : pv_index_sets[j - originalvtnum];
-
     double mindist = std::numeric_limits<double>::max();
-    for (const auto& vi : vtset_i)
+
+    if (i < originalvtnum)
     {
-        for (const auto& vj : vtset_j)
-        {
-            const double distance = dist_mat_.getDistance(vi, vj);
-            if (distance < mindist)
-                mindist = distance;
-        }
+        for (const auto vj : pv_rep_lists[j - originalvtnum])
+            mindist = std::min(mindist, dist_mat_.getDistance(i, vj));
+        return mindist;
+    }
+
+    if (j < originalvtnum)
+    {
+        for (const auto vi : pv_rep_lists[i - originalvtnum])
+            mindist = std::min(mindist, dist_mat_.getDistance(vi, j));
+        return mindist;
+    }
+
+    for (const auto vi : pv_rep_lists[i - originalvtnum])
+    {
+        for (const auto vj : pv_rep_lists[j - originalvtnum])
+            mindist = std::min(mindist, dist_mat_.getDistance(vi, vj));
     }
 
     return mindist;
@@ -567,20 +605,21 @@ double QuotientAndExpand<DistMatType>::computeLabelDistance(const size_t i, cons
 
 template <typename DistMatType>
 typename QuotientAndExpand<DistMatType>::QuotientEdgeData QuotientAndExpand<DistMatType>::buildQuotientEdges(const std::vector<size_t>& active_labels,
-                                                                                                             const std::vector<std::unordered_set<size_t>>& pv_index_sets,
+                                                                                                             const std::vector<std::vector<size_t>>& pv_rep_lists,
                                                                                                              const double maxeps, int threadnum)
 {
     const int worker_count = threadnum > 0 ? threadnum : 1;
+    const size_t originalvtnum = dist_mat_.getVertexNumber();
     omp_set_num_threads(worker_count);
 
-    std::vector<robin_hood::unordered_map<uint64_t, double>> thread_hash_tables(static_cast<size_t>(worker_count));
+    std::vector<robin_hood::unordered_map<uint64_t, double>> thread_pv_label_distance_hashes(static_cast<size_t>(worker_count));
     std::vector<std::vector<std::pair<int64_t, double>>> thread_edge_workspace(static_cast<size_t>(worker_count));
 
 #pragma omp parallel for schedule(dynamic) num_threads(worker_count)
     for (size_t i = 0; i < active_labels.size(); ++i)
     {
         int threadid = omp_get_thread_num();
-        auto& thread_hash_table = thread_hash_tables[threadid];
+        auto& thread_pv_label_distance_hash = thread_pv_label_distance_hashes[threadid];
         auto& thread_edges = thread_edge_workspace[threadid];
 
         for (size_t j = i + 1; j < active_labels.size(); ++j)
@@ -590,9 +629,13 @@ typename QuotientAndExpand<DistMatType>::QuotientEdgeData QuotientAndExpand<Dist
             if (label_i > label_j)
                 std::swap(label_i, label_j);
 
-            const double weight = computeLabelDistance(label_i, label_j, pv_index_sets);
-            const uint64_t key = (static_cast<uint64_t>(label_i) << 32) | static_cast<uint64_t>(label_j);
-            thread_hash_table.emplace(key, weight);
+            const double weight = computeLabelDistance(label_i, label_j, pv_rep_lists);
+            // only hash pv incident edges
+            if (label_i >= originalvtnum || label_j >= originalvtnum)
+            {
+                const uint64_t key = (static_cast<uint64_t>(label_i) << 32) | static_cast<uint64_t>(label_j);
+                thread_pv_label_distance_hash.emplace(key, weight);
+            }
 
             if (weight > 0 && weight < maxeps)
             {
@@ -602,13 +645,19 @@ typename QuotientAndExpand<DistMatType>::QuotientEdgeData QuotientAndExpand<Dist
         }
     }
 
-    robin_hood::unordered_map<uint64_t, double> label_distance_hash;
-    const size_t pair_count = active_labels.size() < 2 ? 0 : (active_labels.size() * (active_labels.size() - 1)) / 2;
-    label_distance_hash.reserve(pair_count);
-    for (const auto& thread_hash_table : thread_hash_tables)
-        label_distance_hash.insert(thread_hash_table.begin(), thread_hash_table.end());
+    size_t pv_label_pair_count = 0;
+    for (const auto& thread_pv_label_distance_hash : thread_pv_label_distance_hashes)
+        pv_label_pair_count += thread_pv_label_distance_hash.size();
 
-    return QuotientEdgeData{std::move(label_distance_hash), SimplexUtility::sortAndMergeSimplexChunks(thread_edge_workspace, threadnum)};
+    robin_hood::unordered_map<uint64_t, double> pv_label_distance_hash;
+    pv_label_distance_hash.reserve(pv_label_pair_count);
+    for (const auto& thread_pv_label_distance_hash : thread_pv_label_distance_hashes)
+    {
+        pv_label_distance_hash.insert(thread_pv_label_distance_hash.begin(),
+                                      thread_pv_label_distance_hash.end());
+    }
+
+    return QuotientEdgeData{std::move(pv_label_distance_hash), SimplexUtility::sortAndMergeSimplexChunks(thread_edge_workspace, threadnum)};
 }
 
 template <typename DistMatType>
@@ -681,15 +730,17 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
     SimplexEnumerator<DistMatType> simplex_enumerator(dist_mat_, binomial_table_);
 
     auto active_labels = getActiveLabelIndices(pv_index_sets);
+    const auto pv_rep_lists = getPVRepresentativeLists(pv_index_sets);
 
-    auto quotient_edge_data = buildQuotientEdges(active_labels, pv_index_sets, maxeps, threadnumber);
-    auto label_distance_hash = std::move(quotient_edge_data.label_distance_hash);
+    auto quotient_edge_data = buildQuotientEdges(active_labels, pv_rep_lists, maxeps, threadnumber);
+    auto pv_label_distance_hash = std::move(quotient_edge_data.pv_label_distance_hash);
     auto sorted_quotient_simplex = std::move(quotient_edge_data.sorted_edges);
 
     auto active_facet_hash = getQuotientActiveEdgeIndexHashTable(sorted_quotient_simplex, pvnum);
 
-    // auto sorted_quotient_cofacet = getQuotientCofacetList(sorted_quotient_simplex, active_labels, label_distance_hash, 1, maxeps, threadnumber);
-    auto sorted_quotient_cofacet = simplex_enumerator.getGeometricCofacetList(sorted_quotient_simplex, active_labels, pv_index_sets, label_distance_hash, 1, maxeps, threadnumber);
+    auto sorted_quotient_cofacet = simplex_enumerator.getGeometricCofacetList(
+        sorted_quotient_simplex, active_labels, pv_rep_lists, pv_label_distance_hash,
+        1, maxeps, threadnumber);
 
     // Implicit interface graph (no explicit adjacency lists)
     BipartiteGraph bi_graph(1, 1, ImplicitConstructionTag{});
@@ -737,7 +788,9 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
             active_facet_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_quotient_cofacet);
 
             // enumerate next cofacet list (geometric PV clique filter)
-            sorted_quotient_simplex = simplex_enumerator.getGeometricCofacetList(sorted_quotient_cofacet, active_labels, pv_index_sets, label_distance_hash, dim, maxeps, threadnumber);
+            sorted_quotient_simplex = simplex_enumerator.getGeometricCofacetList(
+                sorted_quotient_cofacet, active_labels, pv_rep_lists, pv_label_distance_hash,
+                dim, maxeps, threadnumber);
 
             std::swap(sorted_quotient_simplex, sorted_quotient_cofacet);
         }
@@ -940,6 +993,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getPVInd
 template <typename DistMatType>
 void QuotientAndExpand<DistMatType>::reportFalseFacetIdentificationStats(
     const WindowState& win_state,
+    const std::vector<std::vector<size_t>>& pv_rep_lists,
     const std::vector<std::pair<int64_t, double>>& facet_list,
     const std::vector<std::pair<int64_t, double>>& cofacet_list,
     const robin_hood::unordered_map<int64_t, uint64_t>& facet_pv_realizations,
@@ -950,7 +1004,7 @@ void QuotientAndExpand<DistMatType>::reportFalseFacetIdentificationStats(
     const int threadnum)
 {
     const size_t origin_vt_num = win_state.original_vertex_number;
-    const size_t pv_num = win_state.pv_flat_index_set_list.size();
+    const size_t pv_num = win_state.pv_list.size();
 
     if (pv_num == 0 || interface_dim < 3 || interface_dim >= MAX_FFI_PACKED_LABELS_)
         return;
@@ -958,16 +1012,6 @@ void QuotientAndExpand<DistMatType>::reportFalseFacetIdentificationStats(
     const size_t total_label_count = origin_vt_num + pv_num;
     const size_t cofacet_label_count = interface_dim + 1;
     const size_t facet_label_count = interface_dim;
-
-    // Use the enumerator's deterministic representative ordering so packed local indices
-    // resolve to the same original vertices.
-    std::vector<std::vector<size_t>> pv_rep_lists(pv_num);
-    for (size_t i = 0; i < pv_num; ++i)
-    {
-        pv_rep_lists[i].assign(win_state.pv_flat_index_set_list[i].begin(),
-                               win_state.pv_flat_index_set_list[i].end());
-        std::sort(pv_rep_lists[i].begin(), pv_rep_lists[i].end());
-    }
 
     const auto facet_hash = SimplexUtility::getSimplexIndexHashTable(facet_list);
 
@@ -1196,6 +1240,7 @@ void QuotientAndExpand<DistMatType>::reportFalseFacetIdentificationStats(
     {
         if (measured_pv_incident > 0)
         {
+            std::cout << std::endl << "FFI stats \n";
             std::cout << "  [ffi2] realization gap ratio (w(Y|F) - w(F)) / w(F): zero = "
                       << percentage(total.gap_ratio_zero) << "%"
                       << "  p50 = " << quantile(0.50)
@@ -1229,16 +1274,18 @@ void QuotientAndExpand<DistMatType>::reportFalseFacetIdentificationStats(
                   << " pv_cofacets =" << total.cofacets_with_pv
                 //   << " inc=" << total.incidence_total
                 //   << " all_orig=" << total.facet_all_original
-                  << " gap_ratio_zero_pct=" << percentage(total.gap_ratio_zero)
-                  << " gap_ratio_p50=" << quantile(0.50)
-                  << " gap_ratio_p90=" << quantile(0.90)
-                  << " gap_ratio_p99=" << quantile(0.99)
-                  << " diffm_safe_pct=" << percentage(total.diff_multi_safe)
-                  << " diffm_flagged_pct=" << percentage(total.diff_multi_flagged)
-                  << " measured=" << measured_pv_incident
-                  << " missing=" << total.missing_facet_realization
-                  << " void_capable_pct=" << percentage(void_capable)
+                //   << " gap_ratio_zero_pct=" << percentage(total.gap_ratio_zero) << "%"
+                //   << " gap_ratio_p50=" << quantile(0.50)
+                //   << " gap_ratio_p90=" << quantile(0.90)
+                //   << " gap_ratio_p99=" << quantile(0.99)
+                  << " diffm_safe_pct=" << percentage(total.diff_multi_safe) << "%"
+                  << " diffm_flagged_pct=" << percentage(total.diff_multi_flagged) << "%"
+                //   << " measured=" << measured_pv_incident
+                //   << " missing=" << total.missing_facet_realization
+                //   << " void_capable_pct=" << percentage(void_capable)
+                  <<"\nEnd of FFI stats"
                   << std::endl;
+
     }
 }
 

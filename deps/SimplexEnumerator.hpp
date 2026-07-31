@@ -41,12 +41,12 @@ public:
 #endif
 
     // Geometric enumeration for quotient complexes with pseudo-vertices.
-    // Each PV represents a set of original vertices, and simplex weight is the smallest
-    // clique realization weight among representative choices.
+    // Each sorted PV representative list contains original vertex indices, and simplex
+    // weight is the smallest clique realization weight among representative choices.
     std::vector<std::pair<int64_t, double>> getGeometricCofacetList(const std::vector<std::pair<int64_t, double>>& sorted_quotient_simplex_list,
                                         const std::vector<size_t>& active_labels,
-                                        const std::vector<std::unordered_set<size_t>>& pv_index_sets,
-                                        const robin_hood::unordered_map<uint64_t, double>& label_distance_hash,
+                                        const std::vector<std::vector<size_t>>& pv_rep_lists,
+                                        const robin_hood::unordered_map<uint64_t, double>& pv_label_distance_hash,
                                         const size_t dim, const double maxeps, const int threadnum);
 
     // Verbose diagnostics use a separate enumerator so the regular path does not allocate
@@ -54,8 +54,8 @@ public:
     std::vector<std::pair<int64_t, double>> getGeometricCofacetListWithRealizations(
                                         const std::vector<std::pair<int64_t, double>>& sorted_quotient_simplex_list,
                                         const std::vector<size_t>& active_labels,
-                                        const std::vector<std::unordered_set<size_t>>& pv_index_sets,
-                                        const robin_hood::unordered_map<uint64_t, double>& label_distance_hash,
+                                        const std::vector<std::vector<size_t>>& pv_rep_lists,
+                                        const robin_hood::unordered_map<uint64_t, double>& pv_label_distance_hash,
                                         const size_t dim, const double maxeps, const int threadnum,
                                         robin_hood::unordered_map<int64_t, uint64_t>& pv_realization_out);
 
@@ -135,8 +135,8 @@ private:
     std::vector<std::pair<int64_t, double>> enumerateGeometricCofacets(
                                         const std::vector<std::pair<int64_t, double>>& sorted_quotient_simplex_list,
                                         const std::vector<size_t>& active_labels,
-                                        const std::vector<std::unordered_set<size_t>>& pv_index_sets,
-                                        const robin_hood::unordered_map<uint64_t, double>& label_distance_hash,
+                                        const std::vector<std::vector<size_t>>& pv_rep_lists,
+                                        const robin_hood::unordered_map<uint64_t, double>& pv_label_distance_hash,
                                         const size_t dim, const double maxeps, const int threadnum,
                                         robin_hood::unordered_map<int64_t, uint64_t>* pv_realization_out);
 };

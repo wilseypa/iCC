@@ -80,13 +80,19 @@ private:
         }
     };
 
+    struct SelectedPV
+    {
+        // Flattened to original vertex indices and its max pairwise distance.
+        std::unordered_set<size_t> flat_index_set;
+        double diameter = 0.0;
+    };
+
     struct WindowState
     {
         size_t original_vertex_number = 0;
 
-        std::vector<std::unordered_set<size_t>> pv_flat_index_set_list;
-        // Kept in the same order as pv_flat_index_set_list.
-        std::vector<double> pv_diameter_list;
+        // Append-only: PV labels are original_vertex_number + position in this list.
+        std::vector<SelectedPV> pv_list;
 
         // active labels in the current window:
         // original vertices: 0 .. original_vertex_number-1
@@ -95,22 +101,16 @@ private:
 
         WindowState() = default;
 
-        explicit WindowState(size_t npts): original_vertex_number(npts), pv_flat_index_set_list(), pv_diameter_list(), active_label_list(npts)
+        explicit WindowState(size_t npts): original_vertex_number(npts), pv_list(), active_label_list(npts)
         {
             std::iota(active_label_list.begin(), active_label_list.end(), 0);
         }
     };
 
-    struct SelectedPV
-    {
-        // Flattened to original vertex indices and its max pairwise distance.
-        std::unordered_set<size_t> flat_index_set;
-        double diameter = 0.0;
-    };
-
     struct QuotientEdgeData
     {
-        robin_hood::unordered_map<uint64_t, double> label_distance_hash;
+        // Original-original distances remain in dist_mat_; this stores only pairs involving a PV label.
+        robin_hood::unordered_map<uint64_t, double> pv_label_distance_hash;
         std::vector<std::pair<int64_t, double>> sorted_edges;
     };
 
@@ -124,6 +124,11 @@ private:
 
     double getMaxPairwiseDistance(const std::unordered_set<size_t>& index_set) const;
 
+    std::vector<std::vector<size_t>> getPVRepresentativeLists(const WindowState& win_state) const;
+
+    std::vector<std::vector<size_t>> getPVRepresentativeLists(
+        const std::vector<std::unordered_set<size_t>>& pv_index_sets) const;
+
     void rebuildWindowState(WindowState& win_state, std::vector<SelectedPV>&& new_pv_list);
 
     void collectProtectedIndices(const MatchingContext& matching_context,
@@ -136,15 +141,17 @@ private:
                                                                    const size_t origin_vt_num,
                                                                    const bool verbose);
 
-    double computeLabelDistance(const size_t i, const size_t j, const std::vector<std::unordered_set<size_t>>& pv_index_sets);
+    double computeLabelDistance(const size_t i, const size_t j,
+                                const std::vector<std::vector<size_t>>& pv_rep_lists);
 
     QuotientEdgeData buildQuotientEdges(const std::vector<size_t>& active_labels,
-                                         const std::vector<std::unordered_set<size_t>>& pv_index_sets,
+                                         const std::vector<std::vector<size_t>>& pv_rep_lists,
                                          const double maxeps, int threadnum);
 
     // Verbose-only top-interface diagnostics. Realizations are compared exactly; the
     // multi-coordinate carrier-clique test is sufficient, but not necessary, for a filler.
     void reportFalseFacetIdentificationStats(const WindowState& win_state,
+                                             const std::vector<std::vector<size_t>>& pv_rep_lists,
                                              const std::vector<std::pair<int64_t, double>>& facet_list,
                                              const std::vector<std::pair<int64_t, double>>& cofacet_list,
                                              const robin_hood::unordered_map<int64_t, uint64_t>& facet_pv_realizations,
