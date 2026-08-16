@@ -21,6 +21,8 @@ namespace
 constexpr const char* PIECEWISE_PH_TOOL = "piecewise";
 constexpr const char* MORSE_PH_TOOL = "ph";
 constexpr double DEFAULT_EPS_INTERVAL_SCALE = 1.0;
+// SimplexEnumerator stores group coverage in a uint64_t, with group indices 0..maxdim.
+constexpr size_t MAX_SIMPLEX_DIMENSION = 63;
 
 class HelpSpacingFormatter : public CLI::Formatter
 {
@@ -153,9 +155,10 @@ size_t promptMaxDimension()
         long long value = 0;
         char extra = '\0';
 
-        if (!(parser >> value) || (parser >> extra) || value <= 0)
+        if (!(parser >> value) || (parser >> extra) || value <= 0 ||
+            value > static_cast<long long>(MAX_SIMPLEX_DIMENSION))
         {
-            std::cout << "  Please enter a positive integer.\n";
+            std::cout << "  Please enter an integer from 1 to " << MAX_SIMPLEX_DIMENSION << ".\n";
             continue;
         }
 
@@ -574,6 +577,8 @@ void validateRunOptions(const std::string& tool,
 
     if (maxdim == 0)
         throw std::invalid_argument("Maximum dimension must be a positive integer.");
+    if (maxdim > MAX_SIMPLEX_DIMENSION)
+        throw std::invalid_argument("Maximum dimension must be less than 64.");
     if (threadnumber <= 0)
         throw std::invalid_argument("Thread number must be a positive integer.");
 
@@ -723,9 +728,9 @@ int runCommandLine(int argc, char** argv)
         ->required()
         ->check(CLI::ExistingFile);
 
-    app.add_option("-d,--max-dim", maxdim, "Maximum simplex dimension")
+    app.add_option("-d,--max-dim", maxdim, "Maximum simplex dimension (1-63)")
         ->required()
-        ->check(CLI::PositiveNumber);
+        ->check(CLI::Range(size_t{1}, MAX_SIMPLEX_DIMENSION));
 
     app.add_option("-n,--threads", threadnumber, "Number of worker threads")
         ->default_val(1)

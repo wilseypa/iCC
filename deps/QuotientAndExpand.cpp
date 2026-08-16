@@ -1228,7 +1228,7 @@ void QuotientAndExpand<DistMatType>::reportFalseFacetIdentificationStats(
 
     const size_t pv_incident = total.incidence_total - total.facet_all_original;
     const size_t measured_pv_incident = total.gap_ratio_samples.size();
-    const size_t void_capable = total.diff_multi_safe + total.diff_multi_flagged;
+    const size_t multi_incidence = total.diff_multi_safe + total.diff_multi_flagged;
     const auto percentage = [&](const size_t count) -> double
     {
         if (measured_pv_incident == 0)
@@ -1248,9 +1248,9 @@ void QuotientAndExpand<DistMatType>::reportFalseFacetIdentificationStats(
                       << "  p99 = " << quantile(0.99) << '\n';
 
             std::cout << "  [ffi2] differing PV coordinates:"
-                      << "  void-capable (multi) = " << percentage(void_capable) << "%"
+                      << "  multi indcidence = " << percentage(multi_incidence) << "%"
                       << "  clique-certified = " << percentage(total.diff_multi_safe) << "%"
-                      << "  no one-clique certificate = "
+                      << "  void capable = "
                       << percentage(total.diff_multi_flagged) << "%\n";
         }
 
@@ -1282,7 +1282,6 @@ void QuotientAndExpand<DistMatType>::reportFalseFacetIdentificationStats(
                   << " diffm_flagged_pct=" << percentage(total.diff_multi_flagged) << "%"
                 //   << " measured=" << measured_pv_incident
                 //   << " missing=" << total.missing_facet_realization
-                //   << " void_capable_pct=" << percentage(void_capable)
                   <<"\nEnd of FFI stats"
                   << std::endl;
 
