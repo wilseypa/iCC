@@ -1,12 +1,32 @@
 #pragma once
 
-#include "BipartiteGraph.hpp"
-
-#include "robin_hood.h"
-
-#include <vector>
+#include <cstddef>
 #include <cstdint>
 #include <utility>
+#include <vector>
+
+#include "BipartiteGraph.hpp"
+#include "robin_hood.h"
+
+struct NormalDistMat;
+
+struct ApparentPairSearchConfig
+{
+    enum class Mode : uint8_t
+    {
+        Disabled,
+        NormalVR,
+        QuotientVR
+    };
+
+    Mode mode = Mode::Disabled;
+    const NormalDistMat* dist_mat = nullptr;
+
+    // Quotient-only data. Original labels are [0, original_vertex_count).
+    const robin_hood::unordered_map<uint64_t, double>* pv_label_distance_hash = nullptr;
+    const std::vector<uint8_t>* active_label_mask = nullptr;
+    size_t original_vertex_count = 0;
+};
 
 namespace    //for explicit/legacy
 {
@@ -22,6 +42,10 @@ struct MatchingContext
     //default values for explicit/legacy implementation
     const size_t total_label_count = 0;    //total labels: original vertices + virtual/PV labels
     const size_t dim = 0;    //current dim of interface (cofacet dim)
+
+    // Disabled by default so explicit, approximate, and other callers retain the
+    // original full-cofacet matching path unless they opt in explicitly.
+    ApparentPairSearchConfig apparent_pair_search{};
 
     BipartiteGraph& graph;
 

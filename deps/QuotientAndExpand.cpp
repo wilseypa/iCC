@@ -2,6 +2,7 @@
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <type_traits>
 
 #include "omp.h"
 
@@ -219,6 +220,12 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
 
     auto active_simplex_hash = getQuotientActiveEdgeIndexHashTable(sorted_quotient_simplex, pv_num);
 
+    // Matching sweeps the complete label range. This mask cheaply rejects labels
+    // that are inactive in the current quotient complex before distance/hash work.
+    std::vector<uint8_t> active_label_mask(total_label_count, 0);
+    for (const size_t label : active_labels)
+        active_label_mask[label] = 1;
+
     const bool ffi_stats_requested = verbose && (pv_num > 0) && (maxdim >= 3);
     const bool collect_ffi_stats = ffi_stats_requested && (maxdim < MAX_FFI_PACKED_LABELS_);
 
@@ -239,14 +246,14 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
         if (collect_ffi_stats)
         {
             ffi_realizations = std::make_unique<FfiRealizationState>();
-            return simplex_enumerator.getGeometricCofacetListWithRealizations(
-                sorted_quotient_simplex, active_labels, pv_rep_lists, pv_label_distance_hash,
-                1, eps_hi, threadnumber, ffi_realizations->cofacet_realization_hash);
+            return simplex_enumerator.getGeometricCofacetListWithRealizations(sorted_quotient_simplex, 
+                                                                              active_labels, pv_rep_lists, pv_label_distance_hash,
+                                                                              1, eps_hi, threadnumber, ffi_realizations->cofacet_realization_hash);
         }
 
-        return simplex_enumerator.getGeometricCofacetList(
-            sorted_quotient_simplex, active_labels, pv_rep_lists, pv_label_distance_hash,
-            1, eps_hi, threadnumber);
+        return simplex_enumerator.getGeometricCofacetList(sorted_quotient_simplex, 
+                                                          active_labels, pv_rep_lists, pv_label_distance_hash,
+                                                          1, eps_hi, threadnumber);
     };
     auto sorted_quotient_cofacet = enumerate_initial_cofacets();
     
@@ -278,6 +285,15 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
 
         MatchingContext matching_context(bi_graph, binomial_table_, sorted_quotient_simplex, sorted_quotient_cofacet,
                                          active_simplex_hash, cofacet_hash, total_label_count, dim);
+
+        if constexpr (std::is_same_v<DistMatType, NormalDistMat>)
+        {
+            matching_context.apparent_pair_search.mode = ApparentPairSearchConfig::Mode::QuotientVR;
+            matching_context.apparent_pair_search.dist_mat = &dist_mat_;
+            matching_context.apparent_pair_search.pv_label_distance_hash = &pv_label_distance_hash;
+            matching_context.apparent_pair_search.active_label_mask = &active_label_mask;
+            matching_context.apparent_pair_search.original_vertex_count = original_vt_num;
+        }
 
         MaximumMorseMatching::MatchSupportInfo dim_match_support_info;
         if (collect_pv)
@@ -321,15 +337,15 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
             {
                 std::swap(ffi_realizations->facet_realization_hash,
                           ffi_realizations->cofacet_realization_hash);
-                sorted_quotient_simplex = simplex_enumerator.getGeometricCofacetListWithRealizations(
-                    sorted_quotient_cofacet, active_labels, pv_rep_lists, pv_label_distance_hash,
-                    dim, eps_hi, threadnumber, ffi_realizations->cofacet_realization_hash);
+                sorted_quotient_simplex = simplex_enumerator.getGeometricCofacetListWithRealizations(sorted_quotient_cofacet, 
+                                                                                                     active_labels, pv_rep_lists, pv_label_distance_hash,
+                                                                                                     dim, eps_hi, threadnumber, ffi_realizations->cofacet_realization_hash);
             }
             else
             {
-                sorted_quotient_simplex = simplex_enumerator.getGeometricCofacetList(
-                    sorted_quotient_cofacet, active_labels, pv_rep_lists, pv_label_distance_hash,
-                    dim, eps_hi, threadnumber);
+                sorted_quotient_simplex = simplex_enumerator.getGeometricCofacetList(sorted_quotient_cofacet, 
+                                                                                     active_labels, pv_rep_lists, pv_label_distance_hash,
+                                                                                     dim, eps_hi, threadnumber);
             }
             std::swap(sorted_quotient_simplex, sorted_quotient_cofacet);
         }

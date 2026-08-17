@@ -39,6 +39,7 @@ target_link_libraries(ApproximateMorseMatching PUBLIC OpenMP::OpenMP_CXX)
 add_library(MaximumMorseMatching STATIC MaximumMorseMatching.cpp)
 target_include_directories(MaximumMorseMatching PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(MaximumMorseMatching PUBLIC OpenMP::OpenMP_CXX)
+target_link_libraries(MaximumMorseMatching PRIVATE DistanceMatrix)
 
 # Library for the Quotient and Expand workflow
 add_library(QuotientAndExpand STATIC QuotientAndExpand.cpp)

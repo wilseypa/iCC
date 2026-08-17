@@ -6,8 +6,146 @@
 
 #include "omp.h"
 
+#include "DistanceMatrix.hpp"
 #include "MaximumMorseMatching.hpp"
 #include "SimplexUtility.hpp"
+
+int64_t MaximumMorseMatching::findOptimizedApparentPairCofacet(
+    const MatchingContext& matching_context,
+    const int64_t facet_bindex,
+    const double facet_weight)
+{
+    const auto& search = matching_context.apparent_pair_search;
+    if (search.mode == ApparentPairSearchConfig::Mode::Disabled || search.dist_mat == nullptr)
+        return -1;
+
+    const auto& binomial_table = matching_context.binomial_table;
+    const auto& cofacet_hash = matching_context.cofacet_bindex_to_list_index;
+    const auto& cofacet_list = matching_context.sorted_cofacets;
+    const size_t facet_dimension = matching_context.dim - 1;
+
+    int64_t tied_cofacet_list_index = -1;
+    const auto probe_exact_tie = [&](const int64_t cofacet_bindex) -> bool
+    {
+        const auto it = cofacet_hash.find(cofacet_bindex);
+        if (it == cofacet_hash.end())
+            return false;
+
+        const size_t cofacet_rank = it->second;
+        if (cofacet_list[cofacet_rank].second != facet_weight)
+            return false;
+
+        // Candidates arrive in increasing bindex order. Since no cofacet can
+        // weigh less than its facet, the first stored exact tie is the minimum
+        // cofacet under the list's complete (weight, bindex) ordering.
+        tied_cofacet_list_index = static_cast<int64_t>(cofacet_rank);
+        return true;
+    };
+
+    if (search.mode == ApparentPairSearchConfig::Mode::NormalVR)
+    {
+        const auto check_normal_apparent_pair_capability =
+            [&](const size_t covt, const int64_t cofacet_bindex) -> bool
+            {
+                for (const size_t facet_vertex : vertex_workspace_)
+                {
+                    if (search.dist_mat->getDistance(covt, facet_vertex) > facet_weight)
+                        return false;
+                }
+
+                return probe_exact_tie(cofacet_bindex);
+            };
+
+        SimplexUtility::forEachImmediateCofacetInBindexOrder(binomial_table, vertex_workspace_, facet_bindex,
+                                                             matching_context.total_label_count, facet_dimension,
+                                                             check_normal_apparent_pair_capability);
+
+        return tied_cofacet_list_index;
+    }
+
+    assert(search.mode == ApparentPairSearchConfig::Mode::QuotientVR);
+    assert(search.pv_label_distance_hash != nullptr);
+
+    if (search.pv_label_distance_hash == nullptr)
+        return -1;
+
+    const auto check_quotient_apparent_pair_capability =
+        [&](const size_t covt, const int64_t cofacet_bindex) -> bool
+        {
+            if (search.active_label_mask != nullptr &&
+                (covt >= search.active_label_mask->size() ||
+                 (*search.active_label_mask)[covt] == 0))
+            {
+                return false;
+            }
+
+            for (const size_t facet_label : vertex_workspace_)
+            {
+                double label_distance;
+                if (covt < search.original_vertex_count &&
+                    facet_label < search.original_vertex_count)
+                {
+                    label_distance = search.dist_mat->getDistance(covt, facet_label);
+                }
+                else
+                {
+                    label_distance = SimplexUtility::getPVLabelDistance(*search.pv_label_distance_hash, covt, facet_label);
+
+                    // Both labels are active, so every PV-incident pair must have
+                    // been memoized by buildQuotientEdges()
+                    assert(label_distance >= 0.0);
+                }
+
+                if (label_distance > facet_weight)
+                    return false;
+            }
+
+            return probe_exact_tie(cofacet_bindex);
+        };
+
+    SimplexUtility::forEachImmediateCofacetInBindexOrder(binomial_table, vertex_workspace_, facet_bindex,
+                                                         matching_context.total_label_count, facet_dimension,
+                                                         check_quotient_apparent_pair_capability);
+
+    return tied_cofacet_list_index;
+}
+
+bool MaximumMorseMatching::tryInstallOptimizedApparentPair(
+    MatchingContext& matching_context,
+    const size_t facet_list_index,
+    const size_t facet_graph_index)
+{
+    const auto& facet = matching_context.sorted_facets[facet_list_index];
+    const int64_t candidate = findOptimizedApparentPairCofacet(
+        matching_context, facet.first, facet.second);
+
+    if (candidate < 0)
+        return false;
+
+    const size_t cofacet_list_index = static_cast<size_t>(candidate);
+    auto& graph = matching_context.graph;
+    if (graph.match_list[cofacet_list_index] >= 0)
+        return false;
+
+    SimplexUtility::getFacetListIndicesInPlace(
+        matching_context.binomial_table,
+        matching_context.facet_bindex_to_list_index,
+        facet_indices_,
+        vertex_workspace_,
+        matching_context.sorted_cofacets[cofacet_list_index].first,
+        matching_context.total_label_count,
+        matching_context.dim);
+
+    if (facet_indices_.empty() ||
+        facet_list_index != *std::max_element(facet_indices_.begin(), facet_indices_.end()))
+    {
+        return false;
+    }
+
+    graph.match_list[facet_graph_index] = static_cast<int64_t>(cofacet_list_index);
+    graph.match_list[cofacet_list_index] = static_cast<int64_t>(facet_graph_index);
+    return true;
+}
 
 size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context,
                                            std::vector<PersistentPairInfo>& persistent_pairs)
@@ -28,10 +166,6 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context,
 
     facet_indices_.reserve(dim + 1);
 
-    aug_path_.reserve(u + v);
-
-    cofacet_stack_.reserve(u);
-
     vertex_workspace_.reserve(dim + 1);
 
     pq_workspace_.reserve(u);
@@ -42,9 +176,9 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context,
     size_t ct = 0;    //apparent pair count
 
     //process facet in reverse order
-    for (int64_t i = static_cast<int64_t>(v) - 1; i >= 0; --i)
+    for (size_t reverse_index = v; reverse_index > 0; --reverse_index)
     {
-        const size_t facet_list_index = static_cast<size_t>(i);
+        const size_t facet_list_index = reverse_index - 1;
         const int64_t facetbindex = facet_list[facet_list_index].first;
 
         //skip non active facets
@@ -54,6 +188,15 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context,
         //covert list index to graph index
         size_t facetgraphidx = facet_list_index + u;
 
+        if (tryInstallOptimizedApparentPair(matching_context, facet_list_index, facetgraphidx))
+        {
+            ct += 1;
+            continue;
+        }
+
+        // The optimized search contains only a filtered candidate set. Rebuild the
+        // complete immediate-cofacet list before the ordinary apparent-pair check,
+        // empty-column handling, or compressed residual reduction.
         SimplexUtility::getCofacetListIndicesInPlace(binom_table, cofacet_hash, cofacet_indices_, vertex_workspace_, facetbindex, total_label_count, dim-1);
 
         if (cofacet_indices_.empty())
@@ -148,8 +291,6 @@ MaximumMorseMatching::MatchSupportInfo MaximumMorseMatching::implicitMatchAndCol
     // init workspace (same pattern as implicitMatch)
     cofacet_indices_.reserve(dim < 5 ? 32 : 64);
     facet_indices_.reserve(dim + 1);
-    aug_path_.reserve(u + v);
-    cofacet_stack_.reserve(u);
     vertex_workspace_.reserve(dim + 1);
     pq_workspace_.reserve(u);
 
@@ -161,9 +302,9 @@ MaximumMorseMatching::MatchSupportInfo MaximumMorseMatching::implicitMatchAndCol
     // size_t ct = 0;    //apparent pair count
 
     // process facets in reverse order
-    for (int64_t i = static_cast<int64_t>(v) - 1; i >= 0; --i)
+    for (size_t reverse_index = v; reverse_index > 0; --reverse_index)
     {
-        const size_t facet_list_index = static_cast<size_t>(i);
+        const size_t facet_list_index = reverse_index - 1;
         const int64_t facetbindex = facet_list[facet_list_index].first;
 
         // skip non-active facets
@@ -171,6 +312,9 @@ MaximumMorseMatching::MatchSupportInfo MaximumMorseMatching::implicitMatchAndCol
         if (fit == facet_hash.end()) continue;
 
         const size_t facetgraphidx = facet_list_index + u;
+
+        if (tryInstallOptimizedApparentPair(matching_context, facet_list_index, facetgraphidx))
+            continue;
 
         // compute immediate cofacets of this facet (list indices)
         SimplexUtility::getCofacetListIndicesInPlace(binom_table, cofacet_hash, cofacet_indices_, vertex_workspace_,
@@ -828,8 +972,9 @@ size_t MaximumMorseMatching::serialFacetMatch(MatchingContext& matching_context)
 
     int k = 0;
 
-    for (int64_t i = graph.vnodes - 1; i >= 0; i--)
+    for (size_t reverse_index = graph.vnodes; reverse_index > 0; --reverse_index)
     {
+        const size_t i = reverse_index - 1;
         auto vidx = graph.unodes + i;
 
         if (graph.match_list[vidx] >= 0 || graph.adj_list[vidx].size() == 0) continue;    //skip matched or not active facet
@@ -908,8 +1053,9 @@ int64_t MaximumMorseMatching::serialFacetMatchAndGetMinCriticalIndex(MatchingCon
 
     int64_t minindex = -1;
 
-    for (int64_t i = graph.vnodes - 1; i >= 0; i--)
+    for (size_t reverse_index = graph.vnodes; reverse_index > 0; --reverse_index)
     {
+        const size_t i = reverse_index - 1;
         auto vidx = graph.unodes + i;
 
         if (graph.match_list[vidx] >= 0 || graph.adj_list[vidx].size() == 0) continue;    //skip matched or not active facet
@@ -963,8 +1109,9 @@ std::vector< std::vector<size_t> > MaximumMorseMatching::serialFacetMatchAndGetA
 
     std::vector< std::vector<size_t> > aug_path_cofacet_vec;
 
-    for (int64_t i = graph.vnodes - 1; i >= 0; i--)
+    for (size_t reverse_index = graph.vnodes; reverse_index > 0; --reverse_index)
     {
+        const size_t i = reverse_index - 1;
         auto vidx = graph.unodes + i;
 
         if (graph.match_list[vidx] >= 0 || graph.adj_list[vidx].size() == 0) continue;    //skip matched or not active facet

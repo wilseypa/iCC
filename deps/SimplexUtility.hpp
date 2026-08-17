@@ -206,7 +206,7 @@ namespace SimplexUtility
         int64_t below = bindex;
         size_t k = dim;
 
-        for (auto i = 0; i < simplex_vt.size(); i++)
+        for (size_t i = 0; i < simplex_vt.size(); i++)
         {
             size_t vt = simplex_vt[i];
             below -= binomial_table[vt][k + 1];
@@ -252,7 +252,7 @@ namespace SimplexUtility
         int64_t bindex;
         size_t m = sorted_edge.size();
         std::vector<size_t> edge_vt;
-        for (auto i = 0; i < m; i++)
+        for (size_t i = 0; i < m; i++)
         {
             bindex = sorted_edge[i].first;
             edge_vt = getSimplexVertices(binomial_table, bindex, npts, 1);
@@ -276,7 +276,7 @@ namespace SimplexUtility
 
         auto facetnum = facet_list.size();
 
-        for (auto i = 0; i < facetnum; ++i)
+        for (size_t i = 0; i < facetnum; ++i)
         {
             if (graph_match_list[i] < 0)
             {
@@ -293,7 +293,7 @@ namespace SimplexUtility
         robin_hood::unordered_map<int64_t, size_t> facet_index_hash;
         facet_index_hash.reserve(facet_list.size());
 
-        for (auto i = 0; i < facet_list.size(); ++i)
+        for (size_t i = 0; i < facet_list.size(); ++i)
         {
             auto bindex = facet_list[i].first;
             facet_index_hash.emplace(bindex, i);
@@ -362,7 +362,7 @@ namespace SimplexUtility
         size_t k = cofacetdim + 1;
         bool inserted = false;
 
-        for (auto i = 0; i < facet_vertices.size(); ++i)
+        for (size_t i = 0; i < facet_vertices.size(); ++i)
         {
             //facet_vertices are in descending order
             //insert co-vertex
@@ -383,26 +383,30 @@ namespace SimplexUtility
     }
 
 
-    inline void getCofacetListIndicesInPlace(const std::vector<std::vector<int64_t>>& binomial_table, const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash_table, 
-                                  std::vector<size_t>& cofacet_indices, std::vector<size_t>& facet_vertices_workspace, int64_t facetbidx,  size_t total_label_ct, size_t facetdim)
+    /**
+     * Visits every immediate cofacet in increasing resulting binomial-index order.
+     * The candidate action receives (co-vertex, cofacet bindex) and returns true
+     * when the desired candidate was found, or false to continue the sweep.
+     */
+    template <typename CofacetCandidateAction>
+    inline void forEachImmediateCofacetInBindexOrder(
+        const std::vector<std::vector<int64_t>>& binomial_table,
+        std::vector<size_t>& facet_vertices_workspace,
+        const int64_t facetbidx,
+        const size_t total_label_ct,
+        const size_t facetdim,
+        CofacetCandidateAction&& process_cofacet_candidate)
     {
-        cofacet_indices.clear();
-
         getSimplexVerticesInPlace(binomial_table, facet_vertices_workspace, facetbidx, total_label_ct, facetdim);
 
         const size_t m = facet_vertices_workspace.size();
-        const auto appendIfActive = [&](const int64_t cofacetbindex)
-        {
-            auto it = cofacet_hash_table.find(cofacetbindex);
-            if (it != cofacet_hash_table.end()) cofacet_indices.push_back(it->second);
-        };
-
         int64_t base = getBinomialIndex(binomial_table, facet_vertices_workspace, 1);
 
-        // Co-vertices below the minimum facet vertex occupy slot 1; all facet vertices are shifted.
+        // Co-vertices below the minimum facet vertex occupy slot 0; all facet vertices are shifted.
         for (size_t covt = 0; covt < facet_vertices_workspace.back(); ++covt)
         {
-            appendIfActive(base + binomial_table[covt][1]);
+            if (process_cofacet_candidate(covt, base + binomial_table[covt][1]))
+                return;
         }
 
         for (size_t i = m - 1; i > 0; --i)
@@ -415,7 +419,8 @@ namespace SimplexUtility
             // ascending order of covt
             for (size_t covt = vt + 1; covt < facet_vertices_workspace[i - 1]; ++covt)
             {
-                appendIfActive(base + binomial_table[covt][pos + 1 + 1]);
+                if (process_cofacet_candidate(covt, base + binomial_table[covt][pos + 1 + 1]))
+                    return;
             }
         }
 
@@ -423,10 +428,28 @@ namespace SimplexUtility
         base += binomial_table[maxvt][m] - binomial_table[maxvt][m + 1];
         for (size_t covt = maxvt + 1; covt < total_label_ct; ++covt)
         {
-            appendIfActive(base + binomial_table[covt][m + 1]);
+            if (process_cofacet_candidate(covt, base + binomial_table[covt][m + 1]))
+                return;
         }
+    }
 
-        return;
+    inline void getCofacetListIndicesInPlace(const std::vector<std::vector<int64_t>>& binomial_table, const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash_table,
+                                  std::vector<size_t>& cofacet_indices, std::vector<size_t>& facet_vertices_workspace, int64_t facetbidx,  size_t total_label_ct, size_t facetdim)
+    {
+        cofacet_indices.clear();
+
+        const auto collect_active_cofacet =
+            [&](const size_t, const int64_t cofacetbindex)
+            {
+                const auto it = cofacet_hash_table.find(cofacetbindex);
+                if (it != cofacet_hash_table.end())
+                    cofacet_indices.push_back(it->second);
+                return false;
+            };
+
+        forEachImmediateCofacetInBindexOrder(
+            binomial_table, facet_vertices_workspace, facetbidx, total_label_ct, facetdim,
+            collect_active_cofacet);
     }
 
     inline void getFacetListIndicesInPlace(const std::vector<std::vector<int64_t>>& binomial_table, const robin_hood::unordered_map<int64_t, size_t>& facet_hash_table, 
@@ -440,7 +463,7 @@ namespace SimplexUtility
         int64_t below = cofacetbindex;
         size_t k = cofacetdim;
 
-        for (auto i = 0; i < cofacet_vertices_workspace.size(); i++)
+        for (size_t i = 0; i < cofacet_vertices_workspace.size(); i++)
         {
             size_t vt = cofacet_vertices_workspace[i];
             below -= binomial_table[vt][k + 1];

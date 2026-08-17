@@ -69,6 +69,14 @@ private:
     std::vector<size_t> vertex_workspace_;
     std::vector<size_t> pq_workspace_;
 
+    int64_t findOptimizedApparentPairCofacet(const MatchingContext& matching_context,
+                                              int64_t facet_bindex,
+                                              double facet_weight);
+
+    bool tryInstallOptimizedApparentPair(MatchingContext& matching_context,
+                                          size_t facet_list_index,
+                                          size_t facet_graph_index);
+
     int64_t implicitFacetAugPath(const std::vector<std::vector<int64_t>>& binomial_table, BipartiteGraph& bi_graph, 
                                  const std::vector<std::pair<int64_t, double>>& facet_list,
                                  const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash_table, const size_t facetgraphindex, 

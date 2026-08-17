@@ -320,6 +320,14 @@ void CritCells<ComplexType, DistMatType>::morseVRPH(size_t maxdim, double maxeps
 
         MatchingContext matching_context(bi_graph, binom_table, sorted_simplex, sorted_cofacet, facet_hash, cofacet_hash, n, dim);
 
+        if constexpr (std::is_same_v<DistMatType, NormalDistMat>)
+        {
+            matching_context.apparent_pair_search.mode =
+                ApparentPairSearchConfig::Mode::NormalVR;
+            matching_context.apparent_pair_search.dist_mat =
+                static_cast<const NormalDistMat*>(this);
+        }
+
         std::cout << "Processing dim " << dim << ", cofacet number: " << sorted_cofacet.size() << ", facet number: " << sorted_simplex.size() << std::endl;
 
         //implicit morse matching
