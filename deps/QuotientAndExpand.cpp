@@ -333,6 +333,11 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
             // facets for the next dimension are the unmatched cofacets from the current dimension
             active_simplex_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_quotient_cofacet);
 
+            // Both structures are dead past this point. Empty swaps actually release
+            // their backing storage before the next enumeration and merge.
+            decltype(cofacet_hash){}.swap(cofacet_hash);
+            decltype(sorted_quotient_simplex){}.swap(sorted_quotient_simplex);
+
             if (collect_ffi_stats)
             {
                 std::swap(ffi_realizations->facet_realization_hash,

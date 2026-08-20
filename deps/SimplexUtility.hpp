@@ -272,7 +272,9 @@ namespace SimplexUtility
     inline robin_hood::unordered_map<int64_t, size_t> getActiveSimplexIndexHashTable(const std::vector<int64_t>& graph_match_list, const std::vector<std::pair<int64_t, double>>& facet_list)
     {
         robin_hood::unordered_map<int64_t, size_t> active_facet_index_hash;
-        active_facet_index_hash.reserve(facet_list.size());
+        // Only unmatched simplices are inserted. Start at half the input size;
+        // robin_hood::reserve accounts for its load factor and grows as needed.
+        active_facet_index_hash.reserve(facet_list.size() / 2);
 
         auto facetnum = facet_list.size();
 
