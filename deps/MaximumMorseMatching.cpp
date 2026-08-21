@@ -20,18 +20,18 @@ int64_t MaximumMorseMatching::findOptimizedApparentPairCofacet(
         return -1;
 
     const auto& binomial_table = matching_context.binomial_table;
-    const auto& cofacet_hash = matching_context.cofacet_bindex_to_list_index;
+    const auto& cofacet_index = matching_context.cofacet_bindex_to_list_index;
     const auto& cofacet_list = matching_context.sorted_cofacets;
     const size_t facet_dimension = matching_context.dim - 1;
 
     int64_t tied_cofacet_list_index = -1;
     const auto probe_exact_tie = [&](const int64_t cofacet_bindex) -> bool
     {
-        const auto it = cofacet_hash.find(cofacet_bindex);
-        if (it == cofacet_hash.end())
+        const auto rank = cofacet_index.findRank(cofacet_bindex);
+        if (!rank.has_value())
             return false;
 
-        const size_t cofacet_rank = it->second;
+        const size_t cofacet_rank = static_cast<size_t>(*rank);
         if (cofacet_list[cofacet_rank].second != facet_weight)
             return false;
 
@@ -153,7 +153,7 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context,
     auto& binom_table = matching_context.binomial_table;
     auto& cofacet_list = matching_context.sorted_cofacets;
     auto& facet_list = matching_context.sorted_facets;
-    auto& cofacet_hash = matching_context.cofacet_bindex_to_list_index;
+    auto& cofacet_index = matching_context.cofacet_bindex_to_list_index;
     auto& facet_hash = matching_context.facet_bindex_to_list_index;
     auto& bi_graph = matching_context.graph;
     auto u = bi_graph.unodes;
@@ -197,7 +197,7 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context,
         // The optimized search contains only a filtered candidate set. Rebuild the
         // complete immediate-cofacet list before the ordinary apparent-pair check,
         // empty-column handling, or compressed residual reduction.
-        SimplexUtility::getCofacetListIndicesInPlace(binom_table, cofacet_hash, cofacet_indices_, vertex_workspace_, facetbindex, total_label_count, dim-1);
+        SimplexUtility::getCofacetListIndicesInPlace(binom_table, cofacet_index, cofacet_indices_, vertex_workspace_, facetbindex, total_label_count, dim-1);
 
         if (cofacet_indices_.empty())
         {
@@ -240,7 +240,7 @@ size_t MaximumMorseMatching::implicitMatch(MatchingContext& matching_context,
         }
 
         const int64_t terminalcofacet = implicitFacetCompressedAugPath(binom_table, bi_graph, facet_list,
-                                                                       cofacet_hash, cofacet_indices_, total_label_count, dim);
+                                                                       cofacet_index, cofacet_indices_, total_label_count, dim);
 
         if (terminalcofacet < 0)
         {
@@ -280,7 +280,7 @@ MaximumMorseMatching::MatchSupportInfo MaximumMorseMatching::implicitMatchAndCol
     auto& binom_table = matching_context.binomial_table;
     auto& cofacet_list = matching_context.sorted_cofacets;
     auto& facet_list = matching_context.sorted_facets;
-    auto& cofacet_hash = matching_context.cofacet_bindex_to_list_index;
+    auto& cofacet_index = matching_context.cofacet_bindex_to_list_index;
     auto& facet_hash = matching_context.facet_bindex_to_list_index;
     auto& bi_graph = matching_context.graph;
     auto u = bi_graph.unodes;
@@ -317,7 +317,7 @@ MaximumMorseMatching::MatchSupportInfo MaximumMorseMatching::implicitMatchAndCol
             continue;
 
         // compute immediate cofacets of this facet (list indices)
-        SimplexUtility::getCofacetListIndicesInPlace(binom_table, cofacet_hash, cofacet_indices_, vertex_workspace_,
+        SimplexUtility::getCofacetListIndicesInPlace(binom_table, cofacet_index, cofacet_indices_, vertex_workspace_,
                                                      facetbindex, total_label_count, dim - 1);
 
         //if active and have no cofacets 
@@ -359,7 +359,7 @@ MaximumMorseMatching::MatchSupportInfo MaximumMorseMatching::implicitMatchAndCol
         }
 
         const int64_t terminalcofacet = implicitFacetCompressedAugPath(binom_table, bi_graph, facet_list,
-                                                                       cofacet_hash, cofacet_indices_, total_label_count, dim);
+                                                                       cofacet_index, cofacet_indices_, total_label_count, dim);
 
         if (terminalcofacet < 0)
         {
@@ -504,7 +504,7 @@ int64_t MaximumMorseMatching::implicitFacetAugPath(const std::vector<std::vector
 int64_t MaximumMorseMatching::implicitFacetCompressedAugPath(const std::vector<std::vector<int64_t>>& binomial_table,
                                                              const BipartiteGraph& bi_graph,
                                                              const std::vector<std::pair<int64_t, double>>& facet_list,
-                                                             const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash_table,
+                                                             const CofacetIndex& cofacet_index,
                                                              const std::vector<size_t>& start_cofacet_indices,
                                                              size_t npts,
                                                              size_t interfacedimension)
@@ -545,7 +545,7 @@ int64_t MaximumMorseMatching::implicitFacetCompressedAugPath(const std::vector<s
         enqueueReducedCompressedColumnTail(binomial_table,
                                            bi_graph,
                                            facet_list,
-                                           cofacet_hash_table,
+                                           cofacet_index,
                                            nextfacet_list_idx,
                                            topcofacet,
                                            npts,
@@ -563,7 +563,7 @@ int64_t MaximumMorseMatching::implicitFacetCompressedAugPath(const std::vector<s
 void MaximumMorseMatching::enqueueReducedCompressedColumnTail(const std::vector<std::vector<int64_t>>& binomial_table,
                                                               const BipartiteGraph& bi_graph,
                                                               const std::vector<std::pair<int64_t, double>>& facet_list,
-                                                              const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash_table,
+                                                              const CofacetIndex& cofacet_index,
                                                               const size_t facet_list_index,
                                                               const size_t expected_pivot_cofacet,
                                                               size_t npts,
@@ -572,7 +572,7 @@ void MaximumMorseMatching::enqueueReducedCompressedColumnTail(const std::vector<
 {
     const int64_t facetbindex = facet_list[facet_list_index].first;
     SimplexUtility::getCofacetListIndicesInPlace(binomial_table,
-                                                 cofacet_hash_table,
+                                                 cofacet_index,
                                                  cofacet_indices_,
                                                  vertex_workspace_,
                                                  facetbindex,
@@ -640,7 +640,7 @@ void MaximumMorseMatching::enqueueReducedCompressedColumnTail(const std::vector<
         enqueueReducedCompressedColumnTail(binomial_table,
                                            bi_graph,
                                            facet_list,
-                                           cofacet_hash_table,
+                                           cofacet_index,
                                            matched_facet_list_index,
                                            topcofacet,
                                            npts,

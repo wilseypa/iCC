@@ -312,13 +312,13 @@ void CritCells<ComplexType, DistMatType>::morseVRPH(size_t maxdim, double maxeps
 
     for (size_t dim = 2; dim <= maxdim; ++dim)
     {
-        //create hash table for current cofacets (dim-simplices)
-        auto cofacet_hash = SimplexUtility::getSimplexIndexHashTable(sorted_cofacet);
+        // Create the compact binomial-index lookup for current cofacets.
+        auto cofacet_index = SimplexUtility::getCofacetIndex(sorted_cofacet);
 
         //set graph size
         bi_graph.updateDimensionImplicit(sorted_cofacet.size(), sorted_simplex.size());
 
-        MatchingContext matching_context(bi_graph, binom_table, sorted_simplex, sorted_cofacet, facet_hash, cofacet_hash, n, dim);
+        MatchingContext matching_context(bi_graph, binom_table, sorted_simplex, sorted_cofacet, facet_hash, cofacet_index, n, dim);
 
         if constexpr (std::is_same_v<DistMatType, NormalDistMat>)
         {
@@ -352,6 +352,9 @@ void CritCells<ComplexType, DistMatType>::morseVRPH(size_t maxdim, double maxeps
         {
             //the facets for the next dimension are the unmatched cofacets from the current dimension
             facet_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_cofacet);
+
+            // The index refers to sorted_cofacet's current element storage.
+            cofacet_index.release();
 
             //get cofacets for the next dimension, overwrite the current facets
             sorted_simplex = simplex_enumerator.getSortedVRCofacets(sorted_cofacet, dim, maxeps, threadnumber);

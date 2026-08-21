@@ -10,6 +10,7 @@
 #include <utility> // For std::swap
 #include <vector>
 
+#include "CofacetIndex.hpp"
 #include "robin_hood.h"
 
 namespace SimplexUtility
@@ -304,6 +305,14 @@ namespace SimplexUtility
         return facet_index_hash;
     }
 
+    inline CofacetIndex getCofacetIndex(const std::vector<std::pair<int64_t, double>>& cofacet_list)
+    {
+        return CofacetIndex(cofacet_list);
+    }
+
+    inline CofacetIndex getCofacetIndex(std::vector<std::pair<int64_t, double>>&&) = delete;
+    inline CofacetIndex getCofacetIndex(const std::vector<std::pair<int64_t, double>>&&) = delete;
+
     inline double getPVLabelDistance(const robin_hood::unordered_map<uint64_t, double>& pv_label_distance_hash, size_t i, size_t j)
     {
         if (i > j)
@@ -446,6 +455,25 @@ namespace SimplexUtility
                 const auto it = cofacet_hash_table.find(cofacetbindex);
                 if (it != cofacet_hash_table.end())
                     cofacet_indices.push_back(it->second);
+                return false;
+            };
+
+        forEachImmediateCofacetInBindexOrder(
+            binomial_table, facet_vertices_workspace, facetbidx, total_label_ct, facetdim,
+            collect_active_cofacet);
+    }
+
+    inline void getCofacetListIndicesInPlace(const std::vector<std::vector<int64_t>>& binomial_table, const CofacetIndex& cofacet_index,
+                                  std::vector<size_t>& cofacet_indices, std::vector<size_t>& facet_vertices_workspace, int64_t facetbidx, size_t total_label_ct, size_t facetdim)
+    {
+        cofacet_indices.clear();
+
+        const auto collect_active_cofacet =
+            [&](const size_t, const int64_t cofacetbindex)
+            {
+                const auto rank = cofacet_index.findRank(cofacetbindex);
+                if (rank.has_value())
+                    cofacet_indices.push_back(static_cast<size_t>(*rank));
                 return false;
             };
 

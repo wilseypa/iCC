@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "BipartiteGraph.hpp"
+#include "CofacetIndex.hpp"
 #include "robin_hood.h"
 
 struct NormalDistMat;
@@ -35,6 +36,12 @@ namespace    //for explicit/legacy
     static const robin_hood::unordered_map<int64_t, size_t> empty_map;
     return empty_map;
   }
+
+  inline const CofacetIndex& emptyCofacetIndex()
+  {
+    static const CofacetIndex empty_index;
+    return empty_index;
+  }
 }
 
 struct MatchingContext
@@ -54,16 +61,16 @@ struct MatchingContext
     std::vector<std::pair<int64_t, double>>& sorted_facets;
     std::vector<std::pair<int64_t, double>>& sorted_cofacets;
 
-    // Hash tables required for implicit graph lookups
+    // Lookup structures required for implicit graph queries
     const robin_hood::unordered_map<int64_t, size_t>& facet_bindex_to_list_index;
-    const robin_hood::unordered_map<int64_t, size_t>& cofacet_bindex_to_list_index;
+    const CofacetIndex& cofacet_bindex_to_list_index;
 
     MatchingContext (BipartiteGraph& bi_graph,
                      std::vector<std::vector<int64_t>>& binomial_table,
                      std::vector<std::pair<int64_t, double>>& sorted_facets,
                      std::vector<std::pair<int64_t, double>>& sorted_cofacets,
                      const robin_hood::unordered_map<int64_t, size_t>& facet_hash = emptyMap(),
-                     const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash = emptyMap())
+                     const CofacetIndex& cofacet_index = emptyCofacetIndex())
     : total_label_count(0),
       dim(0),
       graph(bi_graph),
@@ -71,7 +78,7 @@ struct MatchingContext
       sorted_facets(sorted_facets),
       sorted_cofacets(sorted_cofacets),
       facet_bindex_to_list_index(facet_hash),
-      cofacet_bindex_to_list_index(cofacet_hash)
+      cofacet_bindex_to_list_index(cofacet_index)
       {}
 
     MatchingContext (BipartiteGraph& bi_graph,
@@ -79,7 +86,7 @@ struct MatchingContext
                      std::vector<std::pair<int64_t, double>>& sorted_facets,
                      std::vector<std::pair<int64_t, double>>& sorted_cofacets,
                      const robin_hood::unordered_map<int64_t, size_t>& facet_hash,
-                     const robin_hood::unordered_map<int64_t, size_t>& cofacet_hash,
+                     const CofacetIndex& cofacet_index,
                      const size_t total_label_count_in,
                      const size_t current_dim)
     : total_label_count(total_label_count_in),
@@ -89,7 +96,7 @@ struct MatchingContext
       sorted_facets(sorted_facets),
       sorted_cofacets(sorted_cofacets),
       facet_bindex_to_list_index(facet_hash),
-      cofacet_bindex_to_list_index(cofacet_hash)
+      cofacet_bindex_to_list_index(cofacet_index)
       {}
     
 };

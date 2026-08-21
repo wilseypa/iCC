@@ -272,7 +272,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
 
         bi_graph.updateDimensionImplicit(sorted_quotient_cofacet.size(), sorted_quotient_simplex.size());
 
-        auto cofacet_hash = SimplexUtility::getSimplexIndexHashTable(sorted_quotient_cofacet);
+        auto cofacet_index = SimplexUtility::getCofacetIndex(sorted_quotient_cofacet);
 
         if (collect_ffi_stats && is_top_dimension)
         {
@@ -284,7 +284,7 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
         }
 
         MatchingContext matching_context(bi_graph, binomial_table_, sorted_quotient_simplex, sorted_quotient_cofacet,
-                                         active_simplex_hash, cofacet_hash, total_label_count, dim);
+                                         active_simplex_hash, cofacet_index, total_label_count, dim);
 
         if constexpr (std::is_same_v<DistMatType, NormalDistMat>)
         {
@@ -333,9 +333,9 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::runWindo
             // facets for the next dimension are the unmatched cofacets from the current dimension
             active_simplex_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_quotient_cofacet);
 
-            // Both structures are dead past this point. Empty swaps actually release
-            // their backing storage before the next enumeration and merge.
-            decltype(cofacet_hash){}.swap(cofacet_hash);
+            // Both structures are dead past this point. Release their backing
+            // storage before the next enumeration and merge.
+            cofacet_index.release();
             decltype(sorted_quotient_simplex){}.swap(sorted_quotient_simplex);
 
             if (collect_ffi_stats)
@@ -773,13 +773,13 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
 
     for (size_t dim = 2; dim <= maxdim; ++dim)
     {
-        // Build cofacet hash for implicit adjacency queries
-        auto cofacet_hash = SimplexUtility::getSimplexIndexHashTable(sorted_quotient_cofacet);
+        // Build the compact cofacet index for implicit adjacency queries.
+        auto cofacet_index = SimplexUtility::getCofacetIndex(sorted_quotient_cofacet);
 
         bi_graph.updateDimensionImplicit(sorted_quotient_cofacet.size(), sorted_quotient_simplex.size());
 
         MatchingContext matching_context(bi_graph, binomial_table_, sorted_quotient_simplex, sorted_quotient_cofacet,
-                                         active_facet_hash, cofacet_hash, total_label_count, dim);
+                                         active_facet_hash, cofacet_index, total_label_count, dim);
 
         std::cout << "in expand phase (implicit). dim = " << dim
                   << "  cofacet num = " << sorted_quotient_cofacet.size()
@@ -807,6 +807,8 @@ void QuotientAndExpand<DistMatType>::runExpand(const std::vector<std::unordered_
         {
             // facets for the next dimension are the unmatched cofacets from the current dimension
             active_facet_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_quotient_cofacet);
+
+            cofacet_index.release();
 
             // enumerate next cofacet list (geometric PV clique filter)
             sorted_quotient_simplex = simplex_enumerator.getGeometricCofacetList(
@@ -922,13 +924,13 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getPVInd
 
     for (size_t dim = 2; dim <= maxdim; ++dim)
     {
-        // build cofacet hash for implicit adjacency queries
-        auto cofacet_hash = SimplexUtility::getSimplexIndexHashTable(sorted_cofacet);
+        // Build the compact cofacet index for implicit adjacency queries.
+        auto cofacet_index = SimplexUtility::getCofacetIndex(sorted_cofacet);
 
         bi_graph.updateDimensionImplicit(sorted_cofacet.size(), sorted_simplex.size());
 
         MatchingContext matching_context(bi_graph, binomial_table_, sorted_simplex, sorted_cofacet,
-                                         active_facet_hash, cofacet_hash, originalvtnum, dim);
+                                         active_facet_hash, cofacet_index, originalvtnum, dim);
 
         std::cout << "in quotient phase (implicit), dim = " << dim
                   << "  cofacet num = " << sorted_cofacet.size()
@@ -1001,6 +1003,8 @@ std::vector<std::unordered_set<size_t>> QuotientAndExpand<DistMatType>::getPVInd
         {
             // facets for the next dimension are the unmatched cofacets from the current dimension
             active_facet_hash = SimplexUtility::getActiveSimplexIndexHashTable(bi_graph.match_list, sorted_cofacet);
+
+            cofacet_index.release();
 
             // enumerate next cofacet list
             sorted_simplex = simplex_enumerator.getSortedVRCofacets(sorted_cofacet, dim, initeps, threadnumber);
