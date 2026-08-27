@@ -1,45 +1,64 @@
-#include <cmath>
-#include <stdexcept>
-#include <omp.h>
 #include "DistanceMatrix.hpp"
 
-inline double vectors_distance(const std::vector<double>& a, const std::vector<double>& b)
+#include <cmath>
+#include <stdexcept>
+
+namespace
 {
-#ifdef _GLIBCXX_DEBUG
-    if (a.size() != b.size())
-    {
-        throw std::invalid_argument("Vectors must be of the same length");
-    }
-    if (a.empty())
-    {
-        throw std::invalid_argument("Vectors must not be empty");
-    }
-#endif
+double vectorDistance(
+    const std::vector<double>& lhs,
+    const std::vector<double>& rhs)
+{
     double squared_distance = 0.0;
-    for (size_t i = 0; i < a.size(); i++)
+    for (std::size_t i = 0; i < lhs.size(); ++i)
     {
-        const double diff = a[i] - b[i];
-        squared_distance += diff * diff;
+        const double difference = lhs[i] - rhs[i];
+        squared_distance += difference * difference;
     }
     return std::sqrt(squared_distance);
 }
+}
 
-NormalDistMat::NormalDistMat(const std::vector<std::vector<double>>& point_cloud)
+DistanceMatrix::DistanceMatrix(
+    const std::vector<std::vector<double>>& point_cloud)
 {
-
-    if (point_cloud.empty()) 
-    {
+    if (point_cloud.empty())
         throw std::invalid_argument("Input point cloud is empty.");
+
+    const std::size_t coordinate_count = point_cloud.front().size();
+    if (coordinate_count == 0)
+        throw std::invalid_argument("Input points must contain at least one coordinate.");
+
+    for (const auto& point : point_cloud)
+    {
+        if (point.size() != coordinate_count)
+            throw std::invalid_argument("Input points must have equal coordinate counts.");
+
+        for (const double coordinate : point)
+        {
+            if (!std::isfinite(coordinate))
+                throw std::invalid_argument("Input point coordinates must be finite.");
+        }
     }
 
     vertex_count_ = point_cloud.size();
-    dist_mat_.assign((vertex_count_ * (vertex_count_ - 1)) / 2, 0.0);
+    distances_.assign((vertex_count_ * (vertex_count_ - 1)) / 2, 0.0);
+    if (vertex_count_ == 1)
+        return;
+
 #pragma omp parallel for
-    for (size_t i = 0; i < vertex_count_ - 1; i++)
+    for (std::size_t i = 0; i < vertex_count_ - 1; ++i)
     {
-        for (size_t j = i + 1; j < vertex_count_; j++)
+        for (std::size_t j = i + 1; j < vertex_count_; ++j)
         {
-            dist_mat_[triangularIndex(j, i)] = vectors_distance(point_cloud[i], point_cloud[j]);
+            distances_[triangularIndex(j, i)] =
+                vectorDistance(point_cloud[i], point_cloud[j]);
         }
+    }
+
+    for (const double distance : distances_)
+    {
+        if (!std::isfinite(distance))
+            throw std::invalid_argument("Input coordinates produce a nonfinite Euclidean distance.");
     }
 }

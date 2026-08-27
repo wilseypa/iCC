@@ -1,6 +1,9 @@
-#include "criticalCells.hpp"
+#include "DistanceMatrix.hpp"
+#include "Pipelines.hpp"
+#include "readInput.hpp"
 
 #include <CLI/CLI.hpp>
+#include <omp.h>
 
 #include <algorithm>
 #include <chrono>
@@ -14,12 +17,14 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace
 {
 constexpr const char* PIECEWISE_PH_TOOL = "piecewise";
 constexpr const char* MORSE_PH_TOOL = "ph";
+constexpr const char* APPARENT_PAIR_TOOL = "apparent";
 constexpr double DEFAULT_EPS_INTERVAL_SCALE = 1.0;
 // SimplexEnumerator stores group coverage in a uint64_t, with group indices 0..maxdim.
 constexpr size_t MAX_SIMPLEX_DIMENSION = 63;
@@ -65,7 +70,11 @@ std::string normalizeTool(std::string tool)
     if (tool == "2" || tool == "ph" || tool == "morseph" || tool == "morse-ph")
         return MORSE_PH_TOOL;
 
-    throw std::invalid_argument("Unknown tool '" + tool + "'. Use 'piecewise' or 'ph'.");
+    if (tool == "3" || tool == "apparent" || tool == "apparent-pairs" || tool == "apparentpairs")
+        return APPARENT_PAIR_TOOL;
+
+    throw std::invalid_argument(
+        "Unknown tool '" + tool + "'. Use 'piecewise', 'ph', or 'apparent'.");
 }
 
 bool isPiecewisePHTool(const std::string& tool)
@@ -75,7 +84,12 @@ bool isPiecewisePHTool(const std::string& tool)
 
 const char* displayToolName(const std::string& tool)
 {
-    return isPiecewisePHTool(tool) ? "morsePiecewisePH" : "morsePH";
+    const std::string normalized_tool = normalizeTool(tool);
+    if (normalized_tool == PIECEWISE_PH_TOOL)
+        return "morsePiecewisePH";
+    if (normalized_tool == MORSE_PH_TOOL)
+        return "morsePH";
+    return "apparentPairs";
 }
 
 std::string promptRequiredLine(const std::string& prompt)
@@ -133,15 +147,16 @@ std::string promptTool()
         std::cout << "Select tool:\n";
         std::cout << "  1) morsePiecewisePH\n";
         std::cout << "  2) morsePH\n";
+        std::cout << "  3) apparentPairs\n";
 
-        const std::string answer = promptRequiredLine("Input tool [1/2]: ");
+        const std::string answer = promptRequiredLine("Input tool [1/2/3]: ");
         try
         {
             return normalizeTool(answer);
         }
         catch (const std::invalid_argument&)
         {
-            std::cout << "  Please enter 1 for morsePiecewisePH or 2 for morsePH.\n";
+            std::cout << "  Please enter 1 for morsePiecewisePH, 2 for morsePH, or 3 for apparentPairs.\n";
         }
     }
 }
@@ -367,9 +382,9 @@ double promptPVMinSeparation()
     }
 }
 
-std::vector<double> collectSortedUniquePositiveDistances(const CritCells<VR, NormalDistMat>& crit_cells)
+std::vector<double> collectSortedUniquePositiveDistances(const DistanceMatrix& distance_matrix)
 {
-    const size_t npts = crit_cells.getVertexNumber();
+    const size_t npts = distance_matrix.vertexCount();
     std::vector<double> distances;
     distances.reserve((npts > 1) ? (npts * (npts - 1)) / 2 : 0);
 
@@ -377,7 +392,7 @@ std::vector<double> collectSortedUniquePositiveDistances(const CritCells<VR, Nor
     {
         for (size_t j = i + 1; j < npts; ++j)
         {
-            const double distance = crit_cells.getDistance(i, j);
+            const double distance = distance_matrix.distance(i, j);
             if (!std::isfinite(distance))
                 throw std::runtime_error("Encountered a non-finite pairwise distance while generating epsilon breaks.");
             if (distance > 0.0)
@@ -393,7 +408,7 @@ std::vector<double> collectSortedUniquePositiveDistances(const CritCells<VR, Nor
     return distances;
 }
 
-std::vector<double> generateEpsilonBreaksFromIntervalCount(const CritCells<VR, NormalDistMat>& crit_cells,
+std::vector<double> generateEpsilonBreaksFromIntervalCount(const DistanceMatrix& distance_matrix,
                                                            const size_t interval_count,
                                                            const double interval_scale)
 {
@@ -402,7 +417,7 @@ std::vector<double> generateEpsilonBreaksFromIntervalCount(const CritCells<VR, N
     if (!isValidEpsilonIntervalScale(interval_scale))
         throw std::invalid_argument("Epsilon interval scale must be a finite number greater than or equal to 1.0.");
 
-    const auto distances = collectSortedUniquePositiveDistances(crit_cells);
+    const auto distances = collectSortedUniquePositiveDistances(distance_matrix);
     const size_t distance_count = distances.size();
 
     if (interval_count > distance_count)
@@ -452,7 +467,7 @@ std::vector<double> generateEpsilonBreaksFromIntervalCount(const CritCells<VR, N
     return eps_breaks;
 }
 
-std::vector<double> resolveEpsilonBreaks(const CritCells<VR, NormalDistMat>& crit_cells,
+std::vector<double> resolveEpsilonBreaks(const DistanceMatrix& distance_matrix,
                                          const std::vector<double>& explicit_eps_breaks,
                                          const size_t eps_interval_count,
                                          const double eps_interval_scale)
@@ -460,7 +475,7 @@ std::vector<double> resolveEpsilonBreaks(const CritCells<VR, NormalDistMat>& cri
     if (!explicit_eps_breaks.empty())
         return explicit_eps_breaks;
 
-    return generateEpsilonBreaksFromIntervalCount(crit_cells, eps_interval_count, eps_interval_scale);
+    return generateEpsilonBreaksFromIntervalCount(distance_matrix, eps_interval_count, eps_interval_scale);
 }
 
 void printRunConfiguration(const std::string& tool,
@@ -596,7 +611,15 @@ void validateRunOptions(const std::string& tool,
     else
     {
         if (!std::isfinite(maxeps) || maxeps <= 0.0)
-            throw std::invalid_argument("--max-eps is required and must be finite and positive when --tool ph is selected.");
+        {
+            if (normalized_tool == MORSE_PH_TOOL)
+            {
+                throw std::invalid_argument(
+                    "--max-eps is required and must be finite and positive when --tool ph is selected.");
+            }
+            throw std::invalid_argument(
+                "--max-eps is required and must be finite and positive when --tool apparent is selected.");
+        }
     }
 }
 
@@ -623,12 +646,16 @@ int runTool(const std::string& tool,
                               eps_interval_count, eps_interval_scale, maxeps, pv_cap_scale,
                               pv_min_separation);
 
-    CritCells<VR, NormalDistMat> icc(filename);
+    auto point_cloud = readInput::readCSV(filename);
+    omp_set_num_threads(threadnumber);
+    DistanceMatrix distance_matrix(point_cloud);
+    decltype(point_cloud){}.swap(point_cloud);
 
     std::vector<double> resolved_eps_breaks;
     if (normalized_tool == PIECEWISE_PH_TOOL)
     {
-        resolved_eps_breaks = resolveEpsilonBreaks(icc, eps_breaks, eps_interval_count, eps_interval_scale);
+        resolved_eps_breaks = resolveEpsilonBreaks(
+            distance_matrix, eps_breaks, eps_interval_count, eps_interval_scale);
         validateResolvedPiecewisePHInputs(resolved_eps_breaks, pv_cap_scale, pv_min_separation);
 
         if (verbose && eps_breaks.empty())
@@ -643,12 +670,35 @@ int runTool(const std::string& tool,
     if (verbose)
         std::cout << "\nstarted running...\n";
 
+    PipelineConfig config{
+        .eps_breaks = normalized_tool == PIECEWISE_PH_TOOL
+            ? resolved_eps_breaks
+            : std::vector<double>{maxeps},
+        .maxdim = maxdim,
+        .threads = threadnumber,
+        .pv_cap_scale = normalized_tool == PIECEWISE_PH_TOOL ? pv_cap_scale : 1.0,
+        .pv_min_separation = normalized_tool == PIECEWISE_PH_TOOL ? pv_min_separation : 0.0,
+        .verbose = verbose};
+    config.validate();
+
     const auto st0 = std::chrono::high_resolution_clock::now();
     if (normalized_tool == PIECEWISE_PH_TOOL)
-        icc.morsePiecewisePH(maxdim, resolved_eps_breaks, threadnumber, pv_cap_scale,
-                             pv_min_separation, verbose);
+    {
+        PwphPipeline pipeline(std::move(distance_matrix), std::move(config));
+        pipeline.run();
+    }
+    else if (normalized_tool == MORSE_PH_TOOL)
+    {
+        PersistentHomologyPipeline pipeline(
+            std::move(distance_matrix), std::move(config));
+        pipeline.run();
+    }
     else
-        icc.morseVRPH(maxdim, maxeps, threadnumber);
+    {
+        ApparentPairPipeline pipeline(
+            std::move(distance_matrix), std::move(config));
+        pipeline.run();
+    }
     const auto st1 = std::chrono::high_resolution_clock::now();
 
     const auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
@@ -721,7 +771,7 @@ int runCommandLine(int argc, char** argv)
     double pv_min_separation = 0.0;
     bool verbose = false;
 
-    app.add_option("-t,--tool", tool, "Tool to run: piecewise or ph")
+    app.add_option("-t,--tool", tool, "Tool to run: piecewise, ph, or apparent")
         ->required();
 
     app.add_option("-f,--file-name", filename, "Input CSV filename")
@@ -765,7 +815,7 @@ int runCommandLine(int argc, char** argv)
         ->check(CLI::NonNegativeNumber);
 
     app.add_option("--max-eps", maxeps,
-                   "Required when --tool ph. Maximum epsilon")
+                   "Required when --tool ph or apparent. Maximum epsilon")
         ->check(CLI::PositiveNumber);
 
     try
@@ -797,54 +847,3 @@ int main(int argc, char** argv)
         return 1;
     }
 }
-
-// int main()
-// {   
-//     std::string filename = "test_4dsphere_100.csv";
-//     CritCells<VR, NormalDistMat> icc(filename);
-
-//     std::cout<<"started running...\n";
-
-//     auto st0 = std::chrono::high_resolution_clock::now();
-
-//     // icc.morseQuotientAndExpand(3, 1.0, 1.7, 4);
-//     // icc.morseVRPH(4, 1.7, 4);
-
-//     std::vector<double> eps_breaks = {1.4, 1.7};
-//     icc.morsePiecewisePH(4, eps_breaks, 4, 0.8);
-
-//     auto st1 = std::chrono::high_resolution_clock::now();
-//     auto pt_ms = std::chrono::duration_cast<std::chrono::milliseconds>(st1 - st0);
-//     std::cout<<"run time = "<<pt_ms.count() <<'\n';
-
-//     return 0;
-// }
-
-// int main(int argc, char* argv[])
-// {
-//     std::ofstream logFile("logfile.txt", std::ios::app);
-//     std::streambuf* originalClogBuffer = std::clog.rdbuf();
-//     std::clog.rdbuf(logFile.rdbuf());
-
-//     switch (argc)
-//     {
-//     case 3:
-//     {
-//         CritCells<VR, NormallDistMat> icc(argv[1]);
-//         icc.run_Compute(std::stoi(argv[2]));
-//         break;
-//     }
-//     case 4:
-//     {
-//         CritCells<VR, NormallDistMat> icc(argv[1]);
-//         icc.run_Compute(std::stoi(argv[2]), std::stoi(argv[3]));
-//         break;
-//     }
-//     default:
-//         std::cerr << "Usage: " << argv[0] << " <input_filename> <maxDim> [<batch_size>]" << std::endl;
-//         return 1;
-//     }
-
-//     std::clog.rdbuf(originalClogBuffer);
-//     return 0;
-// }

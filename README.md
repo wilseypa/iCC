@@ -1,15 +1,23 @@
 # iCC
 
-Incremental Critical Cells (iCC)
+Incremental Critical Cells (iCC) computes persistent-homology information for
+dense Euclidean point clouds. The executable provides three concrete pipelines:
 
-This repository contains the C++ code for studies with iCC that are being performed in the HPC lab at the University of Cincinnati.
+- `ph`: direct implicit Vietoris–Rips persistent homology.
+- `piecewise`: piecewise persistent homology (PwPH) with pseudo-vertices (PVs).
+- `apparent`: apparent-pair-only reduction, without augmenting-path matching.
+
+This repository contains the C++ implementation used by the HPC lab at the
+University of Cincinnati.
 
 ## Requirements
 
-- C++23 compiler
+- A C++23 compiler
 - CMake 3.22 or newer
 - OpenMP
-- CLI11, fetched automatically by CMake if it is not already installed
+- CLI11 (CMake fetches CLI11 v2.6.2 when no installed package is found)
+
+CGAL and Eigen are not required.
 
 ## Building
 
@@ -20,74 +28,98 @@ cmake --build build
 
 The executable is written to `build/iCC`.
 
+To build and run the core regression tests:
+
+```bash
+cmake -S . -B build -DBUILD_TESTING=ON
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
 ## Running
 
-Interactive mode:
+Running without arguments opens the interactive runner:
 
 ```bash
 ./build/iCC
 ```
 
-Command-line mode for `morsePH`:
+Direct persistent homology:
 
 ```bash
 ./build/iCC --tool ph --file-name <input.csv> --max-dim <maxDim> --max-eps <epsilon> [-n <thread_count>] [-v]
 ```
 
-Command-line mode for `morsePiecewisePH` with explicit epsilon breaks:
+PwPH with explicit epsilon breaks:
 
 ```bash
 ./build/iCC --tool piecewise --file-name <input.csv> --max-dim <maxDim> --eps-breaks <eps1> <eps2> ... --pv-cap-scale <scale> [--pv-min-separation <delta>] [-n <thread_count>] [-v]
 ```
 
-Command-line mode for `morsePiecewisePH` with automatically generated epsilon breaks:
+PwPH with automatically generated epsilon breaks:
 
 ```bash
 ./build/iCC --tool piecewise --file-name <input.csv> --max-dim <maxDim> --eps-interval-count <count> [--eps-interval-scale <scale>] --pv-cap-scale <scale> [--pv-min-separation <delta>] [-n <thread_count>] [-v]
 ```
 
-For automatic epsilon intervals, the program sorts the distinct positive pairwise distances from the distance matrix and chooses `<count>` interval upper bounds from those ranks. `--eps-interval-scale` must be at least `1.0`; `1.0` gives linear distance ranks, and larger values make earlier intervals contain more distinct distances. The default scale is `1.0`.
+Apparent-pair-only reduction:
 
-`--eps-breaks` and `--eps-interval-count` are mutually exclusive. The aliases `--eps-break-count`, `--eps-window-count`, `--eps-break-scale`, and `--eps-window-scale` are also accepted.
+```bash
+./build/iCC --tool apparent --file-name <input.csv> --max-dim <maxDim> --max-eps <epsilon> [-n <thread_count>] [-v]
+```
 
-`--pv-cap-scale` bounds a new PV's diameter by `<scale> * eps_hi`, where `eps_hi` is the cut scale at which the PV is formed. `--pv-min-separation` requires every pair of PVs to have minimum cross distance at least `<delta> * eps_max`; its default is `0`, which disables the separation constraint.
+The apparent pipeline prints deterministic `dimension, unmatched weight` rows.
+It includes unmatched top-dimensional cofacets and does not print H0 cells.
 
-The executable accepts any finite positive PV cap scale for experiments. The quotient and single-coordinate safety arguments assume the cap does not exceed the formation scale (`scale <= 1`); because filtration admission uses a strict upper bound, use `scale < 1` to avoid the equality boundary.
+The numeric tool aliases `1`, `2`, and `3` select `piecewise`, `ph`, and
+`apparent`, respectively. Existing PH aliases remain accepted; the apparent
+pipeline also accepts `apparent-pairs` and `apparentpairs`.
 
-For all CLI options:
+For every option and alias:
 
 ```bash
 ./build/iCC --help
 ```
 
-## Timing
+## Epsilon schedules
 
-The program prints `run time = ...` in both verbose and non-verbose command-line modes. When automatic epsilon intervals are used, the timer starts after the interval breaks have been generated.
+`--eps-breaks` and `--eps-interval-count` are mutually exclusive. The aliases
+`--eps-break-count` and `--eps-window-count` are accepted for the interval
+count. `--eps-break-scale` and `--eps-window-scale` are accepted for the
+interval scale.
 
-Use `-v` to show diagnostic output, including the generated epsilon breaks for automatic piecewise runs. For piecewise runs with PVs in dimensions 3 through 7, verbose mode also reports canonical-witness false-facet-identification statistics for the top interface. Each report describes the complex rebuilt at that window's upper scale; it is not filtered to cofacets whose weights lie strictly inside the recording interval.
+Automatic scheduling sorts the distinct positive pairwise distances and chooses
+the requested number of upper bounds from those ranks. The interval scale must
+be finite and at least `1.0`; `1.0` gives linear distance ranks, while larger
+values place more distinct distances in earlier windows. Selected distances are
+advanced by one representable floating-point value because filtration admission
+uses a strict upper bound.
 
-## Reviewer Guide
+`--pv-cap-scale` limits a new PV's diameter to `scale * eps_hi`, where `eps_hi`
+is its formation-window upper bound. `--pv-min-separation` requires every pair
+of PVs to have minimum cross-distance at least `delta * eps_max`; its default is
+`0`, which disables this constraint.
 
-For paper-review use, see [README_REVIEWER.md](README_REVIEWER.md). That file focuses on building and running the current command-line workflow.
+The executable accepts any finite positive PV cap scale for experiments. The
+quotient and single-coordinate safety arguments assume the cap does not exceed
+the formation scale. Because admission is strict, use a scale below `1.0` to
+avoid the equality boundary.
 
-## Customization
+## Output and timing
 
-1. **Implementation Parameters**
-   - The implementation requires two template parameters to control the input complex type and the distance matrix implementation to be used.
-   - Sample implementations can be found in `criticalCells.hpp` in the form of structs.
+Direct PH retains the existing per-dimension persistent-pair report. Nonverbose
+PwPH writes a CSV-like window header followed by
+`dimension, birth weight, death weight` rows. In verbose PH and PwPH output,
+every persistence pair includes decoded birth-facet and death-cofacet labels.
+Verbose PwPH additionally reports pipeline counts, PV statistics, and available
+FFI diagnostics.
 
-2. **Customization Process**
-   - Customization can be achieved by specializing predefined functions.
-   - The `DistMat` must provide a distance function to obtain the distance between two indices.
+For PwPH windows containing PVs in dimensions 3 through 7, verbose mode reports
+canonical-witness false-facet-identification statistics for the top interface.
+Each report describes the complex rebuilt at that window's upper scale; it is
+not restricted to cofacets whose weights lie strictly inside the recording
+interval.
 
-3. **Custom Complex Handling**
-   - If a custom complex is used, there are two options:
-     - Store the current simplex in the `simplex` field and implement the `next_simplex` function for seeking.
-     - Provide a custom implementation, such as:
-
-```cpp
-std::map<double, std::vector<std::vector<int>>> binEdgeSimplexes();
-std::map<double, std::vector<std::vector<int>>> dsimplices_batches(ComplexType& simplex_const, size_t dim, size_t batch_size);
-```
-
-   - These functions are crucial for handling custom complex types and ensuring proper functionality.
+Every command-line run prints `run time = ...` in milliseconds. Input reading,
+distance-matrix construction, and automatic epsilon-schedule generation happen
+before this timer starts.
