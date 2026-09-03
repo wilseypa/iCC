@@ -1,8 +1,6 @@
 #include "Pipelines.hpp"
 
 #include <iostream>
-#include <optional>
-#include <stdexcept>
 #include <utility>
 
 #include "DimensionFrame.hpp"
@@ -10,14 +8,6 @@
 
 namespace
 {
-PipelineConfig useFinalEpsilonOnly(PipelineConfig config)
-{
-    config.validate();
-    const double final_epsilon = config.finalEpsilon();
-    config.eps_breaks.assign(1, final_epsilon);
-    return config;
-}
-
 void printSimplexLabels(
     const BinomialTable& binomial_table,
     const char* const prefix,
@@ -89,22 +79,20 @@ PersistentHomologyPipeline::PersistentHomologyPipeline(
     PipelineConfig config)
     : runtime_(
           std::move(distance_matrix),
-          useFinalEpsilonOnly(std::move(config)))
+          std::move(config),
+          PipelineMode::RegVRPH)
 {
 }
 
 void PersistentHomologyPipeline::run()
 {
     WindowState window(runtime_.distanceMatrix().vertexCount());
-    runtime_.ensureBinomialCapacity(window.totalLabelCount());
 
     const WindowBounds bounds{
-        .index = 0,
         .eps_lo = 0.0,
         .eps_hi = runtime_.config().finalEpsilon(),
         .is_final = true};
-    auto edges = window.prepareWindow(
-        runtime_, bounds, WindowPreparationMode::OrdinaryVr);
+    auto edges = window.prepareWindow(runtime_, bounds);
 
     std::cout << "total point number: "
               << runtime_.distanceMatrix().vertexCount() << std::endl;
@@ -156,7 +144,10 @@ void PersistentHomologyPipeline::run()
 PwphPipeline::PwphPipeline(
     DistanceMatrix distance_matrix,
     PipelineConfig config)
-    : runtime_(std::move(distance_matrix), std::move(config)),
+    : runtime_(
+          std::move(distance_matrix),
+          std::move(config),
+          PipelineMode::PwPH),
       window_state_(runtime_.distanceMatrix().vertexCount())
 {
 }
@@ -169,7 +160,6 @@ void PwphPipeline::run()
          ++window_index)
     {
         const WindowBounds bounds{
-            .index = window_index,
             .eps_lo = window_index == 0
                 ? 0.0
                 : config.eps_breaks[window_index - 1],
@@ -183,11 +173,9 @@ void PwphPipeline::run()
             std::cout << "dimension, birth weight, death weight\n";
         }
 
-        runtime_.ensureBinomialCapacity(window_state_.totalLabelCount());
-        auto edges = window_state_.prepareWindow(
-            runtime_, bounds, WindowPreparationMode::QuotientVr);
+        auto edges = window_state_.prepareWindow(runtime_, bounds);
 
-        std::optional<DependencySupportBatch> support_batch;
+        DependencySupportBatch support_batch;
         {
             DimensionFrame frame(runtime_, window_state_, std::move(edges));
             for (;;)
@@ -255,13 +243,11 @@ void PwphPipeline::run()
         if (bounds.is_final)
             break;
 
-        if (!support_batch.has_value())
-            throw std::logic_error("A nonfinal PwPH window did not produce a support batch.");
-
         const std::size_t previous_pv_count =
             window_state_.pseudoVertices().size();
         support_processor_.processPwph(
-            runtime_, window_state_, std::move(*support_batch));
+            runtime_, window_state_, std::move(support_batch));
+        runtime_.ensureBinomialCapacity(window_state_.totalLabelCount());
         const std::size_t new_pv_count =
             window_state_.pseudoVertices().size() - previous_pv_count;
 
@@ -272,7 +258,7 @@ void PwphPipeline::run()
                       << "  total pv number = "
                       << window_state_.pseudoVertices().size() << std::endl;
 
-            std::cout << "pv flat index set statistics:" << std::endl;
+            std::cout << "pv representative statistics:" << std::endl;
             if (window_state_.pseudoVertices().empty())
             {
                 std::cout << "  (empty)" << std::endl;
@@ -285,7 +271,7 @@ void PwphPipeline::run()
                 {
                     const auto& pv = window_state_.pseudoVertices()[pv_index];
                     std::cout << "  [" << pv_index << "] size = "
-                              << pv.flat_index_set.size()
+                              << pv.representatives.size()
                               << "  max diameter = " << pv.diameter << '\n';
                 }
                 std::cout << std::endl;
@@ -299,22 +285,20 @@ ApparentPairPipeline::ApparentPairPipeline(
     PipelineConfig config)
     : runtime_(
           std::move(distance_matrix),
-          useFinalEpsilonOnly(std::move(config)))
+          std::move(config),
+          PipelineMode::RegVRPH)
 {
 }
 
 void ApparentPairPipeline::run()
 {
     WindowState window(runtime_.distanceMatrix().vertexCount());
-    runtime_.ensureBinomialCapacity(window.totalLabelCount());
 
     const WindowBounds bounds{
-        .index = 0,
         .eps_lo = 0.0,
         .eps_hi = runtime_.config().finalEpsilon(),
         .is_final = true};
-    auto edges = window.prepareWindow(
-        runtime_, bounds, WindowPreparationMode::OrdinaryVr);
+    auto edges = window.prepareWindow(runtime_, bounds);
 
     std::cout << "dimension, unmatched weight\n";
 

@@ -81,11 +81,8 @@ std::int64_t ImplicitMorseMatching::findOptimizedApparentPairCofacet(
         [&](const std::size_t covertex,
             const std::int64_t candidate_bindex) -> bool
     {
-        if (covertex >= active_label_mask.size() ||
-            active_label_mask[covertex] == 0)
-        {
+        if (active_label_mask[covertex] == 0)
             return false;
-        }
 
         for (const std::size_t facet_label : workspace.vertex_workspace)
         {
@@ -226,12 +223,6 @@ void ImplicitMorseMatching::matchPersistence(
     DimensionFrame& frame,
     const bool collect_dependency_support) const
 {
-    if (!frame.interface_workspace_)
-    {
-        throw std::logic_error(
-            "Implicit persistence matching requires an interface workspace.");
-    }
-
     auto& workspace = *frame.interface_workspace_;
     const std::size_t cofacet_count = frame.cofacet_list_.size();
     const std::size_t facet_count = frame.facet_list_.size();
@@ -342,12 +333,6 @@ void ImplicitMorseMatching::matchPersistence(
 void ImplicitMorseMatching::matchApparentPairsOnly(
     DimensionFrame& frame) const
 {
-    if (!frame.interface_workspace_)
-    {
-        throw std::logic_error(
-            "Apparent-pair matching requires an interface workspace.");
-    }
-
     auto& workspace = *frame.interface_workspace_;
     const std::size_t cofacet_count = frame.cofacet_list_.size();
     const std::size_t facet_count = frame.facet_list_.size();

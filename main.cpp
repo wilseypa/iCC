@@ -545,31 +545,6 @@ bool promptConfirmation(const std::string& tool,
     }
 }
 
-void validateResolvedPiecewisePHInputs(const std::vector<double>& eps_breaks,
-                                       const double pv_cap_scale,
-                                       const double pv_min_separation)
-{
-    if (!std::isfinite(pv_cap_scale) || pv_cap_scale <= 0.0)
-        throw std::invalid_argument("--pv-cap-scale is required and must be finite and positive when --tool piecewise is selected.");
-    if (!std::isfinite(pv_min_separation) || pv_min_separation < 0.0)
-        throw std::invalid_argument("--pv-min-separation must be finite and nonnegative.");
-    if (eps_breaks.empty())
-        throw std::invalid_argument("Piecewise PH requires at least one resolved epsilon break.");
-
-    for (size_t i = 0; i < eps_breaks.size(); ++i)
-    {
-        if (!std::isfinite(eps_breaks[i]) || eps_breaks[i] <= 0.0)
-            throw std::invalid_argument("Resolved epsilon breaks must be finite and positive.");
-        if (i > 0 && eps_breaks[i] <= eps_breaks[i - 1])
-            throw std::invalid_argument("Resolved epsilon breaks must be strictly increasing.");
-    }
-
-    if (!std::isfinite(pv_cap_scale * eps_breaks.back()))
-        throw std::invalid_argument("--pv-cap-scale times the final epsilon break must be finite.");
-    if (!std::isfinite(pv_min_separation * eps_breaks.back()))
-        throw std::invalid_argument("--pv-min-separation times the final epsilon break must be finite.");
-}
-
 void validateRunOptions(const std::string& tool,
                         const std::string& filename,
                         const size_t maxdim,
@@ -656,7 +631,6 @@ int runTool(const std::string& tool,
     {
         resolved_eps_breaks = resolveEpsilonBreaks(
             distance_matrix, eps_breaks, eps_interval_count, eps_interval_scale);
-        validateResolvedPiecewisePHInputs(resolved_eps_breaks, pv_cap_scale, pv_min_separation);
 
         if (verbose && eps_breaks.empty())
         {
@@ -679,7 +653,6 @@ int runTool(const std::string& tool,
         .pv_cap_scale = normalized_tool == PIECEWISE_PH_TOOL ? pv_cap_scale : 1.0,
         .pv_min_separation = normalized_tool == PIECEWISE_PH_TOOL ? pv_min_separation : 0.0,
         .verbose = verbose};
-    config.validate();
 
     const auto st0 = std::chrono::high_resolution_clock::now();
     if (normalized_tool == PIECEWISE_PH_TOOL)

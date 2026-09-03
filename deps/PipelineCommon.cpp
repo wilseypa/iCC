@@ -49,9 +49,6 @@ void PipelineConfig::validate() const
 
 double PipelineConfig::finalEpsilon() const
 {
-    if (eps_breaks.empty())
-        throw std::logic_error("Final epsilon is unavailable before pipeline configuration validation.");
-
     return eps_breaks.back();
 }
 
@@ -62,11 +59,25 @@ double PipelineConfig::absoluteMinSeparation() const
 
 PipelineRuntime::PipelineRuntime(
     DistanceMatrix distance_matrix,
-    PipelineConfig config)
+    PipelineConfig config,
+    const PipelineMode mode)
     : distance_matrix_(std::move(distance_matrix)),
-      config_(std::move(config))
+      config_(std::move(config)),
+      mode_(mode)
 {
     config_.validate();
+
+    switch (mode_)
+    {
+    case PipelineMode::RegVRPH:
+        config_.eps_breaks.assign(1, config_.finalEpsilon());
+        break;
+    case PipelineMode::PwPH:
+        break;
+    default:
+        throw std::invalid_argument("Unknown pipeline mode.");
+    }
+
     binomial_table_ = SimplexUtility::getBinomialTable(
         distance_matrix_.vertexCount(),
         config_.maxdim);
@@ -75,9 +86,6 @@ PipelineRuntime::PipelineRuntime(
 void PipelineRuntime::ensureBinomialCapacity(const size_t total_label_count)
 {
     const size_t original_vertex_count = distance_matrix_.vertexCount();
-    if (total_label_count < original_vertex_count)
-        throw std::invalid_argument("Total label count cannot be smaller than the original vertex count.");
-
     if (binomial_table_.size() > total_label_count)
         return;
 

@@ -145,7 +145,6 @@ private:
     const PipelineRuntime& runtime_;
     const WindowState& window_;
     const BinomialTable& binomial_table_;
-    const std::size_t binomial_row_count_;
 
     std::size_t dimension_ = 2;
     FramePhase phase_ = FramePhase::ReadyToMatch;

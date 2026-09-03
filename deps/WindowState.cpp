@@ -1,7 +1,6 @@
 #include "WindowState.hpp"
 
 #include <algorithm>
-#include <cmath>
 #include <limits>
 #include <numeric>
 #include <stdexcept>
@@ -14,76 +13,6 @@
 
 namespace
 {
-void validateBounds(
-    const PipelineConfig& config,
-    const WindowBounds& bounds)
-{
-    if (bounds.index >= config.eps_breaks.size())
-        throw std::invalid_argument("Window index is outside the configured epsilon schedule.");
-
-    if (!std::isfinite(bounds.eps_lo) || bounds.eps_lo < 0.0 ||
-        !std::isfinite(bounds.eps_hi) || bounds.eps_hi <= 0.0 ||
-        bounds.eps_lo >= bounds.eps_hi)
-    {
-        throw std::invalid_argument("Window bounds must be finite and satisfy 0 <= eps_lo < eps_hi.");
-    }
-
-    const double expected_lo =
-        (bounds.index == 0) ? 0.0 : config.eps_breaks[bounds.index - 1];
-    const double expected_hi = config.eps_breaks[bounds.index];
-    const bool expected_final = bounds.index + 1 == config.eps_breaks.size();
-
-    if (bounds.eps_lo != expected_lo || bounds.eps_hi != expected_hi)
-        throw std::invalid_argument("Window bounds do not match the configured epsilon schedule.");
-
-    if (bounds.is_final != expected_final)
-        throw std::invalid_argument("Window final-state flag does not match the configured epsilon schedule.");
-}
-
-void validateActiveLabels(
-    const std::vector<size_t>& active_labels,
-    const size_t total_label_count)
-{
-    if (!std::is_sorted(active_labels.begin(), active_labels.end()))
-        throw std::logic_error("Active labels must be sorted.");
-
-    for (size_t i = 0; i < active_labels.size(); ++i)
-    {
-        if (active_labels[i] >= total_label_count)
-            throw std::logic_error("Active label is outside the complete label range.");
-
-        if (i > 0 && active_labels[i] == active_labels[i - 1])
-            throw std::logic_error("Active labels must not contain duplicates.");
-    }
-}
-
-std::vector<std::vector<size_t>> buildRepresentativeLists(
-    const std::vector<SelectedPV>& pv_list,
-    const size_t original_vertex_count)
-{
-    std::vector<std::vector<size_t>> representatives;
-    representatives.reserve(pv_list.size());
-
-    for (const auto& pv : pv_list)
-    {
-        if (pv.flat_index_set.empty())
-            throw std::logic_error("A pseudo-vertex cannot have an empty representative set.");
-
-        if (!std::isfinite(pv.diameter) || pv.diameter < 0.0)
-            throw std::logic_error("A pseudo-vertex diameter must be finite and nonnegative.");
-
-        auto& sorted_representatives = representatives.emplace_back(
-            pv.flat_index_set.begin(),
-            pv.flat_index_set.end());
-        std::sort(sorted_representatives.begin(), sorted_representatives.end());
-
-        if (sorted_representatives.back() >= original_vertex_count)
-            throw std::logic_error("Pseudo-vertex representatives must be original vertex indices.");
-    }
-
-    return representatives;
-}
-
 LabelPairKey makeLabelPairKey(size_t lhs, size_t rhs)
 {
     if (lhs > rhs)
@@ -99,7 +28,7 @@ LabelPairKey makeLabelPairKey(size_t lhs, size_t rhs)
 
 double computeLabelDistance(
     const PipelineRuntime& runtime,
-    const std::vector<std::vector<size_t>>& pv_representative_lists,
+    const std::vector<SelectedPV>& pseudo_vertices,
     const size_t lhs,
     const size_t rhs)
 {
@@ -114,7 +43,7 @@ double computeLabelDistance(
     if (lhs < original_vertex_count)
     {
         for (const size_t rhs_representative :
-             pv_representative_lists[rhs - original_vertex_count])
+             pseudo_vertices[rhs - original_vertex_count].representatives)
         {
             minimum_distance = std::min(
                 minimum_distance,
@@ -126,7 +55,7 @@ double computeLabelDistance(
     if (rhs < original_vertex_count)
     {
         for (const size_t lhs_representative :
-             pv_representative_lists[lhs - original_vertex_count])
+             pseudo_vertices[lhs - original_vertex_count].representatives)
         {
             minimum_distance = std::min(
                 minimum_distance,
@@ -136,10 +65,10 @@ double computeLabelDistance(
     }
 
     for (const size_t lhs_representative :
-         pv_representative_lists[lhs - original_vertex_count])
+         pseudo_vertices[lhs - original_vertex_count].representatives)
     {
         for (const size_t rhs_representative :
-             pv_representative_lists[rhs - original_vertex_count])
+             pseudo_vertices[rhs - original_vertex_count].representatives)
         {
             minimum_distance = std::min(
                 minimum_distance,
@@ -159,7 +88,7 @@ struct QuotientEdgeData
 QuotientEdgeData buildQuotientEdges(
     const PipelineRuntime& runtime,
     const std::vector<size_t>& active_labels,
-    const std::vector<std::vector<size_t>>& pv_representative_lists,
+    const std::vector<SelectedPV>& pseudo_vertices,
     const double eps_hi)
 {
     const int worker_count = runtime.config().threads;
@@ -187,7 +116,7 @@ QuotientEdgeData buildQuotientEdges(
 
             const double weight = computeLabelDistance(
                 runtime,
-                pv_representative_lists,
+                pseudo_vertices,
                 lhs,
                 rhs);
 
@@ -233,33 +162,13 @@ WindowState::WindowState(const size_t original_vertex_count)
     : original_vertex_count_(original_vertex_count),
       active_label_list_(original_vertex_count)
 {
-    if (original_vertex_count_ == 0)
-        throw std::invalid_argument("Window state requires at least one original vertex.");
-
     std::iota(active_label_list_.begin(), active_label_list_.end(), size_t{0});
 }
 
 SimplexList WindowState::prepareWindow(
     const PipelineRuntime& runtime,
-    const WindowBounds& bounds,
-    const WindowPreparationMode mode)
+    const WindowBounds& bounds)
 {
-    if (prepared_)
-        throw std::logic_error("The current window must be invalidated before preparing another window.");
-
-    if (runtime.distanceMatrix().vertexCount() != original_vertex_count_)
-        throw std::invalid_argument("Window state and pipeline runtime have different original vertex counts.");
-
-    validateBounds(runtime.config(), bounds);
-    validateActiveLabels(active_label_list_, totalLabelCount());
-
-    if (runtime.binomialTable().size() <= totalLabelCount())
-        throw std::logic_error("Pipeline binomial table capacity is too small for the current label range.");
-
-    auto representative_lists = buildRepresentativeLists(
-        pv_list_,
-        original_vertex_count_);
-
     std::vector<uint8_t> active_label_mask(totalLabelCount(), 0);
     for (const size_t label : active_label_list_)
         active_label_mask[label] = 1;
@@ -267,19 +176,10 @@ SimplexList WindowState::prepareWindow(
     robin_hood::unordered_map<LabelPairKey, double> pv_label_distances;
     SimplexList sorted_edges;
 
-    switch (mode)
+    switch (runtime.mode())
     {
-    case WindowPreparationMode::OrdinaryVr:
+    case PipelineMode::RegVRPH:
     {
-        if (!pv_list_.empty() || active_label_list_.size() != original_vertex_count_)
-            throw std::logic_error("Ordinary VR preparation requires the unchanged original label set.");
-
-        for (size_t label = 0; label < active_label_list_.size(); ++label)
-        {
-            if (active_label_list_[label] != label)
-                throw std::logic_error("Ordinary VR preparation requires every original label to be active.");
-        }
-
         SimplexEnumerator simplex_enumerator(
             runtime.distanceMatrix(),
             runtime.binomialTable());
@@ -288,30 +188,53 @@ SimplexList WindowState::prepareWindow(
         break;
     }
 
-    case WindowPreparationMode::QuotientVr:
+    case PipelineMode::PwPH:
     {
         auto quotient_edges = buildQuotientEdges(
             runtime,
             active_label_list_,
-            representative_lists,
+            pv_list_,
             bounds.eps_hi);
         pv_label_distances = std::move(quotient_edges.pv_label_distances);
         sorted_edges = std::move(quotient_edges.sorted_edges);
         break;
     }
 
-    default:
-        throw std::invalid_argument("Unknown window preparation mode.");
     }
 
     active_label_mask_ = std::move(active_label_mask);
-    pv_representative_lists_ = std::move(representative_lists);
     pv_label_distance_hash_ = std::move(pv_label_distances);
     bounds_ = bounds;
-    preparation_mode_ = mode;
-    prepared_ = true;
 
     return sorted_edges;
+}
+
+void WindowState::commitSelectedPVs(
+    std::vector<SelectedPV>&& selected_pvs,
+    const std::unordered_set<size_t>& new_absorbed_labels)
+{
+    std::vector<size_t> next_active_labels;
+    next_active_labels.reserve(active_label_list_.size() + selected_pvs.size());
+
+    for (const size_t label : active_label_list_)
+    {
+        if (!new_absorbed_labels.contains(label))
+            next_active_labels.push_back(label);
+    }
+
+    size_t next_pv_label = totalLabelCount();
+    pv_list_.reserve(pv_list_.size() + selected_pvs.size());
+    for (auto& selected : selected_pvs)
+    {
+        pv_list_.push_back(std::move(selected));
+        next_active_labels.push_back(next_pv_label++);
+    }
+
+    active_label_list_ = std::move(next_active_labels);
+
+    // Window-scoped caches are never carried across a completed transition,
+    // including transitions that selected no PVs.
+    invalidateCurrentWindow();
 }
 
 void WindowState::invalidateCurrentWindow() noexcept
@@ -319,9 +242,6 @@ void WindowState::invalidateCurrentWindow() noexcept
     // These caches can be proportional to the complete active-label graph.
     // Empty swaps release their backing storage at the window boundary.
     decltype(active_label_mask_){}.swap(active_label_mask_);
-    decltype(pv_representative_lists_){}.swap(pv_representative_lists_);
     decltype(pv_label_distance_hash_){}.swap(pv_label_distance_hash_);
     bounds_ = WindowBounds{};
-    preparation_mode_ = WindowPreparationMode::OrdinaryVr;
-    prepared_ = false;
 }

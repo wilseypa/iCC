@@ -1,10 +1,10 @@
 #include <algorithm>
-#include <stdexcept>
 
 #include "omp.h"
 
 #include "SimplexEnumerator.hpp"
 #include "SimplexUtility.hpp"
+#include "WindowState.hpp"
 
 std::vector<std::pair<int64_t, double>> SimplexEnumerator::getSortedVREdges(const double maxeps)
 {
@@ -82,7 +82,7 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator::getSortedVRCofacets(c
 
 void SimplexEnumerator::prepareFacetWitnessContext(WitnessWorkspace& ws,
                                                                 const std::vector<size_t>& facet_labels,
-                                                                const std::vector<std::vector<size_t>>& pv_rep_lists,
+                                                                const std::vector<SelectedPV>& pseudo_vertices,
                                                                 const size_t originalvtnum, const double maxeps) const
 {
     const size_t K = facet_labels.size();
@@ -103,7 +103,7 @@ void SimplexEnumerator::prepareFacetWitnessContext(WitnessWorkspace& ws,
         }
         else
         {
-            ws.rep_ptrs[i] = &pv_rep_lists[label - originalvtnum];
+            ws.rep_ptrs[i] = &pseudo_vertices[label - originalvtnum].representatives;
         }
     }
 
@@ -139,7 +139,7 @@ void SimplexEnumerator::prepareFacetWitnessContext(WitnessWorkspace& ws,
 }
 
 void SimplexEnumerator::prepareCovtWitnessGroup(WitnessWorkspace& ws, const size_t covt, const size_t facet_label_count,
-                                                             const std::vector<std::vector<size_t>>& pv_rep_lists,
+                                                             const std::vector<SelectedPV>& pseudo_vertices,
                                                              const size_t originalvtnum, const double maxeps) const
 {
     const size_t K = facet_label_count;
@@ -151,7 +151,7 @@ void SimplexEnumerator::prepareCovtWitnessGroup(WitnessWorkspace& ws, const size
     }
     else
     {
-        ws.rep_ptrs[K] = &pv_rep_lists[covt - originalvtnum];
+        ws.rep_ptrs[K] = &pseudo_vertices[covt - originalvtnum].representatives;
     }
 
     const auto& rep_c = *ws.rep_ptrs[K];
@@ -378,26 +378,18 @@ template <bool RecordRealization>
 std::vector<std::pair<int64_t, double>> SimplexEnumerator::enumerateGeometricCofacets(
     const std::vector<std::pair<int64_t, double>>& sorted_quotient_simplex_list,
     const std::vector<size_t>& active_labels,
-    const std::vector<std::vector<size_t>>& pv_rep_lists,
+    const std::vector<SelectedPV>& pseudo_vertices,
     const robin_hood::unordered_map<uint64_t, double>& pv_label_distance_hash,
     const size_t dim,
     const double maxeps,
     const int threadnum,
     robin_hood::unordered_map<int64_t, uint64_t>* pv_realization_out)
 {
-    if constexpr (RecordRealization)
-    {
-        if (dim > MAX_PACKED_WITNESS_LABELS_ - 2)
-            throw std::invalid_argument("Packed PV witness realizations support cofacets with at most eight labels.");
-        if (pv_realization_out == nullptr)
-            throw std::invalid_argument("A realization output map is required when recording PV witnesses.");
-    }
-
-    const int worker_count = threadnum > 0 ? threadnum : 1;
+    const int worker_count = threadnum;
     std::vector<std::vector<std::pair<int64_t, double>>> thread_workspace(static_cast<size_t>(worker_count));
 
     const size_t originalvtnum = distance_matrix_.vertexCount();
-    const size_t npts = originalvtnum + pv_rep_lists.size();
+    const size_t npts = originalvtnum + pseudo_vertices.size();
 
     // Avoid duplicating original-original distances in the PV-specific hash.
     const auto getQuotientLabelDistance =
@@ -427,10 +419,6 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator::enumerateGeometricCof
 
         const size_t minfacetvt = simplex_vertices.back();
         const auto iter = std::lower_bound(active_labels.begin(), active_labels.end(), minfacetvt);
-
-        if (iter == active_labels.end() || *iter != minfacetvt)
-            throw std::out_of_range("label not found in active label list");
-
         const size_t vtpos = static_cast<size_t>(std::distance(active_labels.begin(), iter));
         if (vtpos == 0)
             continue;
@@ -460,11 +448,11 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator::enumerateGeometricCof
 
                 if (!witness_context_ready)
                 {
-                    prepareFacetWitnessContext(ws, simplex_vertices, pv_rep_lists, originalvtnum, maxeps);
+                    prepareFacetWitnessContext(ws, simplex_vertices, pseudo_vertices, originalvtnum, maxeps);
                     witness_context_ready = true;
                 }
 
-                prepareCovtWitnessGroup(ws, covt, facet_label_count, pv_rep_lists, originalvtnum, maxeps);
+                prepareCovtWitnessGroup(ws, covt, facet_label_count, pseudo_vertices, originalvtnum, maxeps);
                 if constexpr (RecordRealization)
                 {
                     const auto pv_witness =
@@ -531,21 +519,21 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator::enumerateGeometricCof
 std::vector<std::pair<int64_t, double>> SimplexEnumerator::getGeometricCofacetList(
     const std::vector<std::pair<int64_t, double>>& sorted_quotient_simplex_list,
     const std::vector<size_t>& active_labels,
-    const std::vector<std::vector<size_t>>& pv_rep_lists,
+    const std::vector<SelectedPV>& pseudo_vertices,
     const robin_hood::unordered_map<uint64_t, double>& pv_label_distance_hash,
     const size_t dim,
     const double maxeps,
     const int threadnum)
 {
     return enumerateGeometricCofacets<false>(sorted_quotient_simplex_list, active_labels,
-                                             pv_rep_lists, pv_label_distance_hash,
+                                             pseudo_vertices, pv_label_distance_hash,
                                              dim, maxeps, threadnum, nullptr);
 }
 
 std::vector<std::pair<int64_t, double>> SimplexEnumerator::getGeometricCofacetListWithRealizations(
     const std::vector<std::pair<int64_t, double>>& sorted_quotient_simplex_list,
     const std::vector<size_t>& active_labels,
-    const std::vector<std::vector<size_t>>& pv_rep_lists,
+    const std::vector<SelectedPV>& pseudo_vertices,
     const robin_hood::unordered_map<uint64_t, double>& pv_label_distance_hash,
     const size_t dim,
     const double maxeps,
@@ -553,6 +541,6 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator::getGeometricCofacetLi
     robin_hood::unordered_map<int64_t, uint64_t>& pv_realization_out)
 {
     return enumerateGeometricCofacets<true>(sorted_quotient_simplex_list, active_labels,
-                                            pv_rep_lists, pv_label_distance_hash,
+                                            pseudo_vertices, pv_label_distance_hash,
                                             dim, maxeps, threadnum, &pv_realization_out);
 }

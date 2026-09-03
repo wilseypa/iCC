@@ -10,7 +10,9 @@ class DimensionFrame;
 // array, and reusable interface workspace touched by these operations.
 class ImplicitMorseMatching
 {
-public:
+private:
+    friend class DimensionFrame;
+
     void matchPersistence(
         DimensionFrame& frame,
         bool collect_dependency_support) const;

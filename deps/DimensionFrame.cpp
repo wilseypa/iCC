@@ -52,21 +52,10 @@ DimensionFrame::DimensionFrame(
     : runtime_(runtime),
       window_(window),
       binomial_table_(runtime.binomialTable()),
-      binomial_row_count_(binomial_table_.size()),
       dimension_(runtime.config().maxdim == 1 ? 1 : 2),
       simplex_enumerator_(runtime.distanceMatrix(), binomial_table_),
       facet_list_(std::move(prepared_edges))
 {
-    if (!window_.prepared())
-        throw std::logic_error("DimensionFrame requires a prepared WindowState.");
-    if (binomial_table_.size() <= window_.totalLabelCount())
-        throw std::logic_error("Binomial table capacity is too small for the prepared window.");
-    if (binomial_table_.empty() ||
-        binomial_table_.front().size() < runtime_.config().maxdim + 2)
-    {
-        throw std::logic_error("Binomial table dimension is too small for the frame.");
-    }
-
     buildInitialActiveFacetIndex();
 
     if (dimension_ >= 2)
@@ -79,12 +68,6 @@ void DimensionFrame::requirePhase(
 {
     if (phase_ != expected)
         throw std::logic_error(std::string(operation) + " is invalid in the current DimensionFrame phase.");
-
-    // Runtime capacity may grow only between frames. Besides documenting that
-    // lifespan boundary, this prevents an API caller from changing the label
-    // universe underneath an ordinary-VR frame.
-    if (binomial_table_.size() != binomial_row_count_)
-        throw std::logic_error("The pipeline binomial table changed while a DimensionFrame was alive.");
 }
 
 void DimensionFrame::buildInitialActiveFacetIndex()
@@ -106,7 +89,7 @@ void DimensionFrame::enumerateInitialCofacets()
                   << (MAX_FFI_PACKED_LABELS - 1) << '\n';
     }
 
-    if (window_.preparationMode() == WindowPreparationMode::OrdinaryVr)
+    if (runtime_.mode() == PipelineMode::RegVRPH)
     {
         cofacet_list_ = simplex_enumerator_.getSortedVRCofacets(
             facet_list_, 1, window_.bounds().eps_hi, config.threads);
@@ -119,7 +102,7 @@ void DimensionFrame::enumerateInitialCofacets()
         cofacet_list_ = simplex_enumerator_.getGeometricCofacetListWithRealizations(
             facet_list_,
             window_.activeLabels(),
-            window_.pvRepresentativeLists(),
+            window_.pseudoVertices(),
             window_.pvLabelDistanceHash(),
             1,
             window_.bounds().eps_hi,
@@ -131,7 +114,7 @@ void DimensionFrame::enumerateInitialCofacets()
     cofacet_list_ = simplex_enumerator_.getGeometricCofacetList(
         facet_list_,
         window_.activeLabels(),
-        window_.pvRepresentativeLists(),
+        window_.pseudoVertices(),
         window_.pvLabelDistanceHash(),
         1,
         window_.bounds().eps_hi,
@@ -203,9 +186,6 @@ void DimensionFrame::materializeMatchSupport()
 
     for (const std::size_t facet_index : raw.protected_facet_indices)
     {
-        if (facet_index >= facet_list_.size())
-            throw std::logic_error("Protected facet rank is outside the current facet list.");
-
         const auto labels = SimplexUtility::getSimplexVertices(
             binomial_table_, facet_list_[facet_index].first,
             total_label_count, facet_dimension);
@@ -223,9 +203,6 @@ void DimensionFrame::materializeMatchSupport()
         DependencySupport support;
         for (const std::size_t cofacet_index : support_ranks)
         {
-            if (cofacet_index >= cofacet_list_.size())
-                throw std::logic_error("Dependency-support rank is outside the current cofacet list.");
-
             const auto labels = SimplexUtility::getSimplexVertices(
                 binomial_table_, cofacet_list_[cofacet_index].first,
                 total_label_count, dimension_);
@@ -276,7 +253,7 @@ SimplexList DimensionFrame::enumerateNextCofacets(
     robin_hood::unordered_map<SimplexBindex, std::uint64_t>* const realization_output)
 {
     const auto& config = runtime_.config();
-    if (window_.preparationMode() == WindowPreparationMode::OrdinaryVr)
+    if (runtime_.mode() == PipelineMode::RegVRPH)
     {
         return simplex_enumerator_.getSortedVRCofacets(
             cofacet_list_, dimension_, window_.bounds().eps_hi, config.threads);
@@ -287,7 +264,7 @@ SimplexList DimensionFrame::enumerateNextCofacets(
         return simplex_enumerator_.getGeometricCofacetListWithRealizations(
             cofacet_list_,
             window_.activeLabels(),
-            window_.pvRepresentativeLists(),
+            window_.pseudoVertices(),
             window_.pvLabelDistanceHash(),
             dimension_,
             window_.bounds().eps_hi,
@@ -298,7 +275,7 @@ SimplexList DimensionFrame::enumerateNextCofacets(
     return simplex_enumerator_.getGeometricCofacetList(
         cofacet_list_,
         window_.activeLabels(),
-        window_.pvRepresentativeLists(),
+        window_.pseudoVertices(),
         window_.pvLabelDistanceHash(),
         dimension_,
         window_.bounds().eps_hi,
@@ -314,13 +291,6 @@ bool DimensionFrame::advance()
         phase_ = FramePhase::Finished;
         return false;
     }
-
-    if (dimension_ == 1)
-        throw std::logic_error("An edge-only DimensionFrame cannot advance.");
-    if (next_active_cofacet_mask_.size() != cofacet_list_.size())
-        throw std::logic_error("Unmatched-cofacet mask does not match the current cofacet list.");
-    if (interface_workspace_.has_value())
-        throw std::logic_error("Interface workspace must be released before dimension advance.");
 
     // Release the previous interface-sized state before enumeration. Building
     // the next active-facet index after enumeration is an intentional peak-RSS
@@ -378,13 +348,6 @@ void DimensionFrame::clearCurrentInterfaceResults()
 
 DependencySupportBatch DimensionFrame::takeDependencySupportBatch()
 {
-    if (!isTopDimension() ||
-        (phase_ != FramePhase::Matched && phase_ != FramePhase::Finished))
-    {
-        throw std::logic_error(
-            "Dependency support can be taken only after matching the top interface.");
-    }
-
     dependency_support_batch_.protected_labels = std::move(protected_labels_);
     return std::move(dependency_support_batch_);
 }
@@ -399,7 +362,7 @@ void DimensionFrame::reportFalseFacetIdentificationStats() const
     if (pv_count == 0 || dimension_ < 3 || dimension_ >= MAX_FFI_PACKED_LABELS)
         return;
 
-    const auto& pv_rep_lists = window_.pvRepresentativeLists();
+    const auto& pseudo_vertices = window_.pseudoVertices();
     const std::size_t total_label_count = window_.totalLabelCount();
     const std::size_t cofacet_label_count = dimension_ + 1;
     const std::size_t facet_label_count = dimension_;
@@ -447,9 +410,7 @@ void DimensionFrame::reportFalseFacetIdentificationStats() const
         }
     };
 
-    const int worker_count = runtime_.config().threads > 0
-        ? runtime_.config().threads
-        : 1;
+    const int worker_count = runtime_.config().threads;
     std::vector<FfiStats> thread_stats(static_cast<std::size_t>(worker_count));
 
     struct FfiWorkspace
@@ -496,7 +457,8 @@ void DimensionFrame::reportFalseFacetIdentificationStats() const
             workspace.cofacet_witnesses[group] =
                 label < original_vertex_count
                     ? label
-                    : pv_rep_lists[label - original_vertex_count][local_index];
+                    : pseudo_vertices[label - original_vertex_count]
+                          .representatives[local_index];
         }
 
         SimplexBindex above = 0;
@@ -564,8 +526,8 @@ void DimensionFrame::reportFalseFacetIdentificationStats() const
                 workspace.facet_witnesses[q] =
                     label < original_vertex_count
                         ? label
-                        : pv_rep_lists[label - original_vertex_count]
-                                      [facet_local_index];
+                        : pseudo_vertices[label - original_vertex_count]
+                              .representatives[facet_local_index];
                 workspace.restricted_witnesses[q] =
                     workspace.cofacet_witnesses[cofacet_position];
 

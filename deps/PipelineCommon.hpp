@@ -39,12 +39,19 @@ struct PipelineConfig
     double absoluteMinSeparation() const;
 };
 
+enum class PipelineMode : uint8_t
+{
+    RegVRPH,
+    PwPH
+};
+
 class PipelineRuntime
 {
 public:
     PipelineRuntime(
         DistanceMatrix distance_matrix,
-        PipelineConfig config);
+        PipelineConfig config,
+        PipelineMode mode);
 
     [[nodiscard]]
     const DistanceMatrix& distanceMatrix() const noexcept
@@ -59,6 +66,12 @@ public:
     }
 
     [[nodiscard]]
+    PipelineMode mode() const noexcept
+    {
+        return mode_;
+    }
+
+    [[nodiscard]]
     const BinomialTable& binomialTable() const noexcept
     {
         return binomial_table_;
@@ -69,19 +82,13 @@ public:
 private:
     DistanceMatrix distance_matrix_;
     PipelineConfig config_;
+    PipelineMode mode_;
     BinomialTable binomial_table_;
 };
 
 struct WindowBounds
 {
-    size_t index = 0;
     double eps_lo = 0.0;
     double eps_hi = 0.0;
     bool is_final = false;
-};
-
-enum class WindowPreparationMode : uint8_t
-{
-    OrdinaryVr,
-    QuotientVr
 };

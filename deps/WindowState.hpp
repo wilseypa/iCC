@@ -8,12 +8,10 @@
 #include "PipelineCommon.hpp"
 #include "robin_hood.h"
 
-class DependencySupportPostProcessor;
-
 struct SelectedPV
 {
-    // PVs are always flattened to original-vertex indices.
-    std::unordered_set<size_t> flat_index_set;
+    // Canonical sorted original-vertex indices represented by this PV.
+    std::vector<size_t> representatives;
     double diameter = 0.0;
 };
 
@@ -53,12 +51,6 @@ public:
     }
 
     [[nodiscard]]
-    const std::vector<std::vector<size_t>>& pvRepresentativeLists() const noexcept
-    {
-        return pv_representative_lists_;
-    }
-
-    [[nodiscard]]
     const robin_hood::unordered_map<LabelPairKey, double>&
     pvLabelDistanceHash() const noexcept
     {
@@ -71,33 +63,15 @@ public:
         return bounds_;
     }
 
-    [[nodiscard]]
-    bool prepared() const noexcept
-    {
-        return prepared_;
-    }
-
-    [[nodiscard]]
-    WindowPreparationMode mode() const noexcept
-    {
-        return preparation_mode_;
-    }
-
-    // Descriptive alias used by dimension-level orchestration.
-    [[nodiscard]]
-    WindowPreparationMode preparationMode() const noexcept
-    {
-        return mode();
-    }
-
     SimplexList prepareWindow(
         const PipelineRuntime& runtime,
-        const WindowBounds& bounds,
-        WindowPreparationMode mode);
+        const WindowBounds& bounds);
+
+    void commitSelectedPVs(
+        std::vector<SelectedPV>&& selected_pvs,
+        const std::unordered_set<size_t>& new_absorbed_labels);
 
 private:
-    friend class DependencySupportPostProcessor;
-
     void invalidateCurrentWindow() noexcept;
 
     size_t original_vertex_count_ = 0;
@@ -110,10 +84,7 @@ private:
 
     // Current-window caches, all defined over the complete historical label range.
     std::vector<uint8_t> active_label_mask_;
-    std::vector<std::vector<size_t>> pv_representative_lists_;
     robin_hood::unordered_map<LabelPairKey, double> pv_label_distance_hash_;
 
     WindowBounds bounds_;
-    WindowPreparationMode preparation_mode_ = WindowPreparationMode::OrdinaryVr;
-    bool prepared_ = false;
 };

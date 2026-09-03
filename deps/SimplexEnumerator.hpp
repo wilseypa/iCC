@@ -9,8 +9,10 @@
 
 #include "robin_hood.h"
 
+#include "PipelineCommon.hpp"
 #include "SimplexUtility.hpp"
-#include "DistanceMatrix.hpp"
+
+struct SelectedPV;
 
 class SimplexEnumerator
 {
@@ -25,11 +27,11 @@ public:
     std::vector<std::pair<int64_t, double>> getSortedVRCofacets(const std::vector<std::pair<int64_t, double>>& sorted_simplex, const size_t dim, const double maxeps, const int threadnum);
 
     // Geometric enumeration for quotient complexes with pseudo-vertices.
-    // Each sorted PV representative list contains original vertex indices, and simplex
+    // Each PV contains sorted original-vertex representatives, and simplex
     // weight is the smallest clique realization weight among representative choices.
     std::vector<std::pair<int64_t, double>> getGeometricCofacetList(const std::vector<std::pair<int64_t, double>>& sorted_quotient_simplex_list,
                                         const std::vector<size_t>& active_labels,
-                                        const std::vector<std::vector<size_t>>& pv_rep_lists,
+                                        const std::vector<SelectedPV>& pseudo_vertices,
                                         const robin_hood::unordered_map<uint64_t, double>& pv_label_distance_hash,
                                         const size_t dim, const double maxeps, const int threadnum);
 
@@ -38,7 +40,7 @@ public:
     std::vector<std::pair<int64_t, double>> getGeometricCofacetListWithRealizations(
                                         const std::vector<std::pair<int64_t, double>>& sorted_quotient_simplex_list,
                                         const std::vector<size_t>& active_labels,
-                                        const std::vector<std::vector<size_t>>& pv_rep_lists,
+                                        const std::vector<SelectedPV>& pseudo_vertices,
                                         const robin_hood::unordered_map<uint64_t, double>& pv_label_distance_hash,
                                         const size_t dim, const double maxeps, const int threadnum,
                                         robin_hood::unordered_map<int64_t, uint64_t>& pv_realization_out);
@@ -49,7 +51,6 @@ private:
 
     // Local representative choices are encoded in uint64_t masks; PV cardinality must stay below this cap.
     static constexpr size_t MAX_PV_CARDINALITY_ = 64;
-    static constexpr size_t MAX_PACKED_WITNESS_LABELS_ = sizeof(uint64_t);
     static constexpr size_t UNCHOSEN_ = std::numeric_limits<size_t>::max();
 
     // Keep edge ordering consistent with simplex ordering: weight first, then
@@ -96,11 +97,11 @@ private:
 
     void prepareFacetWitnessContext(WitnessWorkspace& ws,
                                     const std::vector<size_t>& facet_labels,
-                                    const std::vector<std::vector<size_t>>& pv_rep_lists,
+                                    const std::vector<SelectedPV>& pseudo_vertices,
                                     const size_t originalvtnum, const double maxeps) const;
 
     void prepareCovtWitnessGroup(WitnessWorkspace& ws, const size_t covt, const size_t facet_label_count,
-                                 const std::vector<std::vector<size_t>>& pv_rep_lists,
+                                 const std::vector<SelectedPV>& pseudo_vertices,
                                  const size_t originalvtnum, const double maxeps) const;
 
     template <bool RecordRealization>
@@ -115,7 +116,7 @@ private:
     std::vector<std::pair<int64_t, double>> enumerateGeometricCofacets(
                                         const std::vector<std::pair<int64_t, double>>& sorted_quotient_simplex_list,
                                         const std::vector<size_t>& active_labels,
-                                        const std::vector<std::vector<size_t>>& pv_rep_lists,
+                                        const std::vector<SelectedPV>& pseudo_vertices,
                                         const robin_hood::unordered_map<uint64_t, double>& pv_label_distance_hash,
                                         const size_t dim, const double maxeps, const int threadnum,
                                         robin_hood::unordered_map<int64_t, uint64_t>* pv_realization_out);
