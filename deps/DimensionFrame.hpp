@@ -156,8 +156,8 @@ private:
 
     robin_hood::unordered_map<SimplexBindex, std::size_t> active_facet_index_;
 
-    std::vector<std::uint8_t> next_active_cofacet_mask_;
-    std::size_t next_active_cofacet_count_ = 0;
+    std::vector<std::uint8_t> next_active_facet_mask_;
+    std::size_t next_active_facet_count_ = 0;
 
     std::vector<PersistentPairInfo> persistent_pairs_;
     std::vector<double> unmatched_facet_weights_;
@@ -175,9 +175,11 @@ private:
     SimplexList enumerateNextCofacets(
         robin_hood::unordered_map<SimplexBindex, std::uint64_t>* realization_output);
 
-    void materializeMatchSupport();
-    void finalizeNextActiveCofacets();
-    void releaseInterfaceWorkspace();
+    void materializeMatchSupport(RawMatchSupportInfo raw_support_info);
+    void finalizeNextActiveFacets();
+    void releaseActiveFacetIndex();
+    RawMatchSupportInfo releaseInterfaceWorkspace(
+        bool preserve_raw_support_info);
     void clearCurrentInterfaceResults();
 
     [[nodiscard]]

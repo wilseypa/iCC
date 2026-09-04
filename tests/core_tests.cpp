@@ -15,7 +15,6 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -111,8 +110,24 @@ WindowBounds boundsFor(
 
 DependencySupport support(std::initializer_list<std::size_t> labels)
 {
-    return DependencySupport{
-        .label_set = std::unordered_set<std::size_t>(labels)};
+    std::vector<std::size_t> sorted_labels(labels);
+    std::sort(sorted_labels.begin(), sorted_labels.end());
+    sorted_labels.erase(
+        std::unique(sorted_labels.begin(), sorted_labels.end()),
+        sorted_labels.end());
+    return DependencySupport{.labels = std::move(sorted_labels)};
+}
+
+void processCompletedPwphWindow(
+    const DependencySupportPostProcessor& processor,
+    const PipelineRuntime& runtime,
+    WindowState& window,
+    DependencySupportBatch&& batch)
+{
+    const double eps_hi = window.bounds().eps_hi;
+    window.invalidateCurrentWindow();
+    processor.processPwph(
+        runtime, window, eps_hi, std::move(batch));
 }
 
 void testPipelineConfig()
@@ -256,7 +271,8 @@ void testWindowStatePreparation()
         [](const SimplexRecord& edge) { return edge.second == 0.0; }));
 
     DependencySupportPostProcessor processor;
-    processor.processPwph(pwph_runtime, quotient, DependencySupportBatch{});
+    processCompletedPwphWindow(
+        processor, pwph_runtime, quotient, DependencySupportBatch{});
     CHECK(quotient.activeLabelMask().empty());
     CHECK(quotient.pvLabelDistanceHash().empty());
 }
@@ -406,11 +422,22 @@ void testMatchingDerivedPwphSupportAndPvGeometry()
         frame.matchPersistence(true);
         first_batch = frame.takeDependencySupportBatch();
         CHECK(!first_batch.supports.empty());
+        for (const auto& materialized_support : first_batch.supports)
+        {
+            CHECK(std::is_sorted(
+                materialized_support.labels.begin(),
+                materialized_support.labels.end()));
+            CHECK(std::adjacent_find(
+                materialized_support.labels.begin(),
+                materialized_support.labels.end()) ==
+                materialized_support.labels.end());
+        }
         CHECK(!frame.advance());
     }
 
     DependencySupportPostProcessor processor;
-    processor.processPwph(runtime, window, std::move(first_batch));
+    processCompletedPwphWindow(
+        processor, runtime, window, std::move(first_batch));
     CHECK(window.pseudoVertices().size() == 1);
     if (window.pseudoVertices().size() == 1)
         CHECK(window.pseudoVertices().front().representatives.size() == 4);
@@ -483,7 +510,8 @@ void testPwphProtectionAndDiameter()
         DependencySupportBatch batch;
         batch.supports.push_back(support({0, 1}));
         batch.protected_labels.insert(1);
-        processor.processPwph(runtime, window, std::move(batch));
+        processCompletedPwphWindow(
+            processor, runtime, window, std::move(batch));
 
         CHECK(window.pseudoVertices().empty());
         CHECK((window.activeLabels() == std::vector<std::size_t>{0, 1}));
@@ -501,7 +529,8 @@ void testPwphProtectionAndDiameter()
 
         DependencySupportBatch batch;
         batch.supports.push_back(support({0, 1}));
-        processor.processPwph(runtime, window, std::move(batch));
+        processCompletedPwphWindow(
+            processor, runtime, window, std::move(batch));
 
         CHECK(window.pseudoVertices().empty());
         CHECK((window.activeLabels() == std::vector<std::size_t>{0, 1}));
@@ -528,7 +557,8 @@ void testPwphOverlapOrderAndSeparation()
         DependencySupportBatch batch;
         batch.supports.push_back(support({0, 1}));
         batch.supports.push_back(support({1, 2}));
-        processor.processPwph(runtime, window, std::move(batch));
+        processCompletedPwphWindow(
+            processor, runtime, window, std::move(batch));
 
         CHECK(window.pseudoVertices().size() == 1);
         CHECK((window.pseudoVertices()[0].representatives ==
@@ -553,7 +583,8 @@ void testPwphOverlapOrderAndSeparation()
         DependencySupportBatch batch;
         batch.supports.push_back(support({0, 1}));
         batch.supports.push_back(support({2, 3}));
-        processor.processPwph(runtime, window, std::move(batch));
+        processCompletedPwphWindow(
+            processor, runtime, window, std::move(batch));
 
         CHECK(window.pseudoVertices().size() == 1);
         CHECK((window.pseudoVertices()[0].representatives ==
@@ -581,7 +612,8 @@ void testPwphFrozenPvsAndAppendOnlyLabels()
         boundsFor(runtime.config(), 0)));
     DependencySupportBatch first_batch;
     first_batch.supports.push_back(support({0, 1}));
-    processor.processPwph(runtime, window, std::move(first_batch));
+    processCompletedPwphWindow(
+        processor, runtime, window, std::move(first_batch));
 
     CHECK(window.pseudoVertices().size() == 1);
     CHECK(window.totalLabelCount() == 6);
@@ -604,7 +636,8 @@ void testPwphFrozenPvsAndAppendOnlyLabels()
     DependencySupportBatch second_batch;
     second_batch.supports.push_back(support({4, 5}));
     second_batch.supports.push_back(support({2, 3}));
-    processor.processPwph(runtime, window, std::move(second_batch));
+    processCompletedPwphWindow(
+        processor, runtime, window, std::move(second_batch));
 
     CHECK(window.pseudoVertices().size() == 2);
     CHECK(window.totalLabelCount() == 7);

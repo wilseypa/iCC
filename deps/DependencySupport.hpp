@@ -6,8 +6,8 @@
 
 struct DependencySupport
 {
-    // Labels are the current global original-or-PV labels, never list ranks.
-    std::unordered_set<std::size_t> label_set;
+    // Sorted unique current global original-or-PV labels, never list ranks.
+    std::vector<std::size_t> labels;
 };
 
 struct DependencySupportBatch

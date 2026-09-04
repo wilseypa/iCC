@@ -67,13 +67,16 @@ public:
         const PipelineRuntime& runtime,
         const WindowBounds& bounds);
 
+    // End the prepared-window geometry lifetime after its DimensionFrame dies.
+    // Persistent active-label and pseudo-vertex state remains available for
+    // support postprocessing and the next window.
+    void invalidateCurrentWindow() noexcept;
+
     void commitSelectedPVs(
         std::vector<SelectedPV>&& selected_pvs,
         const std::unordered_set<size_t>& new_absorbed_labels);
 
 private:
-    void invalidateCurrentWindow() noexcept;
-
     size_t original_vertex_count_ = 0;
 
     // Append-only for the complete pipeline run.

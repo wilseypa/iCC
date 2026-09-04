@@ -130,6 +130,7 @@ void DimensionFrame::matchPersistence(const bool collect_dependency_support)
     // the direct/PwPH output contracts intentionally print no H0 intervals.
     if (dimension_ == 1)
     {
+        releaseActiveFacetIndex();
         phase_ = FramePhase::Matched;
         return;
     }
@@ -141,12 +142,19 @@ void DimensionFrame::matchPersistence(const bool collect_dependency_support)
 
     ImplicitMorseMatching matcher;
     matcher.matchPersistence(*this, collect_dependency_support);
+    releaseActiveFacetIndex();
+
+    // Only a non-top interface needs to communicate unmatched cofacets to
+    // advance(). A top-dimensional frame finishes without consuming this mask.
+    if (!isTopDimension())
+        finalizeNextActiveFacets();
+
+    auto raw_support_info =
+        releaseInterfaceWorkspace(collect_dependency_support);
 
     if (collect_dependency_support)
-        materializeMatchSupport();
+        materializeMatchSupport(std::move(raw_support_info));
 
-    finalizeNextActiveCofacets();
-    releaseInterfaceWorkspace();
     phase_ = FramePhase::Matched;
 }
 
@@ -162,6 +170,7 @@ void DimensionFrame::matchApparentPairsOnly()
             if (active_facet_index_.contains(edge.first))
                 unmatched_facet_weights_.push_back(edge.second);
         }
+        releaseActiveFacetIndex();
         phase_ = FramePhase::Matched;
         return;
     }
@@ -170,21 +179,23 @@ void DimensionFrame::matchApparentPairsOnly()
 
     ImplicitMorseMatching matcher;
     matcher.matchApparentPairsOnly(*this);
+    releaseActiveFacetIndex();
 
-    finalizeNextActiveCofacets();
-    releaseInterfaceWorkspace();
+    if (!isTopDimension())
+        finalizeNextActiveFacets();
+
+    releaseInterfaceWorkspace(false);
     phase_ = FramePhase::Matched;
 }
 
-void DimensionFrame::materializeMatchSupport()
+void DimensionFrame::materializeMatchSupport(
+    RawMatchSupportInfo raw_support_info)
 {
-    assert(interface_workspace_.has_value());
-    auto& raw = interface_workspace_->raw_support_info;
-
     const std::size_t total_label_count = window_.totalLabelCount();
     const std::size_t facet_dimension = dimension_ - 1;
 
-    for (const std::size_t facet_index : raw.protected_facet_indices)
+    for (const std::size_t facet_index :
+         raw_support_info.protected_facet_indices)
     {
         const auto labels = SimplexUtility::getSimplexVertices(
             binomial_table_, facet_list_[facet_index].first,
@@ -196,9 +207,12 @@ void DimensionFrame::materializeMatchSupport()
         return;
 
     std::vector<DependencySupport> materialized_supports;
-    materialized_supports.reserve(raw.support_cofacet_indices.size());
+    materialized_supports.reserve(
+        raw_support_info.support_cofacet_indices.size());
+    std::vector<std::uint8_t> label_seen(total_label_count, 0);
 
-    for (const auto& support_ranks : raw.support_cofacet_indices)
+    for (const auto& support_ranks :
+         raw_support_info.support_cofacet_indices)
     {
         DependencySupport support;
         for (const std::size_t cofacet_index : support_ranks)
@@ -206,8 +220,20 @@ void DimensionFrame::materializeMatchSupport()
             const auto labels = SimplexUtility::getSimplexVertices(
                 binomial_table_, cofacet_list_[cofacet_index].first,
                 total_label_count, dimension_);
-            support.label_set.insert(labels.begin(), labels.end());
+            for (const std::size_t label : labels)
+            {
+                if (label_seen[label] != 0)
+                    continue;
+
+                label_seen[label] = 1;
+                support.labels.push_back(label);
+            }
         }
+
+        for (const std::size_t label : support.labels)
+            label_seen[label] = 0;
+
+        std::sort(support.labels.begin(), support.labels.end());
         materialized_supports.push_back(std::move(support));
     }
 
@@ -216,26 +242,43 @@ void DimensionFrame::materializeMatchSupport()
     dependency_support_batch_.supports = std::move(materialized_supports);
 }
 
-void DimensionFrame::finalizeNextActiveCofacets()
+void DimensionFrame::finalizeNextActiveFacets()
 {
     assert(interface_workspace_.has_value());
     const auto& match_list = interface_workspace_->match_list;
 
-    next_active_cofacet_mask_.assign(cofacet_list_.size(), 0);
-    next_active_cofacet_count_ = 0;
+    next_active_facet_mask_.assign(cofacet_list_.size(), 0);
+    next_active_facet_count_ = 0;
     for (std::size_t i = 0; i < cofacet_list_.size(); ++i)
     {
         if (match_list[i] >= 0)
             continue;
 
-        next_active_cofacet_mask_[i] = 1;
-        ++next_active_cofacet_count_;
+        next_active_facet_mask_[i] = 1;
+        ++next_active_facet_count_;
     }
 }
 
-void DimensionFrame::releaseInterfaceWorkspace()
+void DimensionFrame::releaseActiveFacetIndex()
 {
+    decltype(active_facet_index_){}.swap(active_facet_index_);
+}
+
+DimensionFrame::RawMatchSupportInfo
+DimensionFrame::releaseInterfaceWorkspace(
+    const bool preserve_raw_support_info)
+{
+    assert(interface_workspace_.has_value());
+
+    RawMatchSupportInfo raw_support_info;
+    if (preserve_raw_support_info)
+    {
+        raw_support_info =
+            std::move(interface_workspace_->raw_support_info);
+    }
+
     interface_workspace_.reset();
+    return raw_support_info;
 }
 
 bool DimensionFrame::tryFindCofacetRank(
@@ -292,12 +335,11 @@ bool DimensionFrame::advance()
         return false;
     }
 
-    // Release the previous interface-sized state before enumeration. Building
-    // the next active-facet index after enumeration is an intentional peak-RSS
-    // improvement over the old Q&E sequence.
+    // The old active-facet index was released immediately after matching.
+    // Release the previous facet list before enumeration as well. Building the
+    // next active-facet index afterward is an intentional peak-RSS improvement
+    // over the old Q&E sequence.
     SimplexList{}.swap(facet_list_);
-    decltype(active_facet_index_){}.swap(active_facet_index_);
-
     std::optional<robin_hood::unordered_map<SimplexBindex, std::uint64_t>>
         next_cofacet_realizations;
     if (ffi_realizations_.has_value())
@@ -311,10 +353,10 @@ bool DimensionFrame::advance()
         next_cofacet_realizations.has_value() ? &*next_cofacet_realizations : nullptr);
 
     robin_hood::unordered_map<SimplexBindex, std::size_t> next_active_facets;
-    next_active_facets.reserve(next_active_cofacet_count_);
+    next_active_facets.reserve(next_active_facet_count_);
     for (std::size_t i = 0; i < cofacet_list_.size(); ++i)
     {
-        if (next_active_cofacet_mask_[i] != 0)
+        if (next_active_facet_mask_[i] != 0)
             next_active_facets.emplace(cofacet_list_[i].first, i);
     }
 
@@ -342,8 +384,8 @@ void DimensionFrame::clearCurrentInterfaceResults()
     decltype(unmatched_facet_weights_){}.swap(unmatched_facet_weights_);
     decltype(unmatched_top_cofacet_weights_){}.swap(
         unmatched_top_cofacet_weights_);
-    decltype(next_active_cofacet_mask_){}.swap(next_active_cofacet_mask_);
-    next_active_cofacet_count_ = 0;
+    decltype(next_active_facet_mask_){}.swap(next_active_facet_mask_);
+    next_active_facet_count_ = 0;
 }
 
 DependencySupportBatch DimensionFrame::takeDependencySupportBatch()

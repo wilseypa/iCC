@@ -10,57 +10,20 @@
 void DependencySupportPostProcessor::processPwph(
     const PipelineRuntime& runtime,
     WindowState& window,
+    const double eps_hi,
     DependencySupportBatch&& batch) const
 {
     const std::size_t raw_support_count = batch.supports.size();
     const std::size_t original_vertex_count = window.originalVertexCount();
 
-    std::vector<std::unordered_set<std::size_t>> eligible_label_sets;
-    eligible_label_sets.reserve(batch.supports.size());
-
-    for (auto& support : batch.supports)
-    {
-        bool contains_pv = false;
-        for (const std::size_t label : support.label_set)
-        {
-            if (label >= original_vertex_count)
-                contains_pv = true;
-        }
-
-        // Preserve the frozen-PV policy and its ordering. This test precedes
-        // protection, so the additional protected PV labels retained by the
-        // generic frame cannot affect current PwPH selection.
-        if (contains_pv)
-            continue;
-
-        bool contains_protected_label = false;
-        for (const std::size_t label : support.label_set)
-        {
-            if (batch.protected_labels.contains(label))
-            {
-                contains_protected_label = true;
-                break;
-            }
-        }
-
-        if (!contains_protected_label)
-            eligible_label_sets.push_back(std::move(support.label_set));
-    }
-
-    if (runtime.config().verbose && runtime.config().maxdim >= 2)
-    {
-        std::cout << "raw pv support cofacets size = " << raw_support_count << '\n';
-        std::cout << "pv support label sets with no pv/protected contents size = "
-                  << eligible_label_sets.size() << '\n';
-    }
-
     const double diameter_limit =
-        runtime.config().pv_cap_scale * window.bounds().eps_hi;
+        runtime.config().pv_cap_scale * eps_hi;
     const double min_separation = runtime.config().absoluteMinSeparation();
     const auto& distance_matrix = runtime.distanceMatrix();
 
     std::vector<SelectedPV> selected_pvs;
     std::unordered_set<std::size_t> new_absorbed_labels;
+    std::size_t eligible_support_count = 0;
 
     const auto is_separated = [&](const std::vector<std::size_t>& vertices)
     {
@@ -99,13 +62,41 @@ void DependencySupportPostProcessor::processPwph(
     };
 
     // Matching discovers supports while traversing facets from high to low
-    // rank. The existing PwPH policy then traverses that discovery vector in
-    // reverse; this second reversal is intentionally preserved.
-    for (auto iter = eligible_label_sets.rbegin();
-         iter != eligible_label_sets.rend();
+    // rank. PwPH applies its static filters while traversing that discovery
+    // vector in reverse, preserving the existing overlap-selection order
+    // without allocating a second vector of support containers.
+    for (auto iter = batch.supports.rbegin();
+         iter != batch.supports.rend();
          ++iter)
     {
-        const auto& labels = *iter;
+        auto& labels = iter->labels;
+
+        const bool contains_pv = std::any_of(
+            labels.begin(),
+            labels.end(),
+            [original_vertex_count](const std::size_t label)
+            {
+                return label >= original_vertex_count;
+            });
+
+        // Preserve the frozen-PV policy and its ordering. This test precedes
+        // protection, so the additional protected PV labels retained by the
+        // generic frame cannot affect current PwPH selection.
+        if (contains_pv)
+            continue;
+
+        const bool contains_protected_label = std::any_of(
+            labels.begin(),
+            labels.end(),
+            [&](const std::size_t label)
+            {
+                return batch.protected_labels.contains(label);
+            });
+        if (contains_protected_label)
+            continue;
+
+        ++eligible_support_count;
+
         bool overlaps_new_absorbed_label = false;
         for (const std::size_t label : labels)
         {
@@ -121,20 +112,23 @@ void DependencySupportPostProcessor::processPwph(
         if (labels.empty() || labels.size() >= MAX_PV_CARDINALITY)
             continue;
 
-        std::vector<std::size_t> representatives(
-            labels.begin(), labels.end());
-        std::sort(representatives.begin(), representatives.end());
-
         const double diameter = maxPairwiseDistance(
-            distance_matrix, representatives);
+            distance_matrix, labels);
         if (diameter > diameter_limit)
             continue;
-        if (!is_separated(representatives))
+        if (!is_separated(labels))
             continue;
 
         new_absorbed_labels.insert(labels.begin(), labels.end());
         selected_pvs.push_back(
-            SelectedPV{std::move(representatives), diameter});
+            SelectedPV{std::move(labels), diameter});
+    }
+
+    if (runtime.config().verbose && runtime.config().maxdim >= 2)
+    {
+        std::cout << "raw pv support cofacets size = " << raw_support_count << '\n';
+        std::cout << "pv support label sets with no pv/protected contents size = "
+                  << eligible_support_count << '\n';
     }
 
     window.commitSelectedPVs(

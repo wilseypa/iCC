@@ -15,6 +15,7 @@ public:
     void processPwph(
         const PipelineRuntime& runtime,
         WindowState& window,
+        double eps_hi,
         DependencySupportBatch&& batch) const;
 
 private:

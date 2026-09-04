@@ -237,6 +237,10 @@ void PwphPipeline::run()
             }
         }
 
+        // DimensionFrame was the final consumer of this window's geometry.
+        // Support postprocessing needs persistent labels/PVs and eps_hi only.
+        window_state_.invalidateCurrentWindow();
+
         if (!config.verbose)
             std::cout << '\n';
 
@@ -246,7 +250,7 @@ void PwphPipeline::run()
         const std::size_t previous_pv_count =
             window_state_.pseudoVertices().size();
         support_processor_.processPwph(
-            runtime_, window_state_, std::move(support_batch));
+            runtime_, window_state_, bounds.eps_hi, std::move(support_batch));
         runtime_.ensureBinomialCapacity(window_state_.totalLabelCount());
         const std::size_t new_pv_count =
             window_state_.pseudoVertices().size() - previous_pv_count;

@@ -1,6 +1,7 @@
 #include "WindowState.hpp"
 
 #include <algorithm>
+#include <cassert>
 #include <limits>
 #include <numeric>
 #include <stdexcept>
@@ -213,6 +214,11 @@ void WindowState::commitSelectedPVs(
     std::vector<SelectedPV>&& selected_pvs,
     const std::unordered_set<size_t>& new_absorbed_labels)
 {
+    // The pipeline ends the prepared-window lifetime before support
+    // postprocessing mutates persistent label state.
+    assert(active_label_mask_.empty());
+    assert(pv_label_distance_hash_.empty());
+
     std::vector<size_t> next_active_labels;
     next_active_labels.reserve(active_label_list_.size() + selected_pvs.size());
 
@@ -231,10 +237,6 @@ void WindowState::commitSelectedPVs(
     }
 
     active_label_list_ = std::move(next_active_labels);
-
-    // Window-scoped caches are never carried across a completed transition,
-    // including transitions that selected no PVs.
-    invalidateCurrentWindow();
 }
 
 void WindowState::invalidateCurrentWindow() noexcept

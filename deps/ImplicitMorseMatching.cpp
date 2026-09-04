@@ -232,7 +232,7 @@ void ImplicitMorseMatching::matchPersistence(
     workspace.cofacet_indices.reserve(frame.dimension_ < 5 ? 32 : 64);
     workspace.facet_indices.reserve(frame.dimension_ + 1);
     workspace.vertex_workspace.reserve(frame.dimension_ + 1);
-    workspace.priority_queue_workspace.reserve(cofacet_count);
+    workspace.priority_queue_workspace.reserve(cofacet_count / 2);
 
     workspace.raw_support_info.support_cofacet_indices.clear();
     workspace.raw_support_info.protected_facet_indices.clear();
