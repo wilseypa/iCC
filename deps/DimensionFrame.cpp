@@ -5,7 +5,7 @@
 #include <cmath>
 #include <iostream>
 #include <limits>
-#include <string>
+#include <stdexcept>
 #include <utility>
 
 #include <omp.h>
@@ -18,22 +18,31 @@ namespace
 constexpr std::size_t MAX_FFI_PACKED_LABELS = sizeof(std::uint64_t);
 }
 
-DimensionFrame::FullCofacetHash::FullCofacetHash(const SimplexList& cofacets)
+DimensionFrame::FullCofacetIndex::FullCofacetIndex(const SimplexList& cofacets)
+    : ranks_(0, IndirectHash{cofacets.data()}, IndirectEqual{cofacets.data()})
 {
-    hash_.reserve(cofacets.size());
+    if (cofacets.empty())
+        return;
+
+    if (cofacets.size() - 1 > std::numeric_limits<RankIndex>::max())
+    {
+        throw std::overflow_error("Cofacet lookup ranks exceed the uint32_t range.");
+    }
+
+    ranks_.reserve(cofacets.size());
     for (std::size_t rank = 0; rank < cofacets.size(); ++rank)
-        hash_.emplace(cofacets[rank].first, rank);
+        ranks_.emplace(static_cast<RankIndex>(rank));
 }
 
-bool DimensionFrame::FullCofacetHash::tryFindRank(
+bool DimensionFrame::FullCofacetIndex::tryFindRank(
     const SimplexBindex bindex,
     std::size_t& rank_out) const noexcept
 {
-    const auto iter = hash_.find(bindex);
-    if (iter == hash_.end())
+    const auto it = ranks_.find(bindex);
+    if (it == ranks_.end())
         return false;
 
-    rank_out = iter->second;
+    rank_out = *it;
     return true;
 }
 
@@ -41,7 +50,8 @@ DimensionFrame::InterfaceWorkspace::InterfaceWorkspace(
     const SimplexList& cofacets,
     const std::size_t facet_count)
     : cofacet_lookup(cofacets),
-      match_list(cofacets.size() + facet_count, -1)
+      facet_mates(facet_count, UNMATCHED),
+      cofacet_mates(cofacets.size(), UNMATCHED)
 {
 }
 
@@ -60,14 +70,6 @@ DimensionFrame::DimensionFrame(
 
     if (dimension_ >= 2)
         enumerateInitialCofacets();
-}
-
-void DimensionFrame::requirePhase(
-    const FramePhase expected,
-    const char* const operation) const
-{
-    if (phase_ != expected)
-        throw std::logic_error(std::string(operation) + " is invalid in the current DimensionFrame phase.");
 }
 
 void DimensionFrame::buildInitialActiveFacetIndex()
@@ -123,7 +125,6 @@ void DimensionFrame::enumerateInitialCofacets()
 
 void DimensionFrame::matchPersistence(const bool collect_dependency_support)
 {
-    requirePhase(FramePhase::ReadyToMatch, "matchPersistence");
     clearCurrentInterfaceResults();
 
     // maxdim=1 is a valid edge-only run. H0 is resolved by the initial MSF and
@@ -131,14 +132,13 @@ void DimensionFrame::matchPersistence(const bool collect_dependency_support)
     if (dimension_ == 1)
     {
         releaseActiveFacetIndex();
-        phase_ = FramePhase::Matched;
         return;
     }
 
     if (isTopDimension())
         reportFalseFacetIdentificationStats();
 
-    interface_workspace_.emplace(cofacet_list_, facet_list_.size());
+    initializeInterfaceWorkspace();
 
     ImplicitMorseMatching matcher;
     matcher.matchPersistence(*this, collect_dependency_support);
@@ -154,13 +154,10 @@ void DimensionFrame::matchPersistence(const bool collect_dependency_support)
 
     if (collect_dependency_support)
         materializeMatchSupport(std::move(raw_support_info));
-
-    phase_ = FramePhase::Matched;
 }
 
 void DimensionFrame::matchApparentPairsOnly()
 {
-    requirePhase(FramePhase::ReadyToMatch, "matchApparentPairsOnly");
     clearCurrentInterfaceResults();
 
     if (dimension_ == 1)
@@ -171,11 +168,10 @@ void DimensionFrame::matchApparentPairsOnly()
                 unmatched_facet_weights_.push_back(edge.second);
         }
         releaseActiveFacetIndex();
-        phase_ = FramePhase::Matched;
         return;
     }
 
-    interface_workspace_.emplace(cofacet_list_, facet_list_.size());
+    initializeInterfaceWorkspace();
 
     ImplicitMorseMatching matcher;
     matcher.matchApparentPairsOnly(*this);
@@ -185,7 +181,6 @@ void DimensionFrame::matchApparentPairsOnly()
         finalizeNextActiveFacets();
 
     releaseInterfaceWorkspace(false);
-    phase_ = FramePhase::Matched;
 }
 
 void DimensionFrame::materializeMatchSupport(
@@ -245,13 +240,13 @@ void DimensionFrame::materializeMatchSupport(
 void DimensionFrame::finalizeNextActiveFacets()
 {
     assert(interface_workspace_.has_value());
-    const auto& match_list = interface_workspace_->match_list;
+    const auto& cofacet_mates = interface_workspace_->cofacet_mates;
 
     next_active_facet_mask_.assign(cofacet_list_.size(), 0);
     next_active_facet_count_ = 0;
     for (std::size_t i = 0; i < cofacet_list_.size(); ++i)
     {
-        if (match_list[i] >= 0)
+        if (cofacet_mates[i] != InterfaceWorkspace::UNMATCHED)
             continue;
 
         next_active_facet_mask_[i] = 1;
@@ -262,6 +257,19 @@ void DimensionFrame::finalizeNextActiveFacets()
 void DimensionFrame::releaseActiveFacetIndex()
 {
     decltype(active_facet_index_){}.swap(active_facet_index_);
+}
+
+void DimensionFrame::initializeInterfaceWorkspace()
+{
+    // Reserve the maximum value for UNMATCHED before allocating either side.
+    constexpr std::size_t max_mate_count = InterfaceWorkspace::UNMATCHED;
+    if (facet_list_.size() > max_mate_count ||
+        cofacet_list_.size() > max_mate_count)
+    {
+        throw std::overflow_error("Facet or cofacet count exceeds the uint32_t mate capacity.");
+    }
+
+    interface_workspace_.emplace(cofacet_list_, facet_list_.size());
 }
 
 DimensionFrame::RawMatchSupportInfo
@@ -327,13 +335,8 @@ SimplexList DimensionFrame::enumerateNextCofacets(
 
 bool DimensionFrame::advance()
 {
-    requirePhase(FramePhase::Matched, "advance");
-
     if (isTopDimension())
-    {
-        phase_ = FramePhase::Finished;
         return false;
-    }
 
     // The old active-facet index was released immediately after matching.
     // Release the previous facet list before enumeration as well. Building the
@@ -374,7 +377,6 @@ bool DimensionFrame::advance()
 
     ++dimension_;
     clearCurrentInterfaceResults();
-    phase_ = FramePhase::ReadyToMatch;
     return true;
 }
 

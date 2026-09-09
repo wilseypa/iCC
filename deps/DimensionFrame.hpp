@@ -2,8 +2,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
-#include <stdexcept>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -15,13 +15,6 @@
 #include "robin_hood.h"
 
 class ImplicitMorseMatching;
-
-enum class FramePhase : std::uint8_t
-{
-    ReadyToMatch,
-    Matched,
-    Finished
-};
 
 class DimensionFrame
 {
@@ -36,6 +29,8 @@ public:
     DimensionFrame(DimensionFrame&&) = delete;
     DimensionFrame& operator=(DimensionFrame&&) = delete;
 
+    // Match once per dimension, consume the results, then call advance().
+    // Continue matching only if advance() returns true.
     void matchPersistence(bool collect_dependency_support);
     void matchApparentPairsOnly();
 
@@ -58,12 +53,6 @@ public:
     bool isTopDimension() const noexcept
     {
         return dimension_ == runtime_.config().maxdim;
-    }
-
-    [[nodiscard]]
-    FramePhase phase() const noexcept
-    {
-        return phase_;
     }
 
     [[nodiscard]]
@@ -101,10 +90,12 @@ public:
 private:
     friend class ImplicitMorseMatching;
 
-    class FullCofacetHash
+    using RankIndex = std::uint32_t;
+
+    class FullCofacetIndex
     {
     public:
-        explicit FullCofacetHash(const SimplexList& cofacets);
+        explicit FullCofacetIndex(const SimplexList& cofacets);
 
         [[nodiscard]]
         bool tryFindRank(
@@ -112,7 +103,47 @@ private:
             std::size_t& rank_out) const noexcept;
 
     private:
-        robin_hood::unordered_map<SimplexBindex, std::size_t> hash_;
+        struct IndirectHash
+        {
+            using is_transparent = void;
+
+            const SimplexRecord* cofacets;
+
+            std::size_t operator()(const RankIndex rank) const noexcept
+            {
+                return robin_hood::hash<SimplexBindex>{}(cofacets[rank].first);
+            }
+
+            std::size_t operator()(const SimplexBindex bindex) const noexcept
+            {
+                return robin_hood::hash<SimplexBindex>{}(bindex);
+            }
+        };
+
+        struct IndirectEqual
+        {
+            using is_transparent = void;
+
+            const SimplexRecord* cofacets;
+
+            bool operator()(const RankIndex lhs, const RankIndex rhs) const noexcept
+            {
+                return cofacets[lhs].first == cofacets[rhs].first;
+            }
+
+            bool operator()(const SimplexBindex bindex, const RankIndex rank) const noexcept
+            {
+                return bindex == cofacets[rank].first;
+            }
+
+            bool operator()(const RankIndex rank, const SimplexBindex bindex) const noexcept
+            {
+                return cofacets[rank].first == bindex;
+            }
+        };
+
+        // Borrows cofacet storage, which stays fixed until the workspace is released.
+        robin_hood::unordered_flat_set<RankIndex, IndirectHash, IndirectEqual> ranks_;
     };
 
     struct RawMatchSupportInfo
@@ -123,10 +154,15 @@ private:
 
     struct InterfaceWorkspace
     {
+        static constexpr RankIndex UNMATCHED =
+            std::numeric_limits<RankIndex>::max();
+
         explicit InterfaceWorkspace(const SimplexList& cofacets, std::size_t facet_count);
 
-        FullCofacetHash cofacet_lookup;
-        std::vector<std::int64_t> match_list;
+        FullCofacetIndex cofacet_lookup;
+        // facet_mates[f] = c and cofacet_mates[c] = f; otherwise UNMATCHED.
+        std::vector<RankIndex> facet_mates;
+        std::vector<RankIndex> cofacet_mates;
 
         std::vector<std::size_t> cofacet_indices;
         std::vector<std::size_t> facet_indices;
@@ -147,7 +183,6 @@ private:
     const BinomialTable& binomial_table_;
 
     std::size_t dimension_ = 2;
-    FramePhase phase_ = FramePhase::ReadyToMatch;
 
     SimplexEnumerator simplex_enumerator_;
 
@@ -169,7 +204,6 @@ private:
     std::optional<FfiRealizationState> ffi_realizations_;
     std::optional<InterfaceWorkspace> interface_workspace_;
 
-    void requirePhase(FramePhase expected, const char* operation) const;
     void buildInitialActiveFacetIndex();
     void enumerateInitialCofacets();
     SimplexList enumerateNextCofacets(
@@ -178,6 +212,7 @@ private:
     void materializeMatchSupport(RawMatchSupportInfo raw_support_info);
     void finalizeNextActiveFacets();
     void releaseActiveFacetIndex();
+    void initializeInterfaceWorkspace();
     RawMatchSupportInfo releaseInterfaceWorkspace(
         bool preserve_raw_support_info);
     void clearCurrentInterfaceResults();

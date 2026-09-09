@@ -2,6 +2,7 @@
 #include "DimensionFrame.hpp"
 #include "PipelineCommon.hpp"
 #include "Pipelines.hpp"
+#include "SimplexUtility.hpp"
 #include "WindowState.hpp"
 
 #include <algorithm>
@@ -288,7 +289,7 @@ struct FrameRun
     std::vector<double> top_unmatched_cofacets;
 };
 
-FrameRun runApparentFrame(const int threads, const bool check_phases)
+FrameRun runApparentFrame(const int threads)
 {
     const std::vector<std::vector<double>> points{
         {0.0, 0.0},
@@ -311,16 +312,10 @@ FrameRun runApparentFrame(const int threads, const bool check_phases)
 
     CHECK(frame.dimension() == 2);
     CHECK(frame.facetDimension() == 1);
-    CHECK(frame.phase() == FramePhase::ReadyToMatch);
     CHECK(!frame.isTopDimension());
-    if (check_phases)
-        CHECK_THROWS_AS(frame.advance(), std::logic_error);
 
     frame.matchApparentPairsOnly();
     result.first_unmatched_facets = frame.unmatchedFacetWeights();
-    CHECK(frame.phase() == FramePhase::Matched);
-    if (check_phases)
-        CHECK_THROWS_AS(frame.matchApparentPairsOnly(), std::logic_error);
 
     CHECK(frame.advance());
     result.promoted_facet_count = frame.facetCount();
@@ -328,27 +323,20 @@ FrameRun runApparentFrame(const int threads, const bool check_phases)
     CHECK(frame.dimension() == 3);
     CHECK(frame.facetDimension() == 2);
     CHECK(frame.isTopDimension());
-    CHECK(frame.phase() == FramePhase::ReadyToMatch);
     CHECK(result.promoted_facet_count == result.initial_cofacet_count);
-    if (check_phases)
-        CHECK_THROWS_AS(frame.advance(), std::logic_error);
 
     frame.matchApparentPairsOnly();
     result.top_unmatched_facets = frame.unmatchedFacetWeights();
     result.top_unmatched_cofacets = frame.unmatchedTopCofacetWeights();
-    CHECK(frame.phase() == FramePhase::Matched);
     CHECK(!frame.advance());
-    CHECK(frame.phase() == FramePhase::Finished);
-    if (check_phases)
-        CHECK_THROWS_AS(frame.matchApparentPairsOnly(), std::logic_error);
 
     return result;
 }
 
-void testDimensionFrameStateAndDeterminism()
+void testDimensionFrameAdvancementAndDeterminism()
 {
-    const auto single_thread = runApparentFrame(1, true);
-    const auto multi_thread = runApparentFrame(2, false);
+    const auto single_thread = runApparentFrame(1);
+    const auto multi_thread = runApparentFrame(2);
 
     CHECK(single_thread.initial_facet_count == multi_thread.initial_facet_count);
     CHECK(single_thread.initial_cofacet_count == multi_thread.initial_cofacet_count);
@@ -357,6 +345,104 @@ void testDimensionFrameStateAndDeterminism()
     CHECK(single_thread.first_unmatched_facets == multi_thread.first_unmatched_facets);
     CHECK(single_thread.top_unmatched_facets == multi_thread.top_unmatched_facets);
     CHECK(single_thread.top_unmatched_cofacets == multi_thread.top_unmatched_cofacets);
+
+    CHECK(single_thread.first_unmatched_facets.size() == 1);
+    if (single_thread.first_unmatched_facets.size() == 1)
+    {
+        CHECK(std::abs(single_thread.first_unmatched_facets.front() -
+                       std::sqrt(1.3)) < 1e-12);
+    }
+    CHECK(single_thread.top_unmatched_facets.size() == 1);
+    if (single_thread.top_unmatched_facets.size() == 1)
+    {
+        CHECK(std::abs(single_thread.top_unmatched_facets.front() -
+                       std::sqrt(1.45)) < 1e-12);
+    }
+    CHECK(single_thread.top_unmatched_cofacets.size() == 1);
+    if (single_thread.top_unmatched_cofacets.size() == 1)
+    {
+        CHECK(std::abs(single_thread.top_unmatched_cofacets.front() -
+                       std::sqrt(3.6)) < 1e-12);
+    }
+}
+
+void testDimensionFrameWideCofacetIndices()
+{
+    struct InterfaceResult
+    {
+        std::vector<std::pair<double, double>> persistent_pair_weights;
+        std::vector<double> unmatched_facet_weights;
+        std::vector<double> unmatched_top_cofacet_weights;
+
+        bool operator==(const InterfaceResult&) const = default;
+    };
+
+    const auto run_frame = [](
+        const std::size_t isolated_vertex_count,
+        const bool persistence)
+    {
+        // Isolated vertices shift the clique's binomial indices without changing
+        // its cofacet counts, filtration order, or positive-dimensional matching.
+        std::vector<std::vector<double>> points;
+        for (std::size_t i = 0; i < isolated_vertex_count; ++i)
+            points.push_back({100.0 * static_cast<double>(i + 1), 0.0});
+        points.insert(points.end(), {
+            {0.0, 0.0},
+            {1.0, 0.0},
+            {0.2, 0.9},
+            {1.3, 1.1},
+            {0.6, 1.8}});
+
+        const auto config = makeConfig({3.0}, 5);
+        PipelineRuntime runtime(
+            DistanceMatrix(points), config, PipelineMode::RegVRPH);
+        if (isolated_vertex_count > 0)
+        {
+            const auto smallest_tetrahedron_bindex =
+                SimplexUtility::getBinomialIndex(
+                    runtime.binomialTable(),
+                    {isolated_vertex_count + 3, isolated_vertex_count + 2,
+                     isolated_vertex_count + 1, isolated_vertex_count},
+                    0);
+            CHECK(smallest_tetrahedron_bindex >
+                  std::numeric_limits<std::uint32_t>::max());
+        }
+
+        WindowState window(points.size());
+        auto edges = window.prepareWindow(
+            runtime, boundsFor(runtime.config(), 0));
+        DimensionFrame frame(runtime, window, std::move(edges));
+
+        const std::vector<std::size_t> expected_facet_counts{10, 10, 5, 1};
+        const std::vector<std::size_t> expected_cofacet_counts{10, 5, 1, 0};
+        std::vector<InterfaceResult> results;
+        do
+        {
+            const std::size_t index = frame.dimension() - 2;
+            CHECK(frame.facetCount() == expected_facet_counts.at(index));
+            CHECK(frame.cofacetCount() == expected_cofacet_counts.at(index));
+            if (persistence)
+                frame.matchPersistence(false);
+            else
+                frame.matchApparentPairsOnly();
+
+            InterfaceResult result;
+            for (const auto& pair : frame.persistentPairs())
+            {
+                result.persistent_pair_weights.emplace_back(
+                    pair.facet_weight, pair.cofacet_weight);
+            }
+            result.unmatched_facet_weights = frame.unmatchedFacetWeights();
+            result.unmatched_top_cofacet_weights =
+                frame.unmatchedTopCofacetWeights();
+            results.push_back(std::move(result));
+        } while (frame.advance());
+        CHECK(results.size() == expected_cofacet_counts.size());
+        return results;
+    };
+
+    for (const bool persistence : {false, true})
+        CHECK(run_frame(0, persistence) == run_frame(600, persistence));
 }
 
 void testPersistenceMatchingAndSupportExtraction()
@@ -419,19 +505,29 @@ void testMatchingDerivedPwphSupportAndPvGeometry()
             runtime,
             boundsFor(runtime.config(), 0));
         DimensionFrame frame(runtime, window, std::move(edges));
+        CHECK(frame.facetCount() == 14);
+        CHECK(frame.cofacetCount() == 6);
         frame.matchPersistence(true);
-        first_batch = frame.takeDependencySupportBatch();
-        CHECK(!first_batch.supports.empty());
-        for (const auto& materialized_support : first_batch.supports)
+        CHECK(frame.persistentPairs().size() == 2);
+        if (frame.persistentPairs().size() == 2)
         {
-            CHECK(std::is_sorted(
-                materialized_support.labels.begin(),
-                materialized_support.labels.end()));
-            CHECK(std::adjacent_find(
-                materialized_support.labels.begin(),
-                materialized_support.labels.end()) ==
-                materialized_support.labels.end());
+            CHECK(frame.persistentPairs()[0].facet_bindex == 16);
+            CHECK(frame.persistentPairs()[0].cofacet_bindex == 20);
+            CHECK(frame.persistentPairs()[1].facet_bindex == 14);
+            CHECK(frame.persistentPairs()[1].cofacet_bindex == 16);
         }
+        first_batch = frame.takeDependencySupportBatch();
+        // Each four-label support requires replay through multiple triangles.
+        // Their order also controls which overlapping support PwPH consumes first.
+        CHECK(first_batch.supports.size() == 2);
+        if (first_batch.supports.size() == 2)
+        {
+            CHECK((first_batch.supports[0].labels ==
+                   std::vector<std::size_t>{0, 1, 2, 6}));
+            CHECK((first_batch.supports[1].labels ==
+                   std::vector<std::size_t>{0, 3, 4, 5}));
+        }
+        CHECK(first_batch.protected_labels.empty());
         CHECK(!frame.advance());
     }
 
@@ -448,9 +544,23 @@ void testMatchingDerivedPwphSupportAndPvGeometry()
         runtime,
         boundsFor(runtime.config(), 1));
     DimensionFrame pv_frame(runtime, window, std::move(pv_edges));
-    CHECK(pv_frame.cofacetCount() > 0);
+    CHECK(pv_frame.facetCount() == 10);
+    CHECK(pv_frame.cofacetCount() == 5);
     pv_frame.matchPersistence(true);
-    static_cast<void>(pv_frame.takeDependencySupportBatch());
+    CHECK(pv_frame.persistentPairs().size() == 1);
+    if (pv_frame.persistentPairs().size() == 1)
+    {
+        CHECK(pv_frame.persistentPairs()[0].facet_bindex == 51);
+        CHECK(pv_frame.persistentPairs()[0].cofacet_bindex == 136);
+    }
+    const auto pv_batch = pv_frame.takeDependencySupportBatch();
+    CHECK(pv_batch.supports.size() == 1);
+    if (pv_batch.supports.size() == 1)
+    {
+        CHECK((pv_batch.supports[0].labels ==
+               std::vector<std::size_t>{1, 2, 6, 10}));
+    }
+    CHECK(pv_batch.protected_labels.empty());
     CHECK(!pv_frame.advance());
 }
 
@@ -478,7 +588,6 @@ void testEdgeOnlyDimensionFrame()
     CHECK(frame.unmatchedFacetWeights().size() == 1);
     CHECK(frame.unmatchedTopCofacetWeights().empty());
     CHECK(!frame.advance());
-    CHECK(frame.phase() == FramePhase::Finished);
 }
 
 void testSingleWindowPipelinesUseFinalEpsilon()
@@ -678,7 +787,8 @@ int main()
     runTest("PipelineConfig", testPipelineConfig);
     runTest("DistanceMatrix validation", testDistanceMatrixValidation);
     runTest("WindowState preparation", testWindowStatePreparation);
-    runTest("DimensionFrame state and determinism", testDimensionFrameStateAndDeterminism);
+    runTest("DimensionFrame advancement and determinism", testDimensionFrameAdvancementAndDeterminism);
+    runTest("DimensionFrame wide cofacet indices", testDimensionFrameWideCofacetIndices);
     runTest("Persistence matching and support extraction", testPersistenceMatchingAndSupportExtraction);
     runTest("Matching-derived PwPH support and PV geometry", testMatchingDerivedPwphSupportAndPvGeometry);
     runTest("DimensionFrame edge-only mode", testEdgeOnlyDimensionFrame);

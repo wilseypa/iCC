@@ -47,7 +47,7 @@ private:
     static std::vector<std::size_t> collectReducedColumnSupport(
         DimensionFrame& frame,
         std::size_t terminal_cofacet,
-        std::size_t expected_facet_graph_index);
+        std::size_t expected_facet_list_index);
 
     template <typename MaxQueue>
     static void enqueueReducedCofacetBoundaryTail(

@@ -128,15 +128,12 @@ bool ImplicitMorseMatching::tryInstallApparentPair(
     const std::size_t facet_list_index)
 {
     auto& workspace = *frame.interface_workspace_;
-    const std::size_t cofacet_count = frame.cofacet_list_.size();
-    const std::size_t facet_graph_index =
-        cofacet_count + facet_list_index;
     const auto& facet = frame.facet_list_[facet_list_index];
 
     const auto try_install_candidate =
         [&](const std::size_t cofacet_rank) -> bool
     {
-        if (workspace.match_list[cofacet_rank] >= 0)
+        if (workspace.cofacet_mates[cofacet_rank] != workspace.UNMATCHED)
             return false;
 
         SimplexUtility::getFacetListIndicesInPlace(
@@ -156,10 +153,10 @@ bool ImplicitMorseMatching::tryInstallApparentPair(
             return false;
         }
 
-        workspace.match_list[facet_graph_index] =
-            static_cast<std::int64_t>(cofacet_rank);
-        workspace.match_list[cofacet_rank] =
-            static_cast<std::int64_t>(facet_graph_index);
+        workspace.facet_mates[facet_list_index] =
+            static_cast<DimensionFrame::RankIndex>(cofacet_rank);
+        workspace.cofacet_mates[cofacet_rank] =
+            static_cast<DimensionFrame::RankIndex>(facet_list_index);
         return true;
     };
 
@@ -261,9 +258,6 @@ void ImplicitMorseMatching::matchPersistence(
             continue;
         }
 
-        const std::size_t facet_graph_index =
-            cofacet_count + facet_list_index;
-
         if (tryInstallApparentPair(frame, facet_list_index))
             continue;
 
@@ -309,15 +303,15 @@ void ImplicitMorseMatching::matchPersistence(
                 collectReducedColumnSupport(
                     frame,
                     terminal_cofacet_rank,
-                    facet_graph_index));
+                    facet_list_index));
         }
 
         const auto& cofacet = frame.cofacet_list_[terminal_cofacet_rank];
 
-        // Preserve combined indexing: cofacets first, then all facet slots.
-        workspace.match_list[facet_graph_index] = terminal_cofacet;
-        workspace.match_list[terminal_cofacet_rank] =
-            static_cast<std::int64_t>(facet_graph_index);
+        workspace.facet_mates[facet_list_index] =
+            static_cast<DimensionFrame::RankIndex>(terminal_cofacet_rank);
+        workspace.cofacet_mates[terminal_cofacet_rank] =
+            static_cast<DimensionFrame::RankIndex>(facet_list_index);
 
         if (facet.second != cofacet.second)
         {
@@ -371,9 +365,7 @@ void ImplicitMorseMatching::matchApparentPairsOnly(
             continue;
         }
 
-        const std::size_t facet_graph_index =
-            cofacet_count + facet_list_index;
-        if (workspace.match_list[facet_graph_index] < 0)
+        if (workspace.facet_mates[facet_list_index] == workspace.UNMATCHED)
             frame.unmatched_facet_weights_.push_back(facet.second);
     }
 
@@ -385,7 +377,7 @@ void ImplicitMorseMatching::matchApparentPairsOnly(
              cofacet_rank < cofacet_count;
              ++cofacet_rank)
         {
-            if (workspace.match_list[cofacet_rank] < 0)
+            if (workspace.cofacet_mates[cofacet_rank] == workspace.UNMATCHED)
             {
                 frame.unmatched_top_cofacet_weights_.push_back(
                     frame.cofacet_list_[cofacet_rank].second);
@@ -408,8 +400,6 @@ std::int64_t ImplicitMorseMatching::findCompressedTerminalCofacet(
     for (const std::size_t cofacet_rank : start_cofacet_indices)
         cofacet_queue.push(cofacet_rank);
 
-    const std::size_t cofacet_count = frame.cofacet_list_.size();
-
     while (!cofacet_queue.empty())
     {
         const std::size_t top_cofacet = cofacet_queue.top();
@@ -426,7 +416,7 @@ std::int64_t ImplicitMorseMatching::findCompressedTerminalCofacet(
         if ((multiplicity & 1ULL) == 0ULL)
             continue;
 
-        if (workspace.match_list[top_cofacet] < 0)
+        if (workspace.cofacet_mates[top_cofacet] == workspace.UNMATCHED)
         {
             recoverQueueStorage(
                 cofacet_queue,
@@ -434,10 +424,8 @@ std::int64_t ImplicitMorseMatching::findCompressedTerminalCofacet(
             return static_cast<std::int64_t>(top_cofacet);
         }
 
-        const std::size_t next_facet_graph_index =
-            static_cast<std::size_t>(workspace.match_list[top_cofacet]);
         const std::size_t next_facet_list_index =
-            next_facet_graph_index - cofacet_count;
+            static_cast<std::size_t>(workspace.cofacet_mates[top_cofacet]);
 
         enqueueReducedCompressedColumnTail(
             frame,
@@ -460,7 +448,6 @@ void ImplicitMorseMatching::enqueueReducedCompressedColumnTail(
     MinQueue& target_queue)
 {
     auto& workspace = *frame.interface_workspace_;
-    const std::size_t cofacet_count = frame.cofacet_list_.size();
 
     collectImmediateCofacetRanks(
         frame,
@@ -512,17 +499,16 @@ void ImplicitMorseMatching::enqueueReducedCompressedColumnTail(
                 "enqueueReducedCompressedColumnTail: passed expected pivot");
         }
 
-        const std::int64_t matched_facet_graph_index =
-            workspace.match_list[top_cofacet];
-        if (matched_facet_graph_index < 0)
+        const auto matched_facet =
+            workspace.cofacet_mates[top_cofacet];
+        if (matched_facet == workspace.UNMATCHED)
         {
             throw std::logic_error(
                 "enqueueReducedCompressedColumnTail: unmatched term before expected pivot");
         }
 
         const std::size_t matched_facet_list_index =
-            static_cast<std::size_t>(matched_facet_graph_index) -
-            cofacet_count;
+            static_cast<std::size_t>(matched_facet);
         if (matched_facet_list_index <= facet_list_index)
         {
             throw std::logic_error(
@@ -561,12 +547,11 @@ std::vector<std::size_t>
 ImplicitMorseMatching::collectReducedColumnSupport(
     DimensionFrame& frame,
     const std::size_t terminal_cofacet,
-    const std::size_t expected_facet_graph_index)
+    const std::size_t expected_facet_list_index)
 {
-    static_cast<void>(expected_facet_graph_index);
+    static_cast<void>(expected_facet_list_index);
 
     auto& workspace = *frame.interface_workspace_;
-    const std::size_t cofacet_count = frame.cofacet_list_.size();
 
     workspace.facet_indices.clear();
     workspace.priority_queue_workspace.clear();
@@ -607,14 +592,11 @@ ImplicitMorseMatching::collectReducedColumnSupport(
         if ((multiplicity & 1ULL) == 0ULL)
             continue;
 
-        const std::int64_t next_cofacet =
-            workspace.match_list[
-                top_facet_list_index + cofacet_count];
-        if (next_cofacet < 0)
+        const auto next_cofacet =
+            workspace.facet_mates[top_facet_list_index];
+        if (next_cofacet == workspace.UNMATCHED)
         {
-            assert(
-                expected_facet_graph_index ==
-                top_facet_list_index + cofacet_count);
+            assert(expected_facet_list_index == top_facet_list_index);
             break;
         }
 
@@ -645,7 +627,6 @@ void ImplicitMorseMatching::enqueueReducedCofacetBoundaryTail(
     std::vector<std::size_t>& cofacet_trace)
 {
     auto& workspace = *frame.interface_workspace_;
-    const std::size_t cofacet_count = frame.cofacet_list_.size();
 
     SimplexUtility::getFacetListIndicesInPlace(
         frame.binomial_table_,
@@ -690,10 +671,9 @@ void ImplicitMorseMatching::enqueueReducedCofacetBoundaryTail(
         if ((multiplicity & 1ULL) == 0ULL)
             continue;
 
-        const std::int64_t next_cofacet =
-            workspace.match_list[
-                top_facet_list_index + cofacet_count];
-        if (next_cofacet >= 0 &&
+        const auto next_cofacet =
+            workspace.facet_mates[top_facet_list_index];
+        if (next_cofacet != workspace.UNMATCHED &&
             top_facet_list_index > pivot_facet_list_index)
         {
             const std::size_t cofacet_rank =
