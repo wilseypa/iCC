@@ -1,4 +1,6 @@
 #include <algorithm>
+#include <cmath>
+#include <stdexcept>
 
 #include "omp.h"
 
@@ -79,6 +81,79 @@ std::vector<std::pair<int64_t, double>> SimplexEnumerator::getSortedVRCofacets(c
 }
 
 // ======================= Geometric PV enumeration =======================
+
+SimplexEnumerator::GeometricRealization SimplexEnumerator::getGeometricSimplexRealization(
+    const std::vector<size_t>& labels_descending,
+    const std::vector<SelectedPV>& pseudo_vertices,
+    const double maxeps) const
+{
+    if (labels_descending.empty())
+        throw std::invalid_argument("A geometric realization requires at least one simplex label");
+
+    const size_t originalvtnum = distance_matrix_.vertexCount();
+    for (size_t i = 0; i < labels_descending.size(); ++i)
+    {
+        const size_t label = labels_descending[i];
+        if (i > 0 && labels_descending[i - 1] <= label)
+            throw std::invalid_argument("Simplex labels must be distinct and in descending order");
+        if (label < originalvtnum)
+            continue;
+        if (label - originalvtnum >= pseudo_vertices.size())
+            throw std::invalid_argument("Simplex contains an unknown pseudo-vertex label");
+
+        const auto& representatives = pseudo_vertices[label - originalvtnum].representatives;
+        if (representatives.empty() || representatives.size() > MAX_PV_CARDINALITY_)
+            throw std::invalid_argument("Pseudo-vertex representative count is outside the witness solver range");
+        for (const size_t representative : representatives)
+        {
+            if (representative >= originalvtnum)
+                throw std::invalid_argument("Pseudo-vertex contains an unknown original vertex");
+        }
+    }
+
+    if (labels_descending.front() < originalvtnum)
+    {
+        double weight = 0.0;
+        for (size_t i = 0; i < labels_descending.size(); ++i)
+        {
+            for (size_t j = i + 1; j < labels_descending.size(); ++j)
+                weight = std::max(weight, distance_matrix_.distance(labels_descending[i], labels_descending[j]));
+        }
+        if (!(weight < maxeps))
+            throw std::runtime_error("Simplex has no geometric realization below the maximum epsilon");
+        return {weight, labels_descending};
+    }
+
+    // A vertex has no edge on which to anchor the clique search.
+    if (labels_descending.size() == 1)
+    {
+        if (!(0.0 < maxeps))
+            throw std::runtime_error("Simplex has no geometric realization below the maximum epsilon");
+        return {0.0, {pseudo_vertices[labels_descending.front() - originalvtnum].representatives.front()}};
+    }
+
+    if (labels_descending.size() > 64)
+        throw std::invalid_argument("Geometric witness solver supports at most 64 simplex labels");
+
+    WitnessWorkspace ws;
+    const std::vector<size_t> facet_labels(labels_descending.begin(), labels_descending.end() - 1);
+    prepareFacetWitnessContext(ws, facet_labels, pseudo_vertices, originalvtnum, maxeps);
+    prepareCovtWitnessGroup(ws, labels_descending.back(), facet_labels.size(),
+                            pseudo_vertices, originalvtnum, maxeps);
+
+    // The regular solver also keeps the successful representative choices. Its
+    // edge ordering and recursive tie-breaking are identical to the FFI solver;
+    // skipping packed output removes the eight-label storage restriction.
+    const double weight = getGeometricPVSimplexWeight<false>(ws, labels_descending.size(), 0.0);
+    if (!std::isfinite(weight) || !(weight < maxeps))
+        throw std::runtime_error("Simplex has no geometric realization below the maximum epsilon");
+
+    GeometricRealization realization{weight, {}};
+    realization.vertices.reserve(labels_descending.size());
+    for (size_t g = 0; g < labels_descending.size(); ++g)
+        realization.vertices.push_back((*ws.rep_ptrs[g])[ws.current_local_indices[g]]);
+    return realization;
+}
 
 void SimplexEnumerator::prepareFacetWitnessContext(WitnessWorkspace& ws,
                                                                 const std::vector<size_t>& facet_labels,

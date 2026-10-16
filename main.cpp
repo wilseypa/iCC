@@ -28,6 +28,7 @@ constexpr const char* APPARENT_PAIR_TOOL = "apparent";
 constexpr double DEFAULT_EPS_INTERVAL_SCALE = 1.0;
 // SimplexEnumerator stores group coverage in a uint64_t, with group indices 0..maxdim.
 constexpr size_t MAX_SIMPLEX_DIMENSION = 63;
+constexpr size_t MAX_HOMOLOGY_DIMENSION = MAX_SIMPLEX_DIMENSION - 1;
 
 class HelpSpacingFormatter : public CLI::Formatter
 {
@@ -165,19 +166,20 @@ size_t promptMaxDimension()
 {
     while (true)
     {
-        const std::string line = promptRequiredLine("Input max dimension: ");
+        const std::string line = promptRequiredLine("Input maximum homology dimension: ");
         std::stringstream parser(line);
         long long value = 0;
         char extra = '\0';
 
-        if (!(parser >> value) || (parser >> extra) || value <= 0 ||
-            value > static_cast<long long>(MAX_SIMPLEX_DIMENSION))
+        if (!(parser >> value) || (parser >> extra) || value < 0 ||
+            value > static_cast<long long>(MAX_HOMOLOGY_DIMENSION))
         {
-            std::cout << "  Please enter an integer from 1 to " << MAX_SIMPLEX_DIMENSION << ".\n";
+            std::cout << "  Please enter an integer from 0 to " << MAX_HOMOLOGY_DIMENSION << ".\n";
             continue;
         }
 
-        return static_cast<size_t>(value);
+        // The pipelines retain their maximum interface dimension internally.
+        return static_cast<size_t>(value) + 1;
     }
 }
 
@@ -493,7 +495,7 @@ void printRunConfiguration(const std::string& tool,
 
     std::cout << "\nRun " << displayToolName(normalized_tool) << " with:\n";
     std::cout << "  input file: " << filename << '\n';
-    std::cout << "  max dimension: " << maxdim << '\n';
+    std::cout << "  maximum homology dimension: " << maxdim - 1 << '\n';
     std::cout << "  thread number: " << threadnumber << '\n';
 
     if (normalized_tool == PIECEWISE_PH_TOOL)
@@ -565,10 +567,8 @@ void validateRunOptions(const std::string& tool,
     if (!std::filesystem::is_regular_file(filepath))
         throw std::invalid_argument("Input path is not a regular file: " + filename);
 
-    if (maxdim == 0)
-        throw std::invalid_argument("Maximum dimension must be a positive integer.");
-    if (maxdim > MAX_SIMPLEX_DIMENSION)
-        throw std::invalid_argument("Maximum dimension must be less than 64.");
+    if (maxdim == 0 || maxdim > MAX_SIMPLEX_DIMENSION)
+        throw std::invalid_argument("Maximum homology dimension must be in the range [0, 62].");
     if (threadnumber <= 0)
         throw std::invalid_argument("Thread number must be a positive integer.");
 
@@ -609,7 +609,8 @@ int runTool(const std::string& tool,
             const double pv_cap_scale,
             const double pv_min_separation,
             const bool print_configuration,
-            const bool verbose)
+            const bool verbose,
+            const bool ffi_diagnostics)
 {
     const std::string normalized_tool = normalizeTool(tool);
 
@@ -652,7 +653,8 @@ int runTool(const std::string& tool,
         .threads = threadnumber,
         .pv_cap_scale = normalized_tool == PIECEWISE_PH_TOOL ? pv_cap_scale : 1.0,
         .pv_min_separation = normalized_tool == PIECEWISE_PH_TOOL ? pv_min_separation : 0.0,
-        .verbose = verbose};
+        .verbose = verbose,
+        .ffi_diagnostics = ffi_diagnostics};
 
     const auto st0 = std::chrono::high_resolution_clock::now();
     if (normalized_tool == PIECEWISE_PH_TOOL)
@@ -724,7 +726,7 @@ int runInteractive()
     }
 
     return runTool(tool, filename, maxdim, threadnumber, eps_breaks, eps_interval_count,
-                   eps_interval_scale, maxeps, pv_cap_scale, pv_min_separation, false, true);
+                   eps_interval_scale, maxeps, pv_cap_scale, pv_min_separation, false, true, false);
 }
 
 int runCommandLine(int argc, char** argv)
@@ -734,7 +736,7 @@ int runCommandLine(int argc, char** argv)
 
     std::string tool;
     std::string filename;
-    size_t maxdim = 0;
+    size_t homology_dim = 0;
     int threadnumber = 1;
     std::vector<double> eps_breaks;
     size_t eps_interval_count = 0;
@@ -743,6 +745,7 @@ int runCommandLine(int argc, char** argv)
     double pv_cap_scale = 0.0;
     double pv_min_separation = 0.0;
     bool verbose = false;
+    bool ffi_diagnostics = false;
 
     app.add_option("-t,--tool", tool, "Tool to run: piecewise, ph, or apparent")
         ->required();
@@ -751,15 +754,18 @@ int runCommandLine(int argc, char** argv)
         ->required()
         ->check(CLI::ExistingFile);
 
-    app.add_option("-d,--max-dim", maxdim, "Maximum simplex dimension (1-63)")
+    app.add_option("-d,--homology-dim", homology_dim, "Maximum homology dimension (0-62)")
         ->required()
-        ->check(CLI::Range(size_t{1}, MAX_SIMPLEX_DIMENSION));
+        ->check(CLI::Range(size_t{0}, MAX_HOMOLOGY_DIMENSION));
 
     app.add_option("-n,--threads", threadnumber, "Number of worker threads")
         ->default_val(1)
         ->check(CLI::PositiveNumber);
 
     app.add_flag("-v,--verbose", verbose, "Show diagnostic output");
+    app.add_flag("--ffi", ffi_diagnostics,
+                 "Report false facet identification diagnostics (requires --verbose)")
+        ->needs("--verbose");
 
     // For a std::vector option, CLI11 already accepts one or more values when
     // the option is present. Conditional requirement and resolved-value
@@ -794,8 +800,10 @@ int runCommandLine(int argc, char** argv)
     try
     {
         app.parse(argc, argv);
+        const size_t maxdim = homology_dim + 1;
         return runTool(tool, filename, maxdim, threadnumber, eps_breaks, eps_interval_count,
-                       eps_interval_scale, maxeps, pv_cap_scale, pv_min_separation, true, verbose);
+                       eps_interval_scale, maxeps, pv_cap_scale, pv_min_separation, true, verbose,
+                       ffi_diagnostics);
     }
     catch (const CLI::ParseError& err)
     {

@@ -68,6 +68,12 @@ public:
     }
 
     [[nodiscard]]
+    std::size_t activeFacetCount() const noexcept
+    {
+        return active_facet_index_.size();
+    }
+
+    [[nodiscard]]
     const std::vector<PersistentPairInfo>& persistentPairs() const noexcept
     {
         return persistent_pairs_;
@@ -222,5 +228,6 @@ private:
         SimplexBindex bindex,
         std::size_t& rank_out) const noexcept;
 
+    void reportTopInterfaceFacetIndexStats() const;
     void reportFalseFacetIdentificationStats() const;
 };

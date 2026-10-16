@@ -72,6 +72,60 @@ void printPersistencePair(
         total_label_count,
         dimension);
 }
+
+void printTopSimplex(
+    const char* const name,
+    const SimplexBindex bindex,
+    const std::size_t dimension,
+    const PipelineRuntime& runtime,
+    const WindowState& window,
+    const SimplexEnumerator& simplex_enumerator)
+{
+    std::cout << "    " << name << " simplex:";
+    if (bindex < 0)
+    {
+        std::cout << " (none)\n";
+        return;
+    }
+
+    const auto labels = SimplexUtility::getSimplexVertices(
+        runtime.binomialTable(), bindex, window.totalLabelCount(), dimension);
+    const auto realization = simplex_enumerator.getGeometricSimplexRealization(
+        labels, window.pseudoVertices(), window.bounds().eps_hi);
+
+    std::cout << "\n      labels:";
+    for (const auto label : labels)
+        std::cout << ' ' << label;
+    std::cout << "\n      geometric realization (original vertices):";
+    for (const auto vertex : realization.vertices)
+        std::cout << ' ' << vertex;
+    std::cout << '\n';
+}
+
+void printPvInformation(
+    const WindowState& window,
+    const std::size_t new_pv_count)
+{
+    std::cout << "  new PVs: " << new_pv_count << '\n'
+              << "  total PVs: " << window.pseudoVertices().size() << '\n';
+    if (window.pseudoVertices().empty())
+        std::cout << "  (empty)\n";
+
+    for (std::size_t pv_index = 0;
+         pv_index < window.pseudoVertices().size();
+         ++pv_index)
+    {
+        const auto& pv = window.pseudoVertices()[pv_index];
+        std::cout << "  PV label " << window.originalVertexCount() + pv_index
+                  << ": size=" << pv.representatives.size()
+                  << " diameter=" << pv.diameter
+                  << "\n    original vertices:";
+        for (const auto vertex : pv.representatives)
+            std::cout << ' ' << vertex;
+        std::cout << '\n';
+    }
+    std::cout << std::endl;
+}
 }
 
 PersistentHomologyPipeline::PersistentHomologyPipeline(
@@ -172,26 +226,46 @@ void PwphPipeline::run()
             std::cout << bounds.eps_lo << ", " << bounds.eps_hi << '\n';
             std::cout << "dimension, birth weight, death weight\n";
         }
+        else
+        {
+            std::cout << "epsilon window: " << bounds.eps_lo << ' '
+                      << bounds.eps_hi << '\n';
+        }
 
         auto edges = window_state_.prepareWindow(runtime_, bounds);
+        const SimplexEnumerator simplex_enumerator(
+            runtime_.distanceMatrix(), runtime_.binomialTable());
 
         DependencySupportBatch support_batch;
         {
             DimensionFrame frame(runtime_, window_state_, std::move(edges));
             for (;;)
             {
+                if (config.verbose && frame.dimension() >= 2)
+                {
+                    std::cout << "interface dimension: " << frame.dimension()
+                              << "\n  cofacet list size: " << frame.cofacetCount()
+                              << "\n  facet list size: " << frame.facetCount()
+                              << "\n  active facet list size: " << frame.activeFacetCount()
+                              << std::endl;
+                }
+                else if (!config.verbose && frame.dimension() >= 2 &&
+                         frame.isTopDimension())
+                {
+                    std::cout << "top interface dimension: " << frame.dimension()
+                              << "\n  cofacet list size: " << frame.cofacetCount()
+                              << "\n  facet list size: " << frame.facetCount()
+                              << std::endl;
+                }
+
                 frame.matchPersistence(!bounds.is_final);
 
                 if (frame.dimension() >= 2)
                 {
                     if (config.verbose)
                     {
-                        std::cout << "in eps range " << bounds.eps_lo << "  "
-                                  << bounds.eps_hi << "    dimension = "
-                                  << frame.dimension()
-                                  << "  cofacet num = " << frame.cofacetCount()
-                                  << "  facet num = " << frame.facetCount() << '\n'
-                                  << "   persistent pairs:" << std::endl;
+                        std::cout << "PH dimension " << frame.dimension() - 1
+                                  << ":" << std::endl;
                     }
 
                     bool printed_any = false;
@@ -205,11 +279,20 @@ void PwphPipeline::run()
 
                         if (config.verbose)
                         {
-                            printPersistencePair(
-                                pair,
-                                runtime_.binomialTable(),
-                                frame.dimension(),
-                                window_state_.totalLabelCount());
+                            std::cout << "  (";
+                            printBirthDeath(pair);
+                            std::cout << ")\n";
+                            if (frame.isTopDimension())
+                            {
+                                printTopSimplex(
+                                    "birth", pair.facet_bindex,
+                                    frame.dimension() - 1, runtime_, window_state_,
+                                    simplex_enumerator);
+                                printTopSimplex(
+                                    "death", pair.cofacet_bindex,
+                                    frame.dimension(), runtime_, window_state_,
+                                    simplex_enumerator);
+                            }
                         }
                         else
                         {
@@ -247,6 +330,9 @@ void PwphPipeline::run()
         if (bounds.is_final)
             break;
 
+        if (config.verbose)
+            std::cout << "PV information:\n";
+
         const std::size_t previous_pv_count =
             window_state_.pseudoVertices().size();
         support_processor_.processPwph(
@@ -256,31 +342,7 @@ void PwphPipeline::run()
             window_state_.pseudoVertices().size() - previous_pv_count;
 
         if (config.verbose)
-        {
-            std::cout << "after eps range " << bounds.eps_lo << "  "
-                      << bounds.eps_hi << "  new pv number = " << new_pv_count
-                      << "  total pv number = "
-                      << window_state_.pseudoVertices().size() << std::endl;
-
-            std::cout << "pv representative statistics:" << std::endl;
-            if (window_state_.pseudoVertices().empty())
-            {
-                std::cout << "  (empty)" << std::endl;
-            }
-            else
-            {
-                for (std::size_t pv_index = 0;
-                     pv_index < window_state_.pseudoVertices().size();
-                     ++pv_index)
-                {
-                    const auto& pv = window_state_.pseudoVertices()[pv_index];
-                    std::cout << "  [" << pv_index << "] size = "
-                              << pv.representatives.size()
-                              << "  max diameter = " << pv.diameter << '\n';
-                }
-                std::cout << std::endl;
-            }
-        }
+            printPvInformation(window_state_, new_pv_count);
     }
 }
 

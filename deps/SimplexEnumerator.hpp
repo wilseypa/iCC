@@ -35,8 +35,23 @@ public:
                                         const robin_hood::unordered_map<uint64_t, double>& pv_label_distance_hash,
                                         const size_t dim, const double maxeps, const int threadnum);
 
-    // Verbose diagnostics use a separate enumerator so the regular path does not allocate
-    // realization storage, pack witnesses, or impose canonical edge tie-breaking.
+    struct GeometricRealization
+    {
+        double weight;
+        // One original representative per input label, in the same order.
+        std::vector<size_t> vertices;
+    };
+
+    // Recover only a requested simplex's canonical witness, without retaining a
+    // realization map for the complete list. Supports the configured dimensions
+    // (up to 64 labels), independently of the FFI packed-witness limit.
+    GeometricRealization getGeometricSimplexRealization(
+                                        const std::vector<size_t>& labels_descending,
+                                        const std::vector<SelectedPV>& pseudo_vertices,
+                                        const double maxeps) const;
+
+    // FFI diagnostics use a separate enumerator so the regular path does not
+    // allocate realization storage or pack witnesses.
     std::vector<std::pair<int64_t, double>> getGeometricCofacetListWithRealizations(
                                         const std::vector<std::pair<int64_t, double>>& sorted_quotient_simplex_list,
                                         const std::vector<size_t>& active_labels,

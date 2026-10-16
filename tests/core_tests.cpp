@@ -14,8 +14,10 @@
 #include <initializer_list>
 #include <iostream>
 #include <limits>
+#include <sstream>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -82,6 +84,44 @@ void checkThrows(
         #expression,                                                             \
         __FILE__,                                                                \
         __LINE__)
+
+class CaptureStdout
+{
+public:
+    CaptureStdout() : previous_(std::cout.rdbuf(output_.rdbuf())) {}
+    ~CaptureStdout() { std::cout.rdbuf(previous_); }
+
+    std::string str() const { return output_.str(); }
+
+private:
+    std::ostringstream output_;
+    std::streambuf* previous_;
+};
+
+std::size_t occurrenceCount(const std::string& text, const std::string& needle)
+{
+    std::size_t count = 0;
+    for (std::size_t pos = text.find(needle);
+         pos != std::string::npos;
+         pos = text.find(needle, pos + needle.size()))
+        ++count;
+    return count;
+}
+
+std::vector<std::vector<double>> hexagonWithNearbyPoints()
+{
+    return {
+        {0.0, 0.0},
+        {1.0, 0.0},
+        {0.5, 0.8660254037844386},
+        {-0.5, 0.8660254037844386},
+        {-1.0, 0.0},
+        {-0.5, -0.8660254037844386},
+        {0.5, -0.8660254037844386},
+        {2.2, 0.2},
+        {2.7, 0.9},
+        {2.8, -0.7}};
+}
 
 PipelineConfig makeConfig(
     std::vector<double> eps_breaks = {1.0},
@@ -185,6 +225,12 @@ void testPipelineConfig()
     invalid = valid;
     invalid.pv_min_separation = std::numeric_limits<double>::infinity();
     CHECK_THROWS_AS(invalid.validate(), std::invalid_argument);
+
+    invalid = valid;
+    invalid.ffi_diagnostics = true;
+    CHECK_THROWS_AS(invalid.validate(), std::invalid_argument);
+    invalid.verbose = true;
+    invalid.validate();
 
     PipelineRuntime ordinary_runtime(
         DistanceMatrix({{0.0}}),
@@ -483,17 +529,7 @@ void testPersistenceMatchingAndSupportExtraction()
 
 void testMatchingDerivedPwphSupportAndPvGeometry()
 {
-    const std::vector<std::vector<double>> points{
-        {0.0, 0.0},
-        {1.0, 0.0},
-        {0.5, 0.8660254037844386},
-        {-0.5, 0.8660254037844386},
-        {-1.0, 0.0},
-        {-0.5, -0.8660254037844386},
-        {0.5, -0.8660254037844386},
-        {2.2, 0.2},
-        {2.7, 0.9},
-        {2.8, -0.7}};
+    const auto points = hexagonWithNearbyPoints();
     const auto config = makeConfig({1.1, 1.8, 3.5}, 2, 1, 2.0);
     PipelineRuntime runtime(
         DistanceMatrix(points), config, PipelineMode::PwPH);
@@ -562,6 +598,252 @@ void testMatchingDerivedPwphSupportAndPvGeometry()
     }
     CHECK(pv_batch.protected_labels.empty());
     CHECK(!pv_frame.advance());
+}
+
+void testOnDemandGeometricRealizations()
+{
+    const std::vector<std::vector<double>> points{
+        {0.0, 0.0}, {2.0, 0.0}, {0.0, 2.0}, {2.0, 2.0},
+        {1.0, 0.5}, {1.0, 3.0}, {3.0, 1.0}, {4.0, 0.0}, {5.0, 0.0}};
+    const DistanceMatrix distances(points);
+    const auto binomial_table = SimplexUtility::getBinomialTable(11, 8);
+    const SimplexEnumerator enumerator(distances, binomial_table);
+    const std::vector<SelectedPV> pvs{
+        {.representatives = {0, 1}, .diameter = 2.0},
+        {.representatives = {2, 3}, .diameter = 2.0}};
+
+    const auto original = enumerator.getGeometricSimplexRealization(
+        {3, 2, 0}, pvs, 3.0);
+    CHECK((original.vertices == std::vector<std::size_t>{3, 2, 0}));
+    CHECK(std::abs(original.weight - std::sqrt(8.0)) < 1e-12);
+
+    const auto singleton = enumerator.getGeometricSimplexRealization(
+        {9}, pvs, 3.0);
+    CHECK((singleton.vertices == std::vector<std::size_t>{0}));
+    CHECK(singleton.weight == 0.0);
+
+    const auto edge = enumerator.getGeometricSimplexRealization(
+        {9, 2}, pvs, 3.0);
+    CHECK((edge.vertices == std::vector<std::size_t>{0, 2}));
+    CHECK(edge.weight == 2.0);
+
+    // Independent nearest representatives for the two singleton vertices would
+    // suggest weight 2, but one shared PV representative needs weight sqrt(8).
+    const auto coupled = enumerator.getGeometricSimplexRealization(
+        {9, 3, 2}, pvs, 3.0);
+    CHECK(std::abs(coupled.weight - std::sqrt(8.0)) < 1e-12);
+    CHECK(coupled.vertices.size() == 3);
+    if (coupled.vertices.size() == 3)
+    {
+        CHECK(coupled.vertices[0] <= 1);
+        CHECK(coupled.vertices[1] == 3);
+        CHECK(coupled.vertices[2] == 2);
+    }
+
+    const auto multiple_pvs = enumerator.getGeometricSimplexRealization(
+        {10, 9, 4}, pvs, 3.0);
+    CHECK((multiple_pvs.vertices == std::vector<std::size_t>{2, 0, 4}));
+    CHECK(multiple_pvs.weight == 2.0);
+    CHECK_THROWS_AS(
+        enumerator.getGeometricSimplexRealization({9, 3, 2}, pvs, 2.5),
+        std::runtime_error);
+
+    // A top-dimensional report must also work beyond the packed FFI limit.
+    std::vector<std::vector<double>> line_points;
+    for (std::size_t i = 0; i < 10; ++i)
+        line_points.push_back({static_cast<double>(i)});
+    const DistanceMatrix line_distances(line_points);
+    const SimplexEnumerator line_enumerator(line_distances, binomial_table);
+    const auto high_dimension = line_enumerator.getGeometricSimplexRealization(
+        {10, 8, 7, 6, 5, 4, 3, 2, 1},
+        {{.representatives = {0, 9}, .diameter = 9.0}},
+        10.0);
+    CHECK((high_dimension.vertices ==
+           std::vector<std::size_t>{0, 8, 7, 6, 5, 4, 3, 2, 1}));
+    CHECK(high_dimension.weight == 8.0);
+}
+
+void testOptionalFfiDiagnosticsPreserveMatching()
+{
+    struct MatchingResults
+    {
+        using Pair = std::tuple<SimplexBindex, SimplexBindex, double, double>;
+        std::vector<std::vector<Pair>> pairs_by_interface;
+        std::vector<std::vector<std::size_t>> supports;
+        std::vector<std::size_t> protected_labels;
+
+        bool operator==(const MatchingResults&) const = default;
+    };
+    struct DiagnosticRun
+    {
+        MatchingResults matching;
+        std::string output;
+    };
+
+    const auto run_frame = [](const bool ffi)
+    {
+        // Six quotient labels form an octahedral shell with a finite H2 pair.
+        // The first axis vertex is represented by a genuine two-point PV.
+        const std::vector<std::vector<double>> points{
+            {1.0, 0.0, 0.0}, {-1.0, 0.0, 0.0},
+            {0.0, 1.0, 0.0}, {0.0, -1.0, 0.0},
+            {0.0, 0.0, 1.0}, {0.0, 0.0, -1.0}, {1.01, 0.0, 0.0}};
+        auto config = makeConfig({2.1}, 3);
+        config.verbose = true;
+        config.ffi_diagnostics = ffi;
+        PipelineRuntime runtime(
+            DistanceMatrix(points), config, PipelineMode::PwPH);
+        WindowState window(points.size());
+        window.commitSelectedPVs(
+            {{.representatives = {0, 6}, .diameter = 0.01}}, {0, 6});
+        runtime.ensureBinomialCapacity(window.totalLabelCount());
+
+        DiagnosticRun result;
+        CaptureStdout capture;
+        auto edges = window.prepareWindow(runtime, boundsFor(config, 0));
+        DimensionFrame frame(runtime, window, std::move(edges));
+        do
+        {
+            frame.matchPersistence(true);
+            auto& pairs = result.matching.pairs_by_interface.emplace_back();
+            for (const auto& pair : frame.persistentPairs())
+            {
+                pairs.emplace_back(
+                    pair.facet_bindex, pair.cofacet_bindex,
+                    pair.facet_weight, pair.cofacet_weight);
+            }
+            if (frame.isTopDimension())
+            {
+                auto batch = frame.takeDependencySupportBatch();
+                for (auto& dependency_support : batch.supports)
+                    result.matching.supports.push_back(std::move(dependency_support.labels));
+                result.matching.protected_labels.assign(
+                    batch.protected_labels.begin(), batch.protected_labels.end());
+                std::sort(
+                    result.matching.protected_labels.begin(),
+                    result.matching.protected_labels.end());
+            }
+        } while (frame.advance());
+        result.output = capture.str();
+        return result;
+    };
+
+    const auto plain_verbose = run_frame(false);
+    const auto with_ffi = run_frame(true);
+    CHECK(plain_verbose.matching == with_ffi.matching);
+    CHECK(plain_verbose.matching.pairs_by_interface.size() == 2);
+    if (plain_verbose.matching.pairs_by_interface.size() == 2)
+        CHECK(!plain_verbose.matching.pairs_by_interface.back().empty());
+    CHECK(!plain_verbose.matching.supports.empty());
+    CHECK(plain_verbose.output.find("FFI stats") == std::string::npos);
+    CHECK(plain_verbose.output.find("[ffi") == std::string::npos);
+    CHECK(with_ffi.output.find("FFI stats") != std::string::npos);
+    CHECK(plain_verbose.output.find("[facet-index]") == std::string::npos);
+    CHECK(with_ffi.output.find("[facet-index]") == std::string::npos);
+}
+
+void testPwphVerboseReport()
+{
+    const std::vector<std::vector<double>> octahedron{
+        {1.0, 0.0, 0.0}, {-1.0, 0.0, 0.0},
+        {0.0, 1.0, 0.0}, {0.0, -1.0, 0.0},
+        {0.0, 0.0, 1.0}, {0.0, 0.0, -1.0}};
+    auto config = makeConfig({1.5, 2.1}, 3);
+    config.verbose = true;
+    std::string output;
+    {
+        CaptureStdout capture;
+        PwphPipeline pipeline(DistanceMatrix(octahedron), config);
+        pipeline.run();
+        output = capture.str();
+    }
+
+    CHECK(occurrenceCount(output, "epsilon window:") == 2);
+    CHECK(occurrenceCount(output, "interface dimension: 2") == 2);
+    CHECK(occurrenceCount(output, "interface dimension: 3") == 2);
+    CHECK(output.find("interface dimension: 1") == std::string::npos);
+    CHECK(output.find("PH dimension 0:") == std::string::npos);
+    CHECK(output.find("[ffi") == std::string::npos);
+    CHECK(output.find("[facet-index]") == std::string::npos);
+    CHECK(occurrenceCount(output, "PV information:") == 1);
+
+    for (const std::string header : {"epsilon window: 0 1.5", "epsilon window: 1.5 2.1"})
+    {
+        const auto begin = output.find(header);
+        CHECK(begin != std::string::npos);
+        if (begin == std::string::npos)
+            continue;
+        const auto end = output.find("epsilon window:", begin + header.size());
+        const auto window_output = output.substr(begin, end - begin);
+        const auto interface2 = window_output.find("interface dimension: 2");
+        const auto interface3 = window_output.find("interface dimension: 3");
+        const auto ph1 = window_output.find("PH dimension 1:");
+        const auto ph2 = window_output.find("PH dimension 2:");
+        const auto pvs = window_output.find("PV information:");
+        CHECK(interface2 < ph1);
+        CHECK(ph1 < interface3);
+        CHECK(interface3 < ph2);
+        const bool final_window = header == "epsilon window: 1.5 2.1";
+        if (final_window)
+            CHECK(pvs == std::string::npos);
+        else
+            CHECK(ph2 < pvs);
+        CHECK(window_output.find("active facet list size:", interface2) < ph1);
+        CHECK(window_output.find("active facet list size:", interface3) < ph2);
+        if (header == "epsilon window: 0 1.5")
+        {
+            CHECK(window_output.find(
+                "cofacet list size: 8\n  facet list size: 12\n  active facet list size: 7") < ph1);
+        }
+        const auto non_top = window_output.substr(interface2, interface3 - interface2);
+        CHECK(non_top.find("birth simplex:") == std::string::npos);
+        CHECK(non_top.find("geometric realization") == std::string::npos);
+        const auto top = window_output.substr(ph2, pvs - ph2);
+        CHECK(top.find("birth simplex:") != std::string::npos);
+        CHECK(top.find("geometric realization (original vertices):") != std::string::npos);
+        if (!final_window)
+            CHECK(window_output.find("new PVs: 0", pvs) != std::string::npos);
+    }
+    CHECK(output.find("death simplex: (none)") != std::string::npos);
+    CHECK(output.find("death simplex:\n      labels:") != std::string::npos);
+
+    // This run creates a PV before the second window, so its top H1 pair must
+    // show quotient labels alongside an actual original-vertex realization.
+    const std::vector<std::vector<double>> jittered_hexagon{
+        {0.03, -0.03}, {1.03, -0.12}, {0.63, 1.00}, {-0.44, 0.73},
+        {-0.99, -0.07}, {-0.60, -0.68}, {0.70, -1.05},
+        {2.34, 0.24}, {2.65, 0.81}, {2.87, -0.72}};
+    config = makeConfig({1.1, 1.8, 3.5}, 2, 1, 2.0);
+    config.verbose = true;
+    {
+        CaptureStdout capture;
+        PwphPipeline pipeline(DistanceMatrix(jittered_hexagon), config);
+        pipeline.run();
+        output = capture.str();
+    }
+    CHECK(occurrenceCount(output, "PV information:") == 2);
+    CHECK(output.find("PV label 10: size=4") != std::string::npos);
+    CHECK(output.find("birth simplex:\n      labels: 2 1\n") != std::string::npos);
+    CHECK(output.find(
+        "death simplex:\n      labels: 10 2 1\n"
+        "      geometric realization (original vertices): 0 2 1\n") != std::string::npos);
+    CHECK(output.find("geometric realization (original vertices): 10") == std::string::npos);
+    const auto final_window = output.find("epsilon window: 1.8 3.5");
+    CHECK(final_window != std::string::npos);
+    if (final_window != std::string::npos)
+        CHECK(output.find("PV information:", final_window) == std::string::npos);
+
+    config = makeConfig({2.1}, 1);
+    config.verbose = true;
+    {
+        CaptureStdout capture;
+        PwphPipeline pipeline(DistanceMatrix(octahedron), config);
+        pipeline.run();
+        output = capture.str();
+    }
+    CHECK(output.find("interface dimension:") == std::string::npos);
+    CHECK(output.find("PH dimension") == std::string::npos);
+    CHECK(output.find("PV information:") == std::string::npos);
 }
 
 void testEdgeOnlyDimensionFrame()
@@ -791,6 +1073,9 @@ int main()
     runTest("DimensionFrame wide cofacet indices", testDimensionFrameWideCofacetIndices);
     runTest("Persistence matching and support extraction", testPersistenceMatchingAndSupportExtraction);
     runTest("Matching-derived PwPH support and PV geometry", testMatchingDerivedPwphSupportAndPvGeometry);
+    runTest("On-demand geometric realizations", testOnDemandGeometricRealizations);
+    runTest("Optional FFI diagnostics preserve matching", testOptionalFfiDiagnosticsPreserveMatching);
+    runTest("PwPH verbose report", testPwphVerboseReport);
     runTest("DimensionFrame edge-only mode", testEdgeOnlyDimensionFrame);
     runTest("Single-window pipelines use final epsilon", testSingleWindowPipelinesUseFinalEpsilon);
     runTest("PwPH protection and diameter", testPwphProtectionAndDiameter);

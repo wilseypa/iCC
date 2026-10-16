@@ -57,7 +57,7 @@ if(BUILD_TESTING)
         COMMAND iCC
             --tool ph
             --file-name ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/irregular5.csv
-            --max-dim 3
+            --homology-dim 2
             --max-eps 3.0
             --threads 1
     )
@@ -73,7 +73,7 @@ if(BUILD_TESTING)
         COMMAND iCC
             --tool ph
             --file-name ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/irregular5.csv
-            --max-dim 3
+            --homology-dim 2
             --max-eps 3.0
             --threads 1
             --verbose
@@ -82,5 +82,98 @@ if(BUILD_TESTING)
         icc_cli_ph_verbose
         PROPERTIES
             PASS_REGULAR_EXPRESSION "birth facet labels: 3 1"
+    )
+
+    add_test(
+        NAME icc_cli_piecewise_ffi_verbose
+        COMMAND iCC
+            --tool piecewise
+            --file-name ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/irregular5.csv
+            --homology-dim 2
+            --eps-breaks 3.0
+            --pv-cap-scale 1.0
+            --threads 1
+            --verbose
+            --ffi
+    )
+    set_tests_properties(
+        icc_cli_piecewise_ffi_verbose
+        PROPERTIES PASS_REGULAR_EXPRESSION "PH dimension 2:"
+    )
+
+    add_test(
+        NAME icc_cli_piecewise_ffi_requires_verbose
+        COMMAND iCC
+            --tool piecewise
+            --file-name ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/irregular5.csv
+            --homology-dim 2
+            --eps-breaks 3.0
+            --pv-cap-scale 1.0
+            --threads 1
+            --ffi
+    )
+    set_tests_properties(
+        icc_cli_piecewise_ffi_requires_verbose
+        PROPERTIES WILL_FAIL TRUE
+    )
+
+    add_test(
+        NAME icc_cli_homology_dim_zero
+        COMMAND iCC
+            --tool ph
+            --file-name ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/irregular5.csv
+            --homology-dim 0
+            --max-eps 3.0
+            --threads 1
+    )
+    set_tests_properties(
+        icc_cli_homology_dim_zero
+        PROPERTIES
+            PASS_REGULAR_EXPRESSION "total point number: 5"
+            FAIL_REGULAR_EXPRESSION "Processing dim;dimensional persistent pairs:"
+    )
+
+    add_test(
+        NAME icc_cli_homology_dim_one
+        COMMAND iCC
+            --tool ph
+            --file-name ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/irregular5.csv
+            --homology-dim 1
+            --max-eps 3.0
+            --threads 1
+    )
+    set_tests_properties(
+        icc_cli_homology_dim_one
+        PROPERTIES
+            PASS_REGULAR_EXPRESSION "\\(1.14018, 1.20416\\)"
+            FAIL_REGULAR_EXPRESSION "Processing dim 3"
+    )
+
+    add_test(
+        NAME icc_cli_homology_dim_out_of_range
+        COMMAND iCC
+            --tool ph
+            --file-name ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/irregular5.csv
+            --homology-dim 63
+            --max-eps 3.0
+            --threads 1
+    )
+    set_tests_properties(
+        icc_cli_homology_dim_out_of_range
+        PROPERTIES WILL_FAIL TRUE
+    )
+
+    add_test(
+        NAME icc_cli_old_max_dim_rejected
+        COMMAND iCC
+            --tool ph
+            --file-name ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/irregular5.csv
+            --max-dim 2
+            --max-eps 3.0
+            --threads 1
+    )
+    set_tests_properties(
+        icc_cli_old_max_dim_rejected
+        PROPERTIES WILL_FAIL TRUE
     )
 endif()

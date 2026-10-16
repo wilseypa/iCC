@@ -82,7 +82,9 @@ void DimensionFrame::enumerateInitialCofacets()
 {
     const auto& config = runtime_.config();
     const bool ffi_requested =
-        config.verbose && !window_.pseudoVertices().empty() && config.maxdim >= 3;
+        config.verbose && config.ffi_diagnostics &&
+        runtime_.mode() == PipelineMode::PwPH &&
+        !window_.pseudoVertices().empty() && config.maxdim >= 3;
     const bool collect_ffi = ffi_requested && config.maxdim < MAX_FFI_PACKED_LABELS;
 
     if (ffi_requested && !collect_ffi)
@@ -135,9 +137,10 @@ void DimensionFrame::matchPersistence(const bool collect_dependency_support)
         return;
     }
 
-    if (isTopDimension())
+    if (isTopDimension() && runtime_.config().ffi_diagnostics)
         reportFalseFacetIdentificationStats();
 
+    reportTopInterfaceFacetIndexStats();
     initializeInterfaceWorkspace();
 
     ImplicitMorseMatching matcher;
@@ -171,6 +174,7 @@ void DimensionFrame::matchApparentPairsOnly()
         return;
     }
 
+    reportTopInterfaceFacetIndexStats();
     initializeInterfaceWorkspace();
 
     ImplicitMorseMatching matcher;
@@ -394,6 +398,46 @@ DependencySupportBatch DimensionFrame::takeDependencySupportBatch()
 {
     dependency_support_batch_.protected_labels = std::move(protected_labels_);
     return std::move(dependency_support_batch_);
+}
+
+void DimensionFrame::reportTopInterfaceFacetIndexStats() const
+{
+    if (!runtime_.config().verbose || !isTopDimension() ||
+        runtime_.mode() == PipelineMode::PwPH)
+        return;
+
+    // Query the existing allocation; do not build a second index to estimate it.
+    const std::size_t buckets = active_facet_index_.mask() == 0
+        ? 0 : active_facet_index_.mask() + 1;
+    const std::size_t slots = buckets == 0 ? 0
+        : active_facet_index_.calcNumElementsWithBuffer(buckets);
+    const std::size_t map_bytes = buckets == 0 ? 0
+        : active_facet_index_.calcNumBytesTotal(slots);
+
+    // Hash/equality functors do not affect the flat set's per-slot allocation.
+    // Assume the same bucket count, including the overflow buffer and metadata.
+    const robin_hood::unordered_flat_set<RankIndex> indirect_layout;
+    const std::size_t indirect_bytes = buckets == 0 ? 0
+        : indirect_layout.calcNumBytesTotal(slots);
+    constexpr double bytes_per_mib = 1024.0 * 1024.0;
+    const double active_percent = facet_list_.empty() ? 0.0
+        : 100.0 * static_cast<double>(active_facet_index_.size()) / facet_list_.size();
+
+    std::cout << "  [top-interface] dimension=" << dimension_
+              << " cofacets=" << cofacet_list_.size()
+              << " facets=" << facet_list_.size()
+              << " active_facets=" << active_facet_index_.size()
+              << " active_percent=" << active_percent << '\n'
+              << "  [facet-index] buckets=" << buckets
+              << " map_MiB=" << map_bytes / bytes_per_mib
+              << " indirect_estimate_MiB=" << indirect_bytes / bytes_per_mib
+              << " saving_estimate_MiB=" << (map_bytes - indirect_bytes) / bytes_per_mib
+              << " (same bucket count)\n"
+              << "  [top-lists] facet_storage_MiB="
+              << facet_list_.capacity() * sizeof(SimplexRecord) / bytes_per_mib
+              << " cofacet_storage_MiB="
+              << cofacet_list_.capacity() * sizeof(SimplexRecord) / bytes_per_mib
+              << std::endl;
 }
 
 void DimensionFrame::reportFalseFacetIdentificationStats() const
@@ -701,13 +745,5 @@ void DimensionFrame::reportFalseFacetIdentificationStats() const
                   << total.missing_facet_realization << '\n';
     }
 
-    std::cout << "  [ffi2-line]"
-              << " eps_lo=" << window_.bounds().eps_lo
-              << " eps_hi=" << window_.bounds().eps_hi
-              << " dim=" << dimension_
-              << " pv_cofacets =" << total.cofacets_with_pv
-              << " diffm_safe_pct=" << percentage(total.diff_multi_safe) << "%"
-              << " diffm_flagged_pct=" << percentage(total.diff_multi_flagged) << "%"
-              << "\nEnd of FFI stats"
-              << std::endl;
+    std::cout << "End of FFI stats" << std::endl;
 }

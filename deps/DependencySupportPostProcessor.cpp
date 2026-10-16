@@ -126,8 +126,8 @@ void DependencySupportPostProcessor::processPwph(
 
     if (runtime.config().verbose && runtime.config().maxdim >= 2)
     {
-        std::cout << "raw pv support cofacets size = " << raw_support_count << '\n';
-        std::cout << "pv support label sets with no pv/protected contents size = "
+        std::cout << "  raw support count: " << raw_support_count << '\n';
+        std::cout << "  support count without PV or protected labels: "
                   << eligible_support_count << '\n';
     }
 

@@ -15,6 +15,9 @@ constexpr size_t MAX_SIMPLEX_DIMENSION =
 
 void PipelineConfig::validate() const
 {
+    if (ffi_diagnostics && !verbose)
+        throw std::invalid_argument("Pipeline FFI diagnostics require verbose output.");
+
     if (eps_breaks.empty())
         throw std::invalid_argument("Pipeline epsilon breaks must not be empty.");
 

@@ -29,6 +29,7 @@ struct PipelineConfig
     double pv_cap_scale = 1.0;
     double pv_min_separation = 0.0;
     bool verbose = false;
+    bool ffi_diagnostics = false;
 
     void validate() const;
 
